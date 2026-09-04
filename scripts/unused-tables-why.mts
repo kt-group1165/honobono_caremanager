@@ -37,6 +37,10 @@ const APPS_ROOT = path.resolve(fileURLToPath(new URL("../../", import.meta.url))
 const APPS = [
   ["kaigo-app", "kaigo-app/src"], ["order-app", "order-app/app"], ["order-app", "order-app/lib"],
   ["payroll-app", "payroll-app/src"], ["calendar-app", "calendar-app/app"], ["calendar-app", "calendar-app/lib"],
+  // ⚠ 2026-09-05 追加: property-app が抜けていた。vacant_properties が「app が
+  //   参照しない逆側の表」に誤って分類されていた (実際は submit/list/actions で使用中)。
+  //   marketing-site は静的HTMLで supabase を使わないので対象外のまま。
+  ["property-app", "property-app/app"], ["property-app", "property-app/lib"],
 ] as const;
 
 // ---------------------------------------------------------------- ソースを読む
@@ -58,14 +62,24 @@ for (const f of files) {
   try { src = readFileSync(f, "utf8"); } catch { continue; }
   const reads = new Set<string>();
   const writes: { t: string; line: number }[] = [];
-  for (const m of src.matchAll(/\.from\("([a-z_0-9]+)"\)([\s\S]{0,220})/g)) {
+  // ⚠ 2026-09-05 是正: 旧実装は `matchAll(/\.from\("t"\)([\s\S]{0,220})/g)` で
+  //   後続 220 文字を **マッチ本体に含めていた**ため、matchAll が lastIndex を
+  //   そのぶん先へ進め、220 文字以内に次の `.from(` があると **丸ごと読み飛ばして
+  //   いた**。実例: load-seikyu-data.ts は officeRes/sougouRes の 2 つの `.from(`
+  //   が近接しており、2 つ目 (office_sougou_numbers) が検出から漏れて
+  //   「app が参照しない逆側の表」に誤って分類されていた。
+  //   → マッチ本体は `.from("t")` だけにし、後続の insert/upsert 判定は
+  //   lastIndex を消費しない `src.slice()` で別に見る。
+  for (const m of src.matchAll(/\.from\("([a-z_0-9]+)"\)/g)) {
     const t = m[1];
     // ⚠ `supabase.storage.from("bucket")` は **table ではない**。除外しないと
     //   backups / signatures が「0 行の table」に化ける (2026-09-03 実測で 2 件混入していた)。
     if (/\.storage\s*$/.test(src.slice(Math.max(0, m.index - 60), m.index))) continue;
     allTables.add(t);
-    // ⚠ チェーンは複数行になるので後続 220 文字を見る。select だけなら読み取り
-    if (/\.(insert|upsert)\s*\(/.test(m[2])) {
+    // ⚠ チェーンは複数行になるので後続 220 文字を見る (matchAll の lastIndex は消費しない)。
+    //   select だけなら読み取り
+    const tail = src.slice(m.index + m[0].length, m.index + m[0].length + 220);
+    if (/\.(insert|upsert)\s*\(/.test(tail)) {
       writes.push({ t, line: src.slice(0, m.index).split(String.fromCharCode(10)).length });
     } else reads.add(t);
   }
@@ -122,6 +136,19 @@ type Cls = "E" | "E?" | "CD" | "AB";
  * ここに人が確認した結果を書く。`cls` は自動分類を上書きする (自動判定の限界を反映)。
  */
 const MANUAL_NOTES: Partial<Record<string, { cls: Cls; note: string }>> = {
+  kaigo_ai_usage_logs: {
+    cls: "E",
+    note:
+      "🔴 確認済み・未修正 (2026-09-05)。★ 本物のバグ。3箇所 (reports-content.tsx 2件・" +
+      "assessments-content.tsx 1件) すべて insert に tenant_id が無いが、" +
+      "kaigo_ai_usage_logs.tenant_id は NOT NULL 必須列 (デフォルト無し)。" +
+      "AI生成 (care-plan-1-generate 等) のたびに **確実に失敗**しており、" +
+      "エラーは console.warn のみ (toastで画面に出さない=気づけない設計)。" +
+      "共起先 kaigo_report_documents=8771行/7日分散が示すとおり機能自体は活発に" +
+      "使われているのに、使用ログ (コスト集計) だけが1件も残っていない。" +
+      "修正案: 各insertに tenant_id: currentOffice.tenant_id (reports-content.tsx で" +
+      "既に他所で参照している値) を足すだけ。★ 分類の指示範囲を超えるため未修正のまま報告する。",
+  },
   chiiki_recipient_certs: {
     cls: "AB",
     note:
