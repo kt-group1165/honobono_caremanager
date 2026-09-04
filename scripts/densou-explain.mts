@@ -315,6 +315,10 @@ function parseRecords(path: string, dict: Dict): Parsed[] {
     lineNo++;
     const c = splitCsvLine(line);
     if (c[0] === "1") {
+      // コントロールレコード。⚠ **介護 (12項) と障害 (11項) で構成が違う**。
+      //   介護: … 福祉事務所番号 / 保険者番号 / 事業所番号 / 都道府県番号 / 媒体区分 / 処理対象年月 / 管理番号
+      //   障害: … 予備 / 事業所番号 / 予備 / 媒体区分 / 処理対象年月 / 予備
+      //   同じ並びで解説すると 1 項ずれる (2026-08-07 に JJ で判明)。データ種別で切り分ける。
       const isShogai = /^J\d\d$/.test(c[4] ?? "");
       const names = isShogai
         ? ["レコード種別", "レコード番号", "ボリューム通番", "データ件数", "データ種別",
@@ -419,89 +423,6 @@ function toKaisetsu(recs: Parsed[]): string {
         ].join(","),
       );
     }
-  }
-  return rows.join("\r\n") + "\r\n";
-}
-
-/**
- * 対訳形式: **元のファイルと同じ横並び**のまま、上に項番・項目名、下に意味を付ける。
- * 1 レコードが 4 行 (項番 / 項目名 / 値 / 意味) + 空行のブロックになる。
- * 元ファイルを Excel で開くと桁が化ける (事業所番号が 1.21E+09) が、
- * こちらは値を文字列として出すので化けない。
- */
-function toTaiyaku(recs: Parsed[]): string {
-  const rows: string[] = [];
-  for (const r of recs) {
-    const head = `${r.lineNo} 行目  ${r.label}${r.kind ? ` ${r.kind}` : ""}`;
-    rows.push([head, ...r.fields.map((f) => `項${f.no}`)].map(csvCell).join(","));
-    rows.push(["項目名", ...r.fields.map((f) => f.name)].map(csvCell).join(","));
-    // 値は = 付き文字列にして Excel の数値変換 (指数表記・先頭0落ち) を防ぐ
-    rows.push(["値", ...r.fields.map((f) => (f.value === "" ? "" : `="${f.value}"`))].join(","));
-    rows.push(["意味", ...r.fields.map((f) => f.mean)].map(csvCell).join(","));
-    rows.push("");
-  }
-  return rows.join("\r\n") + "\r\n";
-}
-
-function processFile(path: string, dict: Dict): string {
-  const buf = readFileSync(path);
-  const text = Encoding.codeToString(
-    Encoding.convert(new Uint8Array(buf), { to: "UNICODE", from: "SJIS" }),
-  );
-  const rows: string[] = [
-    ["行", "レコード", "種別", "項番", "項目名", "値", "意味"].join(","),
-  ];
-  let lineNo = 0;
-  for (const line of text.split(/\r\n|\n/)) {
-    if (!line.length) continue;
-    lineNo++;
-    const c = splitCsvLine(line);
-    if (c[0] === "1") {
-      // コントロールレコード。⚠ **介護 (12項) と障害 (11項) で構成が違う**。
-      //   介護: … 福祉事務所番号 / 保険者番号 / 事業所番号 / 都道府県番号 / 媒体区分 / 処理対象年月 / 管理番号
-      //   障害: … 予備 / 事業所番号 / 予備 / 媒体区分 / 処理対象年月 / 予備
-      //   同じ並びで解説すると 1 項ずれる (2026-08-07 に JJ で判明)。データ種別で切り分ける。
-      const isShogai = /^J\d\d$/.test(c[4] ?? "");
-      const names = isShogai
-        ? ["レコード種別", "レコード番号", "ボリューム通番", "データ件数", "データ種別",
-           "予備", "事業所番号", "予備", "媒体区分", "処理対象年月", "予備"]
-        : ["レコード種別", "レコード番号", "ボリューム通番", "データ件数", "データ種別",
-           "福祉事務所番号", "保険者番号", "事業所番号", "都道府県番号", "媒体区分", "処理対象年月", "管理番号"];
-      c.forEach((v, i) =>
-        rows.push([String(lineNo), "コントロール", "", String(i + 1), names[i] ?? "", v, explain(names[i] ?? "", v)].map(csvCell).join(",")),
-      );
-      continue;
-    }
-    if (c[0] === "3") {
-      rows.push([String(lineNo), "エンドレコード", "", "1", "レコード種別", c[0], ""].map(csvCell).join(","));
-      rows.push([String(lineNo), "エンドレコード", "", "2", "レコード番号", c[1] ?? "", ""].map(csvCell).join(","));
-      continue;
-    }
-    if (c[0] !== "2") continue;
-    // データレコード: 先頭 2 列 (レコード種別 / 連番) を除いた残りが「項」
-    const parts = c.slice(2);
-    const kokan = parts[0] ?? "";
-    // サービスコードの名称は制度で引き分ける (同じ 6 桁が介護と障害の両方にある)
-    CUR_SYSTEM = kokan.startsWith("J") ? "障害" : "介護";
-    const isSeikyusho = kokan === "7111" || kokan === "7113" || kokan === "J111";
-    const kind = isSeikyusho ? "" : (parts[1] ?? "");
-    const key = kind ? `${kokan}-${kind}` : kokan;
-    const names = dict.get(key) ?? dict.get(kokan) ?? new Map<number, string>();
-    parts.forEach((v, i) => {
-      const no = i + 1;
-      const name = names.get(no) ?? "";
-      let mean = explain(name, v);
-      // 介護/総合の明細は「サービス種類コード(2桁)」+「サービス項目コード(4桁)」に分かれる。
-      // 種類の行で 2 つを連結した 6 桁の名称を出す (人が読むときはこれが一番効く)。
-      if (!mean && /サービス種類コード/.test(name) && parts[i + 1]) {
-        const joined = `${v}${parts[i + 1]}`;
-        const hit = serviceNameOf(joined);
-        if (hit) mean = `${joined} ${hit}`;
-      }
-      rows.push(
-        [String(lineNo), kokan, kind, String(no), name, v, mean].map(csvCell).join(","),
-      );
-    });
   }
   return rows.join("\r\n") + "\r\n";
 }

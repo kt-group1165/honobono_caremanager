@@ -24,7 +24,7 @@
 //                              (offices は変更しない)
 // ============================================================================
 import {
-  sb, MONTH, MONTH_START, TENANT, TAGS, marker, noteMarker, userNumber,
+  sb, MONTH, TENANT, TAGS, noteMarker,
   sampleClient, sampleInsurance, sampleAssignment, insertRows, deleteByTag, assertSafeMonth,
 } from "./_sample_data.mjs";
 

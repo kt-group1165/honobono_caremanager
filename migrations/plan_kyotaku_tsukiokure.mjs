@@ -162,7 +162,7 @@ async function main() {
   }
 
   let grand = 0;
-  for (const [key, g] of groups) {
+  for (const [, g] of groups) {
     const off = findOffice(g.label);
     if (!off) { console.log(`── ${g.label}: offices に無い — skip\n`); continue; }
 

@@ -56,8 +56,6 @@ const GROUP_ALIAS = {
   居宅: ["居宅", null],
   訪問入浴: ["訪問入浴", null],
 };
-/** 構成維持用の置きファイル。データではないので触らない */
-const SKIP_FILES = new Set([".gitkeep", "README.md"]);
 
 /** ほのぼの/新システム の揺れ */
 const SIDE_ALIAS = {
@@ -257,8 +255,7 @@ function main() {
     if (new Set(hashes).size === 1) {
       // 中身が同じ → 1 つ残して他は削除
       for (const g of group.slice(1)) dropAsIdentical.push(g);
-      // 先頭が keep(既存) でなければ、先頭だけ移動する
-      if (group[0].keep) for (const g of group.slice(1)) { /* 全部削除 */ }
+      // 先頭が keep(既存) の場合も、上の 1 行で group.slice(1) を全部削除対象にしてある
     } else if (dest.includes(`${path.sep}新システム${path.sep}`)) {
       // 新システム側は**こちらが生成したもの**なので、内容が違っても最新だけ残せばよい
       //   (過去の生成物が別階層に散らばっているだけ。いつでも再生成できる)

@@ -35,7 +35,6 @@ import { readFileSync } from "node:fs";
 
 const EXECUTE = process.argv.includes("--execute");
 const REVERT = process.argv.includes("--revert");
-const TENANT = "kt-group";
 const MONTH = process.env.MONTH || "2026-06";
 
 /** ほのぼのが Ⅱイ (121) を使っている事業所 × サービス種類 */

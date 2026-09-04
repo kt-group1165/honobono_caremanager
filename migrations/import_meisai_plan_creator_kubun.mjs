@@ -30,7 +30,6 @@ const YM = TARGET_MONTH.replace("-", "");
 const AREA_DIR = process.env.AREA_DIR || "茂原";
 const TAG = process.env.TAG || "";
 const OFFICE_ID = process.env.OFFICE_ID || "";
-const TENANT = "kt-group";
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 
 /** ほのぼのの表記 → IF 仕様の区分コード */

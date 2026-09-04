@@ -439,6 +439,7 @@ async function main(){
     // 再利用でも**認定情報は入れ直す** (対象月の認定に更新するため)。
     //   同じ取込マーカーの行だけ消して入れ直すので、手入力の認定は壊さない。
     if(r.client){
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 分割代入で user_number を attrs から落とすための記述
       const { user_number, ...attrs } = r.client;
       const upd = r.renumberFrom ? { ...attrs, user_number: r.num } : attrs;
       const { error:uErr } = await sb.from("clients").update(upd).eq("id", r.id);

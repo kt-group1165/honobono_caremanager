@@ -21,7 +21,7 @@ for(const [bn,tag] of OFFICES){
   const hasMeisai=new Set();
   for(const r of mine){ if((r[g("サービス区分")]||"").trim()!=="明細") continue;
     hasMeisai.add([padIns(r[g("被保険者番号")]),padInsurer(r[g("保険者番号")]),(r[g("事業所番号（提供事業所）")]||"").trim(),(r[g("サービス種類コード（提供事業所）")]||"").trim(),(r[g("サービスコード")]||"").trim()].join("|")); }
-  const agg=new Map(), limitByUser=new Map();
+  const agg=new Map();
   for(const r of mine){
     const kubun=(r[g("サービス区分")]||"").trim();
     if(kubun==="支給限度額対象外") continue;

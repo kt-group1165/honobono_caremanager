@@ -810,7 +810,7 @@ function loadTjBodySpans(targetMonth, areaDir) {
       out.get(k).push({ s, e });
     }
   }
-  for (const [k, arr] of out) arr.sort((a, b) => a.s - b.s);
+  for (const [, arr] of out) arr.sort((a, b) => a.s - b.s);
   return out;
 }
 

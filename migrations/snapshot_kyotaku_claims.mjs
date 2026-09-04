@@ -48,15 +48,6 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
   auth: { persistSession: false },
 });
 
-/** 個別加算 (一括生成では必ず OFF になる列) */
-const INDIVIDUAL_ADDONS = [
-  "initial_addition", "initial_addition_units",
-  "hospital_coordination", "hospital_coordination_units",
-  "discharge_addition", "discharge_addition_units", "discharge_type",
-  "medical_coordination", "medical_coordination_units",
-  "terminal_care", "terminal_care_units",
-  "emergency_conference", "emergency_conference_units",
-];
 /** 一括生成が計算する = 検証したい列 */
 const CALC_FIELDS = [
   "care_support_code", "care_support_name", "units",

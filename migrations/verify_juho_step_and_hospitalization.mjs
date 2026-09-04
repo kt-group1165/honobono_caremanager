@@ -78,14 +78,6 @@ async function fetchAll(table, cols, mod) {
 //   こちらが古いままになり『修正したのにテストが落ち続ける』状態を実際に招いた。
 //   乖離源なので共有モジュールに一本化した。
 
-// 入院等判定 (isHospitalizedByName と同じロジック。ここでは日付範囲を直接渡す形の単純版)
-function isHospitalizedOn(periods, dateStr) {
-  for (const p of periods) {
-    if (dateStr >= p.admission_date && (p.discharge_date === null || dateStr < p.discharge_date)) return true;
-  }
-  return false;
-}
-
 // juho-tier.ts の remapJuhoCode 相当 (段Ⅰ/Ⅱ/Ⅲ 読み替え)。byBase/byCode は下で構築する。
 function splitTierName(name) {
   const m = /^重訪(Ⅰ|Ⅱ|Ⅲ)(.*)$/.exec((name ?? "").normalize("NFC"));

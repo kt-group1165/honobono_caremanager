@@ -41,7 +41,7 @@
 //   env: MONTH=2026-06 / AREA=おゆみ野 (省略時は全拠点)
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import iconv from "iconv-lite";

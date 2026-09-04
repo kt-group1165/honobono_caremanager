@@ -112,7 +112,7 @@ async function main() {
       .eq("client_id", p.client_id)
       .eq("notes", STEP1_MARK);
     if (error) { console.error(`✗ ${p.name}: ${error.message}`); process.exit(1); }
-    count ? ok++ : miss++;
+    if (count) ok++; else miss++;
   }
   console.log(`✓ 完了: ${ok} 名更新 / marker不一致で未更新 ${miss}`);
 }

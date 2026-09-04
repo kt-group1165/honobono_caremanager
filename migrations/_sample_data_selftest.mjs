@@ -5,7 +5,7 @@
  * node migrations/_sample_data_selftest.mjs            # DRY RUN
  * node migrations/_sample_data_selftest.mjs --execute
  */
-import { sb, TENANT, MONTH, marker, userNumber, sampleClient, sampleInsurance,
+import { sb, MONTH, sampleClient, sampleInsurance,
          sampleAssignment, insertRows, deleteByTag, assertSafeMonth, LIMIT_UNITS } from "./_sample_data.mjs";
 
 const EXEC = process.argv.includes("--execute");

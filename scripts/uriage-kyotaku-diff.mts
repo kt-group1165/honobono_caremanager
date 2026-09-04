@@ -27,7 +27,7 @@
  * ── 予防は比較しない ──────────────────────────────────────────────────
  *   予防プラン (地域包括からの委託) は国保連を通らず包括から直接支払われる。
  */
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";

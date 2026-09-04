@@ -20,7 +20,6 @@ import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { normClientName as normClientNameShared } from "./_meisai_name.mjs";
 import { calcIdouAmount } from "./_idou_rates.mjs";
 import { fileURLToPath } from "node:url";
-import path from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
 const TARGET_MONTH = "2026-06";
@@ -48,7 +47,6 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
   auth: { persistSession: false },
 });
 
-const normBase = (s) => (s || "").normalize("NFKC").replace(/[\s　]/g, "");
 // 利用者名の正規化は _meisai_name.mjs に集約 (括弧なしの目印「移/障/支」を落とすため)
 const normClientName = normClientNameShared;
 const sjis = new TextDecoder("shift_jis");

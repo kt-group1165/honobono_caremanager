@@ -104,14 +104,6 @@ const iso = (s) => {
   const m = /^(\d{4})\/(\d{1,2})\/(\d{1,2})$/.exec((s ?? "").trim());
   return m ? `${m[1]}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}` : null;
 };
-/** 「R 8/ 7/ 1～R 8/12/31」→ ["2026-07-01","2026-12-31"] */
-const parseWareki = (s) => {
-  const out = [];
-  for (const m of (s ?? "").matchAll(/R\s*(\d+)\s*\/\s*(\d+)\s*\/\s*(\d+)/g)) {
-    out.push(`${2018 + Number(m[1])}-${m[2].padStart(2, "0")}-${m[3].padStart(2, "0")}`);
-  }
-  return out;
-};
 
 async function main() {
   console.log(`=== ケアプラン取込 ${MONTH} ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"}` +

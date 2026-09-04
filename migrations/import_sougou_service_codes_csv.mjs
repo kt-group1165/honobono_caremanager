@@ -224,6 +224,7 @@ async function main() {
   }
   const toInsert = rows
     .filter((r) => !existing.has(`${r.service_code}|${r.valid_from ?? "null"}`))
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 分割代入で内部用の _bare を落とすための記述
     .map(({ _bare, ...rest }) => rest);
   console.log(`\n既存と衝突 skip ${rows.length - toInsert.length} / 新規 INSERT ${toInsert.length}`);
 

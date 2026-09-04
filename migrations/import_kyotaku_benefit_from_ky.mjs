@@ -79,12 +79,14 @@ async function main() {
   let ins = 0, dropShiteiKubun = false;
   for (let i = 0; i < rows.length; i += 200) {
     let chunk = rows.slice(i, i + 200);
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 分割代入で shitei_kubun 列を落とすための記述
     if (dropShiteiKubun) chunk = chunk.map(({ shitei_kubun, ...rest }) => rest);
     let { error } = await sb.from("kaigo_benefit_management").insert(chunk);
     // shitei_kubun 列未適用 (kyufu_kanri_shitei_kubun.sql) の環境では列なしで再試行
     if (error && !dropShiteiKubun && /shitei_kubun/.test(error.message)) {
       console.warn("⚠ shitei_kubun 列が未適用のため区分なしで投入 (kyufu_kanri_shitei_kubun.sql 適用後に再実行推奨)");
       dropShiteiKubun = true;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars -- 分割代入で shitei_kubun 列を落とすための記述
       ({ error } = await sb.from("kaigo_benefit_management").insert(chunk.map(({ shitei_kubun, ...rest }) => rest)));
     }
     if (error) { console.error("挿入失敗:", error.message); process.exit(1); }
