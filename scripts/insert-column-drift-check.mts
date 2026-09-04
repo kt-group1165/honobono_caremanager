@@ -150,7 +150,119 @@ function topLevelKeys(obj: string): { keys: string[]; partial: boolean } | null 
   return { keys, partial };
 }
 
-type Site = { file: string; line: number; table: string; keys: string[] | null; partial: boolean };
+/**
+ * 変数渡し (`.insert(X)` 等) のうち、
+ *   const X = <何か>.map((row) => ({ ... }))
+ * という **単純な形だけ** を解決する。
+ *
+ * ⚠ このパターン専用。意図的に広げていない (VERIFICATION_RULES: 静的解析は
+ *   複雑にしすぎない。欲張ると誤検出が出て検査が信用されなくなる)。
+ *   対象外 (= 未解析のまま残る): .flatMap / チェーンした複数 .map /
+ *   明示的な `return {...}` (中括弧の関数本体) / for ループ + .push
+ *
+ * @param beforeIndex この変数を使っている `.from(` 呼出しの位置。
+ *   これより後ろの宣言は拾わない (同名変数が複数箇所にあるファイル対策)。
+ *   同名変数が複数あるファイルでは「直前の宣言」を単純に採用する簡易ヒューリスティックで、
+ *   完全ではない (別関数の同名変数を誤って拾う可能性はゼロではない)。
+ */
+function resolveMapVariable(
+  src: string,
+  varName: string,
+  beforeIndex: number,
+): { keys: string[]; partial: boolean } | null {
+  const declRe = new RegExp(`\\b(?:const|let)\\s+${varName}\\s*(?::[^=]+)?=\\s*`, "g");
+  let lastMatch: RegExpExecArray | null = null;
+  let m: RegExpExecArray | null;
+  while ((m = declRe.exec(src))) {
+    if (m.index >= beforeIndex) break;
+    lastMatch = m;
+  }
+  if (!lastMatch) return null;
+
+  // ★ 事故った実装の教訓 その2: 「ファイル内で直前に見つかった同名の宣言」を
+  //   無条件に採用すると、★ 別の関数にある同名変数 (よくある汎用名 `rows` 等) を
+  //   誤って拾う。実際に踏んだ: order-app/lib/attendance.ts で、別関数の中で
+  //   事業所一覧を組み立てる `const rows = ...` (2,821 文字も離れた場所) を、
+  //   関数引数として渡された同名の `rows` (payroll_kyotaku_attendance_records への
+  //   upsert) の宣言と誤認した。
+  //   → 宣言から使用箇所までの間で **中括弧の相対深さが 0 を下回ったら**
+  //     (= 宣言を包んでいた関数/ブロックが閉じた = 別スコープに出た) 採用しない。
+  {
+    let depth = 0;
+    let crossedScope = false;
+    for (let i = lastMatch.index; i < beforeIndex; i++) {
+      const ch = src[i];
+      if (ch === '"' || ch === "'" || ch === "`") {
+        const q = ch; i++;
+        while (i < beforeIndex && src[i] !== q) { if (src[i] === "\\") i++; i++; }
+        continue;
+      }
+      if (ch === "/" && src[i + 1] === "/") { while (i < beforeIndex && src[i] !== "\n") i++; continue; }
+      if (ch === "/" && src[i + 1] === "*") { const e = src.indexOf("*/", i + 2); i = e < 0 ? beforeIndex : e + 1; continue; }
+      if (ch === "{") depth++;
+      else if (ch === "}") { depth--; if (depth < 0) { crossedScope = true; break; } }
+    }
+    if (crossedScope) return null;
+  }
+
+  const exprStart = lastMatch.index + lastMatch[0].length;
+
+  // ★ 事故った実装の教訓: 「宣言の後 2000 文字以内」という近さだけで .map( を探すと、
+  //   宣言自体が .map を含まない文 (例: `const batch = arr.slice(...)`) のときに
+  //   ★ その後に出てくる無関係な .map( (別のテーブル向けの全く別の insert) を
+  //   誤って拾ってしまう。実際に踏んだ: calendar-app/lib/clients.ts の `batch` (= 単なる
+  //   .slice()) が、離れた場所にある clients 向けの別の .map( を拾って
+  //   「client_office_assignments に存在しない列 13 個」という **偽陽性** を出した。
+  //   → .map( は **この宣言の文の中** (次のセミコロンが来るまで) にしか探しに行かない。
+  let stmtEnd = -1;
+  {
+    let depth = 0;
+    for (let i = exprStart; i < src.length; i++) {
+      const ch = src[i];
+      if (ch === '"' || ch === "'" || ch === "`") {
+        const q = ch; i++;
+        while (i < src.length && src[i] !== q) { if (src[i] === "\\") i++; i++; }
+        continue;
+      }
+      if (ch === "/" && src[i + 1] === "/") { while (i < src.length && src[i] !== "\n") i++; continue; }
+      if (ch === "/" && src[i + 1] === "*") { const e = src.indexOf("*/", i + 2); i = e < 0 ? src.length : e + 1; continue; }
+      if (ch === "{" || ch === "(" || ch === "[") depth++;
+      else if (ch === "}" || ch === ")" || ch === "]") { if (depth === 0) { stmtEnd = i; break; } depth--; }
+      else if (ch === ";" && depth === 0) { stmtEnd = i; break; }
+    }
+  }
+  if (stmtEnd < 0) return null;
+
+  // 宣言の文の中でだけ .map( を探す (他の文には絶対に踏み出さない)
+  const mapIdx = src.indexOf(".map(", exprStart);
+  if (mapIdx < 0 || mapIdx > stmtEnd) return null;
+  const parenStart = mapIdx + ".map(".length - 1;
+  const parenEnd = matchBrace(src, parenStart);
+  if (parenEnd < 0) return null;
+  const argBody = src.slice(parenStart + 1, parenEnd);
+
+  // アロー関数の "=> (" だけ対応 (暗黙 return の丸括弧形)
+  const arrowIdx = argBody.indexOf("=>");
+  if (arrowIdx < 0) return null;
+  let i = arrowIdx + 2;
+  while (i < argBody.length && /\s/.test(argBody[i])) i++;
+  if (argBody[i] !== "(") return null;
+  const objParenEnd = matchBrace(argBody, i);
+  if (objParenEnd < 0) return null;
+  const inner = argBody.slice(i + 1, objParenEnd).trim();
+  if (!inner.startsWith("{") || !inner.endsWith("}")) return null;
+  return topLevelKeys(inner);
+}
+
+type Site = {
+  file: string;
+  line: number;
+  table: string;
+  keys: string[] | null;
+  partial: boolean;
+  /** true なら resolveMapVariable (変数渡し→map パターン解決) で解けた箇所 */
+  viaPattern?: boolean;
+};
 
 function collect(): Site[] {
   const sites: Site[] = [];
@@ -185,7 +297,23 @@ function collect(): Site[] {
           const r = objEnd < 0 ? null : topLevelKeys(src.slice(argStart, objEnd + 1));
           sites.push({ file: rel, line, table, keys: r?.keys ?? null, partial: r?.partial ?? false });
         } else {
-          sites.push({ file: rel, line, table, keys: null, partial: false }); // 変数を渡している = 未解析
+          // 変数渡し。「const X = ....map((row) => ({...}))」の単純な形だけ追加で解決する。
+          const idMatch = /^[A-Za-z_$][A-Za-z0-9_$]*/.exec(src.slice(argStart));
+          let keys: string[] | null = null;
+          let partial = false;
+          let viaPattern = false;
+          if (idMatch) {
+            const varName = idMatch[0];
+            let j = argStart + varName.length;
+            while (j < src.length && /\s/.test(src[j])) j++;
+            // 続きが呼出しの区切り (`,` か `)`) のときだけ対象にする。
+            // `.` や `(` が続く (chunk.slice(...) 等のメソッドチェーン) は対象外 (未解析のまま)。
+            if (src[j] === "," || src[j] === ")") {
+              const resolved = resolveMapVariable(src, varName, m.index);
+              if (resolved) { keys = resolved.keys; partial = resolved.partial; viaPattern = true; }
+            }
+          }
+          sites.push({ file: rel, line, table, keys, partial, viaPattern });
         }
       }
     }
@@ -214,10 +342,13 @@ async function main() {
   console.log(`【分母】insert/upsert/update の呼出 ${sites.length} 箇所 / ${tables.length} table`);
   const parsed = sites.filter((s) => s.keys !== null);
   const partial = parsed.filter((s) => s.partial);
+  const viaPattern = parsed.filter((s) => s.viaPattern);
   console.log(`  うち **インラインのオブジェクトが読めた** ${parsed.length} 箇所`);
   console.log(`    (うち ${partial.length} 箇所は ★ 部分解析 — スプレッドを含むので`);
   console.log(`     「余分な列」は見えるが「足りない列」は見えない)`);
-  console.log(`  ★ 未解析 (変数渡し・動的キー) ${sites.length - parsed.length} 箇所 — ここは見ていない\n`);
+  console.log(`    (うち ${viaPattern.length} 箇所は ★ 変数渡し→map パターン解決で追加解析`);
+  console.log(`     "const X = ....map((row) => ({...}))" の形だけ対応。それ以外の変数渡しは未解析のまま)`);
+  console.log(`  ★ 未解析 (それ以外の変数渡し・動的キー) ${sites.length - parsed.length} 箇所 — ここは見ていない\n`);
 
   // 未解析の site を一覧する (手で当たるため)。表名で絞れる:
   //   LIST_UNPARSED=1                        全部
@@ -229,6 +360,17 @@ async function main() {
     console.log(`── 未解析の site ${rows.length} 件 ${filter ? `(${filter.size} 表に絞り込み)` : "(全部)"} ──`);
     for (const s of rows.sort((a, b) => a.table.localeCompare(b.table) || a.file.localeCompare(b.file))) {
       console.log(`  ${s.table.padEnd(34)} ${s.file}:${s.line}`);
+    }
+    console.log("");
+  }
+  // ★ パターン解決 (const X = ....map(...)) で解けた箇所も一覧できるようにする。
+  //   新しい解析パスなので、まず何を解けているかを人が確認できることが大事
+  //   (VERIFICATION_RULES: 静的解析を広げたら、広げた分だけ検証する)。
+  if ((process.env.LIST_VIAPATTERN ?? "").trim()) {
+    const rows = sites.filter((s) => s.viaPattern);
+    console.log(`── 変数渡し→map パターンで解決した site ${rows.length} 件 ──`);
+    for (const s of rows.sort((a, b) => a.table.localeCompare(b.table) || a.file.localeCompare(b.file))) {
+      console.log(`  ${s.table.padEnd(34)} ${s.file}:${s.line}  → ${s.keys?.join(",")}`);
     }
     console.log("");
   }
