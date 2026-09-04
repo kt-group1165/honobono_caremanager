@@ -247,8 +247,24 @@ export async function deleteByTag(tag, { dryRun = true, extraTables = [] } = {})
     .from("clients").select("id,user_number,name")
     .like("user_number", `Z${tag.toUpperCase()}%`);
   if (error) throw new Error(`clients 取得失敗: ${error.message}`);
-  const ids = (cs ?? []).map((c) => c.id);
-  console.log(`撤去対象: clients ${ids.length} 名 (user_number LIKE 'Z${tag.toUpperCase()}%')`);
+
+  // 🔴 ★ 接頭辞だけで消してはいけない (2026-09-05。I が衝突を発見)
+  //   user_number の接頭辞 `Z<TAG>` は ★ セッション間で衝突する。
+  //   実例: 移動支援 (tag=l) の seed が ★ ZM% を使っていて、
+  //         総合事業 (tag=m) の ZM% と ★ 同じ空間に入っていた。
+  //   接頭辞だけで消すと ★ 他セッションのサンプルを巻き込む。
+  //   → 氏名の `[sample-<tag>]` マーカーも ★ 両方一致した行だけ消す。
+  const mk = marker(tag);
+  const mine = (cs ?? []).filter((c) => String(c.name ?? "").includes(mk));
+  const others = (cs ?? []).filter((c) => !String(c.name ?? "").includes(mk));
+  if (others.length) {
+    // ★ 黙って飛ばさない。誰のものかを出す
+    console.log(`⚠ ★ 接頭辞 Z${tag.toUpperCase()} に一致するが マーカー ${mk} を持たない行が ${others.length} 件`);
+    for (const c of others.slice(0, 5)) console.log(`     ${c.user_number}  ${c.name}  ← ★ 他セッションのものとして 消しません`);
+    if (others.length > 5) console.log(`     … 他 ${others.length - 5} 件`);
+  }
+  const ids = mine.map((c) => c.id);
+  console.log(`撤去対象: clients ${ids.length} 名 (user_number LIKE 'Z${tag.toUpperCase()}%' ★ かつ 氏名に ${mk})`);
   if (!ids.length) return 0;
 
   // 子から順に。extraTables は各業務が自分の表を足す
@@ -277,9 +293,11 @@ export async function deleteByTag(tag, { dryRun = true, extraTables = [] } = {})
 
   // ★ 撤去後に 0 件を確認する (SAMPLE_DATA_PROTOCOL 7章)
   const { data: left, error: e3 } = await sb
-    .from("clients").select("id").like("user_number", `Z${tag.toUpperCase()}%`);
+    .from("clients").select("id,name").like("user_number", `Z${tag.toUpperCase()}%`);
   if (e3) throw new Error(`確認クエリ失敗: ${e3.message}`);
-  if ((left ?? []).length !== 0) throw new Error(`撤去したのに ${left.length} 行残っている`);
+  // ★ 自分のマーカーを持つ行だけが 0 であればよい (他セッションのぶんは残っていて正しい)
+  const leftMine = (left ?? []).filter((c) => String(c.name ?? "").includes(mk));
+  if (leftMine.length !== 0) throw new Error(`撤去したのに ${leftMine.length} 行残っている`);
   console.log(`✅ 撤去完了。残 0 件を確認`);
   return ids.length;
 }
