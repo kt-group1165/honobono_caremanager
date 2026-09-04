@@ -28,6 +28,8 @@ const CHECKS: Check[] = [
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
   { name: "sougou-shoguu", script: "check:sougou-shoguu", why: "総合事業の処遇改善 (自治体独自率)" },
+  { name: "shoguu-4impl", script: "check:shoguu-4impl", why: "★ 処遇改善の % 計算が 4 制度の実装で一致するか" },
+  { name: "service-code-gap", script: "check:service-code-gap", why: "★ 単位数0・加算率未設定のコードが 実発火しうるか" },
   { name: "teigen", script: "check:teigen", why: "逓減制" },
   { name: "shogai-jogen", script: "check:shogai-jogen", why: "障害の上限額管理" },
   { name: "tokutei", script: "check:tokutei", why: "特定事業所加算" },
