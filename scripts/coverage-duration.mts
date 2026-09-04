@@ -51,24 +51,27 @@ const toMin = (t: string | null): number | null => {
 
 type Row = { user_id: string; start_time: string | null; end_time: string | null; service_type: string | null; staff_id_2: string | null; system: string | null };
 
-async function page<T>(table: string, select: string, filt: (q: ReturnType<typeof sb.from>) => unknown): Promise<T[]> {
-  const out: T[] = [];
+/** ★ PostgREST は 1000 行キャップ。order 付きで必ずページングする */
+async function loadSchedule(): Promise<Row[]> {
+  const out: Row[] = [];
   for (let off = 0; ; off += 1000) {
-    let q = sb.from(table).select(select).order("id", { ascending: true }).range(off, off + 999);
-    q = filt(q) as typeof q;
-    const { data, error } = await q;
-    if (error) throw new Error(`${table} 取得失敗: ${error.message}`);
-    out.push(...((data ?? []) as T[]));
-    if ((data ?? []).length < 1000) break;
+    const { data, error } = await sb
+      .from("kaigo_visit_schedule")
+      .select("user_id, start_time, end_time, service_type, staff_id_2, system")
+      .eq("status", "completed")
+      .gte("visit_date", FROM)
+      .lte("visit_date", TO)
+      .order("id", { ascending: true })
+      .range(off, off + 999);
+    if (error) throw new Error(`kaigo_visit_schedule 取得失敗: ${error.message}`);
+    const rows = (data ?? []) as unknown as Row[];
+    out.push(...rows);
+    if (rows.length < 1000) break;
   }
   return out;
 }
 
-const rows = await page<Row>(
-  "kaigo_visit_schedule",
-  "user_id, start_time, end_time, service_type, staff_id_2, system",
-  (q) => (q as ReturnType<typeof sb.from>).eq("status", "completed").gte("visit_date", FROM).lte("visit_date", TO),
-);
+const rows = await loadSchedule();
 
 console.log(`所要時間の網羅率 — ${FROM} 〜 ${TO} / kaigo_visit_schedule (completed) ★ ${rows.length} 行\n`);
 if (rows.length === 0) { console.log("★ FAIL 0 行です。網羅率は測れません。"); process.exit(1); }
