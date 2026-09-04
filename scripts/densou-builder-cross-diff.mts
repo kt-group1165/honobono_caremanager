@@ -25,8 +25,12 @@
  *
  * DB は読まない (純関数のみ)。dry-run のみで書込みなし。
  */
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { buildKokuhoDensou, type DensouRow } from "../src/lib/kokuho-densou/build";
 import { buildFukuyoguDensou, type FukuyoguSeikyuRow } from "../../order-app/lib/kokuho-densou/build";
+
+const BASELINE = "scripts/densou-builder-cross-diff-baseline.json";
+const UPDATE = process.argv.includes("--update");
 
 let n = 0, ng = 0;
 const eq = (label: string, a: unknown, b: unknown) => {
@@ -213,6 +217,53 @@ console.log(`\n══ 検査 ${n} 件 / NG ${ng} 件 ══`);
 console.log("⚠ この比較は共通スコープ (デモグラフィック・公費構造・欠損行処理) のみを対象にした。");
 console.log("  福祉用具固有 (TAISコード・貸与期間・半月按分) はこのビルダーの外 (集計層) の話で、");
 console.log("  ほのぼの福祉用具伝送が未入手のため、この比較結果をもって検証済みとは言えない。");
-// ⚠ 2026-09-05 是正: 他 3 本 (fukuyogu-densou-check.mts / billing-issue-check.mts /
-//   payroll-sample-check.mts) と同じ穴 — ng を数えるだけで exit code に反映していなかった。
-process.exitCode = ng > 0 ? 1 : 0;
+
+// =====================================================================
+// 基準値方式 (2026-09-05 / DECISIONS_PENDING.md B-2t・B-2x)
+//   ★ 「既知だから緑にする」のではなく「既知の件数を固定して、それ以上を検出する」。
+//   fixture ベースの純関数比較なので (DBの実データに依存しない)、指紋は持たない。
+// =====================================================================
+type Baseline = { _readme: string[]; asOf: string; ng: number };
+
+let baseline: Baseline | null = null;
+if (existsSync(BASELINE)) baseline = JSON.parse(readFileSync(BASELINE, "utf8"));
+
+if (UPDATE || !baseline) {
+  const out: Baseline = {
+    _readme: [
+      "npm run check:densou-builder-diff (order-appから呼ぶ) / このscript直接実行 の基準値。",
+      "",
+      "■ なぜ 3 件なのか (B-2t 参照)",
+      "  A. 要介護度コード (NFKC) — order-appはNFKC正規化するがkaigo-appはtrim()のみ。",
+      "     kaigo-appの参照元(client_insurance_records.care_level)は実データで全角混在0件",
+      "     (2026-09-05実測) なので現時点で実害ではない。案A(kaigoにもNFKCを入れる)を",
+      "     採れば0になるが、優先度は低い。",
+      "  B. 公費0円行の7111計上条件 — kaigo-appは金額0円でも件数計上するが、",
+      "     order-appはkohiAmount>0を条件にしたまま。福祉用具の公費併用者は",
+      "     2026-06実データで0名 (measure-fukuyogu-densou-gap.mjs実測)。",
+      "  C. 保険者番号/被保険者番号が欠損した行の除外 — kaigo-appは伝送から除外するが",
+      "     order-appは除外しない。同実データで欠損0名。",
+      "  B・Cは案A(kaigoの除外/計上ロジックをorder-appに移植)を採れば0になる。",
+      "  いずれも user 判断待ち。",
+      "",
+      "■ 0件を目指さない (今は)",
+      "  user判断が決まるまでは3件のまま。減ったら基準値を更新すること。",
+    ],
+    asOf: new Date().toISOString().slice(0, 10),
+    ng,
+  };
+  writeFileSync(BASELINE, JSON.stringify(out, null, 2) + "\n", "utf8");
+  console.log(`\n--update: 基準値を書きました (${BASELINE})`);
+  process.exit(0);
+}
+
+console.log(`\n基準値 (${baseline.asOf} 時点): NG ${baseline.ng} 件`);
+if (ng > baseline.ng) {
+  console.log(`★ FAIL — NGが基準値 (${baseline.ng}件) より増えた (現在 ${ng}件)。新しい乖離を確認すること。`);
+  process.exit(1);
+}
+if (ng < baseline.ng) {
+  console.log(`✓ PASS — NGが基準値 (${baseline.ng}件) より減った (現在 ${ng}件)。改善している。--update で基準値を下げてよい。`);
+  process.exit(0);
+}
+console.log(`✓ PASS — 基準値どおり ${ng} 件 (既知・DECISIONS_PENDING.md B-2t/B-2x で user 判断待ち)。`);

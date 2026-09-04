@@ -1,0 +1,23 @@
+{
+  "_readme": [
+    "npm run check:densou-builder-diff (order-appから呼ぶ) / このscript直接実行 の基準値。",
+    "",
+    "■ なぜ 3 件なのか (B-2t 参照)",
+    "  A. 要介護度コード (NFKC) — order-appはNFKC正規化するがkaigo-appはtrim()のみ。",
+    "     kaigo-appの参照元(client_insurance_records.care_level)は実データで全角混在0件",
+    "     (2026-09-05実測) なので現時点で実害ではない。案A(kaigoにもNFKCを入れる)を",
+    "     採れば0になるが、優先度は低い。",
+    "  B. 公費0円行の7111計上条件 — kaigo-appは金額0円でも件数計上するが、",
+    "     order-appはkohiAmount>0を条件にしたまま。福祉用具の公費併用者は",
+    "     2026-06実データで0名 (measure-fukuyogu-densou-gap.mjs実測)。",
+    "  C. 保険者番号/被保険者番号が欠損した行の除外 — kaigo-appは伝送から除外するが",
+    "     order-appは除外しない。同実データで欠損0名。",
+    "  B・Cは案A(kaigoの除外/計上ロジックをorder-appに移植)を採れば0になる。",
+    "  いずれも user 判断待ち。",
+    "",
+    "■ 0件を目指さない (今は)",
+    "  user判断が決まるまでは3件のまま。減ったら基準値を更新すること。"
+  ],
+  "asOf": "2026-09-04",
+  "ng": 3
+}
