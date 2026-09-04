@@ -213,7 +213,8 @@ async function main() {
       let sres;
       try {
         sres = await aggregateMonthlyShogaiSeikyu(sb, {
-          year: y, month: mo, officeId: o.id as string, tenantId: o.tenant_id as string,
+          // ⚠ 障害の集計は tenantId を取らない (officeId でスコープする)。渡すと tsc が落ちる
+          year: y, month: mo, officeId: o.id as string,
         });
       } catch (e) {
         console.log(`  ⚠ ${o.name} ${m}: 障害の集計に失敗 — ${e instanceof Error ? e.message : String(e)}`);
