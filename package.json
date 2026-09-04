@@ -40,6 +40,7 @@
     "check:tokutei": "tsx scripts/tokutei-kassan-verify.mts",
     "check:all": "tsx scripts/check-all.mts",
     "check:invariant": "tsx scripts/invariant-check.mts",
+    "check:tier-determinism": "tsx scripts/tier-determinism.mts",
     "check:tier-boundaries": "tsx scripts/honobono-tier-boundaries.mts",
     "check:coverage-duration": "tsx scripts/coverage-duration.mts",
     "check:coverage": "tsx scripts/coverage-check.mts",
