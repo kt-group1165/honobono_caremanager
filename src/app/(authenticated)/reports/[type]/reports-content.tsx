@@ -1013,9 +1013,15 @@ function EditFormCarePlan1({ content, onChange, userId }: {
       setMany(updates);
 
       // 使用ログ
+      // ⚠ 2026-09-05 是正: tenant_id (NOT NULL・デフォルト無し・tenants への FK) が
+      //   無く、この insert は 100% 失敗していた。この EditFormCarePlan1 は
+      //   tenant/office の context を props で受け取っていないため、
+      //   kaigo-app が事実上単一テナントで運用している実データ
+      //   (kaigo_report_documents は全行 tenant_id='kt-group') に合わせて固定値を使う。
       const { error: logError } = await supabaseForAi.from("kaigo_ai_usage_logs").insert({
         user_id: userId,
         user_name: aiUserInfo.name,
+        tenant_id: "kt-group",
         action: "care-plan-1-generate",
         mode: "care-plan-1",
         input_tokens: result.usage?.input_tokens ?? 0,
@@ -1023,8 +1029,10 @@ function EditFormCarePlan1({ content, onChange, userId }: {
         estimated_cost: result.usage?.estimated_cost_yen ?? 0,
       });
       if (logError) {
-        // ログ書込み失敗は本処理を止めない (= warn のみ)
-        console.warn("AI 使用ログの保存に失敗:", logError.message);
+        // ⚠ AI生成そのものは止めない (ログの失敗で本体を止めては本末転倒)。
+        //   ただし console.warn だけだと誰も気づけない (今回まさにその状態で
+        //   100% 失敗に気づけなかった)。toast で画面に出す。
+        toast.error("使用ログの保存に失敗しました (コスト集計に影響): " + logError.message);
       }
 
       const costStr = result.usage?.estimated_cost_yen ? `約${result.usage.estimated_cost_yen}円` : "";
@@ -1305,9 +1313,13 @@ function EditFormCarePlan2({ content, onChange, userId }: {
         }));
         set("blocks", newBlocks);
         // 使用ログをDBに保存
+        // ⚠ 2026-09-05 是正: tenant_id が無く 100% 失敗していた。理由は上の
+        //   care-plan-1-generate と同じ (EditFormCarePlan2 も tenant/office を
+        //   props で受け取らない。kaigo-app 単一テナントの実データに合わせる)。
         const { error: logError } = await supabaseForAi.from("kaigo_ai_usage_logs").insert({
           user_id: resolvedUserId,
           user_name: aiUserInfo.name,
+          tenant_id: "kt-group",
           action: "care-plan-generate",
           mode: aiMode,
           input_tokens: result.usage?.input_tokens ?? 0,
@@ -1315,8 +1327,8 @@ function EditFormCarePlan2({ content, onChange, userId }: {
           estimated_cost: result.usage?.estimated_cost_yen ?? 0,
         });
         if (logError) {
-          // ログ書込み失敗は本処理を止めない (= warn のみ)
-          console.warn("AI 使用ログの保存に失敗:", logError.message);
+          // ⚠ AI生成そのものは止めない。console.warn だけでは気づけない (今回の教訓)。
+          toast.error("使用ログの保存に失敗しました (コスト集計に影響): " + logError.message);
         }
         const costStr = result.usage?.estimated_cost_yen ? `約${result.usage.estimated_cost_yen}円` : "";
         const assessHint = aiUserInfo.hasAssessment ? "（アセスメント反映済）" : "（アセスメント未入力）";

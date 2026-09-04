@@ -387,16 +387,22 @@ export function AssessmentsContent({
       }
 
       // 使用ログ
+      // ⚠ 2026-09-05 是正: tenant_id (NOT NULL・デフォルト無し・tenants への FK) が
+      //   無く、この insert は 100% 失敗していた。この画面に tenant/office の
+      //   context は無いため、kaigo-app が事実上単一テナントで運用している
+      //   実データ (kaigo_report_documents は全行 tenant_id='kt-group') に合わせる。
       const { error: logError } = await supabase.from("kaigo_ai_usage_logs").insert({
         user_id: userId,
         user_name: userName,
+        tenant_id: "kt-group",
         action: "care-plan-1-and-2-generate",
         mode: "care-plan-1-and-2",
         input_tokens: result.usage?.input_tokens ?? 0,
         output_tokens: result.usage?.output_tokens ?? 0,
         estimated_cost: result.usage?.estimated_cost_yen ?? 0,
       });
-      if (logError) console.warn("AI 使用ログの保存に失敗:", logError.message);
+      // ⚠ AI生成そのものは止めない。console.warn だけでは気づけない (今回の教訓)。
+      if (logError) toast.error("使用ログの保存に失敗しました (コスト集計に影響): " + logError.message);
 
       const costStr = result.usage?.estimated_cost_yen ? `約${result.usage.estimated_cost_yen}円` : "";
       toast.success(`第1表・第2表の draft を生成しました（${costStr}）。第1表 page に移動します。`);
