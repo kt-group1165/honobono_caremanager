@@ -16,6 +16,7 @@
     "check:service-code-calc": "tsx scripts/service-code-calc-verify.mts",
     "check:shoguu-4impl": "tsx scripts/shoguu-kaizen-4impl-diff.mts",
     "check:same-building": "tsx scripts/same-building-verify.mts",
+    "check:seikatsu-enjo": "tsx scripts/seikatsu-enjo-limit-verify.mts",
     "check:riyou-final-diff": "tsx scripts/riyou-seikyu-final-amount-diff.mts",
     "check:riyou-final": "tsx scripts/riyou-seikyu-final-amount-verify.mts",
     "dev": "next dev",
