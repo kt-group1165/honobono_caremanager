@@ -40,6 +40,7 @@
     "check:tokutei": "tsx scripts/tokutei-kassan-verify.mts",
     "check:all": "tsx scripts/check-all.mts",
     "check:invariant": "tsx scripts/invariant-check.mts",
+    "check:coverage-duration": "tsx scripts/coverage-duration.mts",
     "check:coverage": "tsx scripts/coverage-check.mts",
     "matrix": "tsx scripts/sample-matrix.mts",
     "check:densou-diff": "tsx scripts/densou-diff-check.mts"
