@@ -39,6 +39,16 @@ import {
   parseYoboShienKubun,
   yoboAddonCode,
   reductionUnitsOf,
+  TOKUTEI_KASSAN_CODES,
+  DISCHARGE_TYPE_CODES,
+  DISCHARGE_UNITS_TO_CODE,
+  SHOKAI_ADDITION_CODE,
+  MEDICAL_COOP_KASSAN_CODE,
+  MEDICAL_COORDINATION_CODE,
+  TERMINAL_CARE_CODE,
+  EMERGENCY_CONFERENCE_CODE,
+  HOSPITAL_COORDINATION_CODE_I,
+  HOSPITAL_COORDINATION_CODE_II,
   type ClaimStatus,
   type YoboShienKubun,
 } from "../claims/claims-shared";
@@ -241,28 +251,9 @@ interface CertDbRow {
 // ─────────────────────────────────────────────────────────────────────────────
 
 // 加算のサービスコード (kaigo_service_codes 実DB確認値 2026-07-08。R6/R8.6 両世代同一)
-const TOKUTEI_KASSAN_CODES: Record<string, string> = {
-  "Ⅰ": "434002",
-  "Ⅱ": "434003",
-  "Ⅲ": "434004",
-  A: "434006",
-  // 旧区分 (既存データ対応)
-  B: "434003",
-  C: "434004",
-};
-const DISCHARGE_TYPE_CODES: Record<string, string> = {
-  i_i: "436132", // 退院退所加算Ⅰ１ 450
-  i_ro: "436143", // Ⅰ２ 600
-  ii_i: "436144", // Ⅱ１ 600
-  ii_ro: "436145", // Ⅱ２ 750
-  iii: "436146", // Ⅲ 900
-};
-// discharge_type 未保存の旧データは単位数からコードを推定
-const DISCHARGE_UNITS_TO_CODE: Record<number, string> = {
-  450: "436132",
-  750: "436145",
-  900: "436146",
-};
+// TOKUTEI_KASSAN_CODES / DISCHARGE_TYPE_CODES / DISCHARGE_UNITS_TO_CODE 等は
+// claims-shared.ts に一本化済み (2026-09-05・billing-forms-content.tsx の
+// コード誤りと3箇所目の食い違いを防ぐため)。
 
 /**
  * @param billingMonth "YYYY-MM" — 43→46 の加算コード読み替えが世代 (R8.6) で
@@ -287,7 +278,7 @@ function buildClaimLines(c: ClaimDbRow, billingMonth: string): {
   const addonCode = (kaigoCode: string) =>
     (isYoboClaim ? yoboAddonCode(kaigoCode, billingMonth) : null) ?? kaigoCode;
   if (c.initial_addition && c.initial_addition_units > 0)
-    lines.push({ name: "初回加算", code: addonCode("434001"), units: c.initial_addition_units, count: 1 });
+    lines.push({ name: "初回加算", code: addonCode(SHOKAI_ADDITION_CODE), units: c.initial_addition_units, count: 1 });
   if ((c.tokutei_kassan_units ?? 0) > 0)
     lines.push({
       name: `特定事業所加算(${c.tokutei_kassan_type ?? ""})`,
@@ -296,11 +287,11 @@ function buildClaimLines(c: ClaimDbRow, billingMonth: string): {
       count: 1,
     });
   if (c.medical_coop_kassan)
-    lines.push({ name: "特定事業所医療介護連携加算", code: "434005", units: c.medical_coop_kassan_units ?? 125, count: 1 });
+    lines.push({ name: "特定事業所医療介護連携加算", code: MEDICAL_COOP_KASSAN_CODE, units: c.medical_coop_kassan_units ?? 125, count: 1 });
   if (c.hospital_coordination && c.hospital_coordination_units > 0)
     lines.push({
       name: `入院時情報連携加算${c.hospital_coordination_units >= 250 ? "Ⅰ" : "Ⅱ"}`,
-      code: c.hospital_coordination_units >= 250 ? "436125" : "436129",
+      code: c.hospital_coordination_units >= 250 ? HOSPITAL_COORDINATION_CODE_I : HOSPITAL_COORDINATION_CODE_II,
       units: c.hospital_coordination_units,
       count: 1,
     });
@@ -315,11 +306,11 @@ function buildClaimLines(c: ClaimDbRow, billingMonth: string): {
       count: 1,
     });
   if (c.medical_coordination)
-    lines.push({ name: "通院時情報連携加算", code: "436135", units: c.medical_coordination_units ?? 50, count: 1 });
+    lines.push({ name: "通院時情報連携加算", code: MEDICAL_COORDINATION_CODE, units: c.medical_coordination_units ?? 50, count: 1 });
   if (c.terminal_care)
-    lines.push({ name: "ターミナルケアマネジメント加算", code: "436100", units: c.terminal_care_units ?? 400, count: 1 });
+    lines.push({ name: "ターミナルケアマネジメント加算", code: TERMINAL_CARE_CODE, units: c.terminal_care_units ?? 400, count: 1 });
   if (c.emergency_conference)
-    lines.push({ name: "緊急時等居宅カンファレンス加算", code: "436133", units: c.emergency_conference_units ?? 200, count: 1 });
+    lines.push({ name: "緊急時等居宅カンファレンス加算", code: EMERGENCY_CONFERENCE_CODE, units: c.emergency_conference_units ?? 200, count: 1 });
   // 減算 (公式合成コードと一致する round 方式: 減算量 = 所定 − round(所定×(100−pct)/100))
   if (c.bcp_not_prepared)
     lines.push({

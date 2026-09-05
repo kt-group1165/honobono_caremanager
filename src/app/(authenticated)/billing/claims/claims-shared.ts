@@ -100,6 +100,63 @@ export const ADDON_CODE_TO_TOKUTEI: Record<string, TokuteiKassanType> = {
   "特定事業所加算A": "A",
 };
 
+// ─────────────────────────────────────────────────────────────────────────
+// 加算のサービスコード一本化 (2026-09-05・訪問入浴の教訓を居宅にも展開して発見)
+//
+// ⚠⚠⚠ 既知の欠陥だった (billing/forms/billing-forms-content.tsx で発見・修正) ⚠⚠⚠
+//   このファイルとは別に billing/seikyu/_seikyu-context.tsx (buildClaimLines) が
+//   同じ意図のコード対応表を独自に持っており、billing/forms/billing-forms-content.tsx
+//   (印刷画面の明細組立) はさらに別の独自ハードコードを持っていた。3箇所目のコピーで
+//   ようやく食い違いが表面化: 初回加算=434000(実際は特定事業所集中減算)/
+//   特定事業所加算=436132(実際は退院退所加算Ⅰ１)/医療介護連携=436135(実際は
+//   通院時情報連携)/入院時情報連携=434001(実際は初回加算)/退院退所=434002固定
+//   (実際は特定事業所加算Ⅰ。かつサブ区分Ⅰ１〜Ⅲを区別していなかった)/
+//   通院時情報連携=434050(存在しないコード)/ターミナル=434400(存在しないコード)/
+//   緊急時カンファレンス=434200(存在しないコード) — 印刷される明細書のコード欄が
+//   ほぼ全滅していた。実際の伝送 (KK/8124) の単位数フィンガープリントで正しいコードを
+//   確認済み (例: 436125行は units=250 と実伝送で一致 = 入院時情報連携加算Ⅰ)。
+//   単位数・金額自体は c.xxx_units 列 (DB確定値) から取るため計算には影響なし
+//   (印刷されるコード表示のみの不具合)。
+//
+//   今後 3 箇所目の食い違いを防ぐため、コード対応表はここ1箇所にまとめる。
+// ─────────────────────────────────────────────────────────────────────────
+
+/** 特定事業所加算 区分 → サービスコード (単位数は TOKUTEI_KASSAN_FALLBACK 参照) */
+export const TOKUTEI_KASSAN_CODES: Record<string, string> = {
+  "Ⅰ": "434002",
+  "Ⅱ": "434003",
+  "Ⅲ": "434004",
+  A: "434006",
+  // 旧区分 (既存データ対応)
+  B: "434003",
+  C: "434004",
+};
+
+/** 退院・退所加算 区分 → サービスコード */
+export const DISCHARGE_TYPE_CODES: Record<string, string> = {
+  i_i: "436132", // Ⅰ１ 450
+  i_ro: "436143", // Ⅰ２ 600
+  ii_i: "436144", // Ⅱ１ 600
+  ii_ro: "436145", // Ⅱ２ 750
+  iii: "436146", // Ⅲ 900
+};
+
+/** discharge_type 未保存の旧データは単位数からコードを推定するフォールバック */
+export const DISCHARGE_UNITS_TO_CODE: Record<number, string> = {
+  450: "436132",
+  750: "436145",
+  900: "436146",
+};
+
+/** 単独コードの加算 (区分を持たないもの) */
+export const SHOKAI_ADDITION_CODE = "434001"; // 初回加算
+export const MEDICAL_COOP_KASSAN_CODE = "434005"; // 特定事業所医療介護連携加算
+export const MEDICAL_COORDINATION_CODE = "436135"; // 通院時情報連携加算
+export const TERMINAL_CARE_CODE = "436100"; // ターミナルケアマネジメント加算
+export const EMERGENCY_CONFERENCE_CODE = "436133"; // 緊急時等居宅カンファレンス加算
+export const HOSPITAL_COORDINATION_CODE_I = "436125"; // 入院時情報連携加算Ⅰ (250単位)
+export const HOSPITAL_COORDINATION_CODE_II = "436129"; // 入院時情報連携加算Ⅱ (200単位)
+
 /**
  * その月に有効な addon かどうか判定する pure helper。
  *   - status='active'

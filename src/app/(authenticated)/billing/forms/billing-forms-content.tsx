@@ -11,7 +11,19 @@ import { toKohiInfo, type KohiInfo } from "./forms-shared";
 import { resolveKohiForMonth } from "@/lib/kohi";
 import { resolveCertForMonth } from "@/lib/cert-for-month";
 import { useBusinessType } from "@/lib/business-type-context";
-import { parseYoboShienKubun } from "../claims/claims-shared";
+import {
+  parseYoboShienKubun,
+  TOKUTEI_KASSAN_CODES,
+  DISCHARGE_TYPE_CODES,
+  DISCHARGE_UNITS_TO_CODE,
+  SHOKAI_ADDITION_CODE,
+  MEDICAL_COOP_KASSAN_CODE,
+  MEDICAL_COORDINATION_CODE,
+  TERMINAL_CARE_CODE,
+  EMERGENCY_CONFERENCE_CODE,
+  HOSPITAL_COORDINATION_CODE_I,
+  HOSPITAL_COORDINATION_CODE_II,
+} from "../claims/claims-shared";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,6 +72,9 @@ export interface ClaimRow {
   hospital_coordination_units: number;
   discharge_addition: boolean;
   discharge_addition_units: number;
+  /** select("*") で実際には取得されているが従来この型に無かった列。
+   *  退院退所加算のサブ区分(Ⅰ１〜Ⅲ)判定に使う (2026-09-05追加)。 */
+  discharge_type?: string | null;
   medical_coordination: boolean;
   medical_coordination_units: number;
   terminal_care: boolean;
@@ -367,21 +382,39 @@ export function BillingFormsContent({
     if (c.care_support_code)
       addLines.push({ name: c.care_support_name ?? "", code: c.care_support_code, units: c.units, count: 1 });
     if (c.initial_addition && c.initial_addition_units > 0)
-      addLines.push({ name: "初回加算", code: "434000", units: c.initial_addition_units, count: 1 });
+      addLines.push({ name: "初回加算", code: SHOKAI_ADDITION_CODE, units: c.initial_addition_units, count: 1 });
     if (c.tokutei_kassan_units > 0)
-      addLines.push({ name: `特定事業所加算(${c.tokutei_kassan_type})`, code: "436132", units: c.tokutei_kassan_units, count: 1 });
+      addLines.push({
+        name: `特定事業所加算(${c.tokutei_kassan_type})`,
+        code: TOKUTEI_KASSAN_CODES[c.tokutei_kassan_type ?? ""] ?? "",
+        units: c.tokutei_kassan_units,
+        count: 1,
+      });
     if (c.medical_coop_kassan)
-      addLines.push({ name: "特定事業所医療介護連携加算", code: "436135", units: c.medical_coop_kassan_units ?? 125, count: 1 });
+      addLines.push({ name: "特定事業所医療介護連携加算", code: MEDICAL_COOP_KASSAN_CODE, units: c.medical_coop_kassan_units ?? 125, count: 1 });
     if (c.hospital_coordination)
-      addLines.push({ name: "入院時情報連携加算", code: "434001", units: c.hospital_coordination_units, count: 1 });
+      addLines.push({
+        name: `入院時情報連携加算${c.hospital_coordination_units >= 250 ? "Ⅰ" : "Ⅱ"}`,
+        code: c.hospital_coordination_units >= 250 ? HOSPITAL_COORDINATION_CODE_I : HOSPITAL_COORDINATION_CODE_II,
+        units: c.hospital_coordination_units,
+        count: 1,
+      });
     if (c.discharge_addition)
-      addLines.push({ name: "退院・退所加算", code: "434002", units: c.discharge_addition_units, count: 1 });
+      addLines.push({
+        name: "退院・退所加算",
+        code:
+          (c.discharge_type ? DISCHARGE_TYPE_CODES[c.discharge_type] : null) ??
+          DISCHARGE_UNITS_TO_CODE[c.discharge_addition_units] ??
+          "",
+        units: c.discharge_addition_units,
+        count: 1,
+      });
     if (c.medical_coordination)
-      addLines.push({ name: "通院時情報連携加算", code: "434050", units: c.medical_coordination_units ?? 50, count: 1 });
+      addLines.push({ name: "通院時情報連携加算", code: MEDICAL_COORDINATION_CODE, units: c.medical_coordination_units ?? 50, count: 1 });
     if (c.terminal_care)
-      addLines.push({ name: "ターミナルケアマネジメント加算", code: "434400", units: c.terminal_care_units ?? 400, count: 1 });
+      addLines.push({ name: "ターミナルケアマネジメント加算", code: TERMINAL_CARE_CODE, units: c.terminal_care_units ?? 400, count: 1 });
     if (c.emergency_conference)
-      addLines.push({ name: "緊急時等居宅カンファレンス加算", code: "434200", units: c.emergency_conference_units ?? 200, count: 1 });
+      addLines.push({ name: "緊急時等居宅カンファレンス加算", code: EMERGENCY_CONFERENCE_CODE, units: c.emergency_conference_units ?? 200, count: 1 });
     const totalUnits = addLines.reduce((s, l) => s + l.units * l.count, 0);
     return { lines: addLines, totalUnits, totalAmount: c.total_amount, insuranceAmount: c.insurance_amount, unitPrice: c.unit_price };
   }, [claims]);
