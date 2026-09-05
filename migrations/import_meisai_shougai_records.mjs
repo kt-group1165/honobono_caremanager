@@ -997,7 +997,15 @@ async function main() {
   //   MEISAI (賃金) と TJ (伝送=請求根拠) の時刻がずれることがある (詳細は loadTjBodySpans 参照)。
   //   次段の同日合算は「間隔」で判定するため、ここで直しておかないと
   //   請求の根拠にならない時刻で合算要否を誤る。
-  {
+  //
+  // ⚠ ★ これは **移行期にしか存在しない足場**。ほのぼのを置き換えると TJ はもらえなくなり、
+  //   ★ 当方が J611 を作る側になるので この補正ごと消える。
+  //   ★ しかも「ほのぼのの答え (TJ) を見て 入力を直してから 答え合わせ (突合) をしている」ので
+  //   ★ 突合が循環している。★ SKIP_TJ_TIME_FIX=1 で足場を外して測れるようにしてある
+  //   (= ★ 移行後の実力。★ 差が小さければ この補正は 削除してよい)。
+  if (process.env.SKIP_TJ_TIME_FIX === "1") {
+    console.log("★ SKIP_TJ_TIME_FIX=1: TJ による時刻補正を行いません (= 移行後と同じ条件)");
+  } else {
     const tjBody = loadTjBodySpans(TARGET_MONTH, AREA_DIR);
     if (tjBody.size) {
       const asg = await fetchAll("client_office_assignments", "client_id",
@@ -1763,8 +1771,11 @@ async function main() {
   //   請求に効くのは isBillableRecord() が true の行だけなので、
   //   「合算従属を除いた集合」が変わっていないかを差分で確認できる。
   if (process.env.DUMP_PAYLOADS) {
+    const codeOf = (p) => (/code=(\d+)/.exec(p.notes || "") || [])[1] ?? "";
     const key = (p) => [p.user_id, p.visit_date, p.service_type, p.start_time, p.end_time,
-      (p.notes || "").includes(MARK_ADDON) ? "ADDON" : (p.notes || "").includes(MARK_SESSION_SUB) ? "SUB" : "BASE"].join("|");
+      (p.notes || "").includes(MARK_ADDON) ? "ADDON" : (p.notes || "").includes(MARK_SESSION_SUB) ? "SUB" : "BASE",
+      // ★ 6桁コードも入れる。★ これが無いと 時刻だけ変わってコードが同じケースを 差分で拾えない。
+      codeOf(p)].join("|");
     const all = deduped.map(key).sort();
     const billable = deduped.filter((p) => !(p.notes || "").includes(MARK_SESSION_SUB)).map(key).sort();
     writeFileSync(process.env.DUMP_PAYLOADS, JSON.stringify({ all, billable }, null, 1));
