@@ -84,6 +84,9 @@ const CHECKS: Check[] = [
   // ★ 2026-09-05 新設。★ 帳票に保存された 要介護度等が 現在の認定と食い違う問題 (218件) の是正。
   //   ★ 印刷プレビューだけ マスタ優先で引き直す (★ 編集フォームは 生の値のまま)。
   { name: "report-master-fields", script: "check:report-master-fields", why: "★ 帳票のマスタ引き直し (要介護度・認定日・保険者等を 印刷時に現在の認定から引く)" },
+  // ★ 保存値とマスタのズレ件数 (基準値 218: 第1表122 / 利用票96)。★ 認定更新のたび自然に増えるので
+  //   ★ 0 を目指さない。★ 想定外の急増だけを検知する。
+  { name: "report-master-drift", script: "check:report-master-fields-drift", why: "★ 帳票の保存値とマスタのズレ件数 (基準値218。印刷は引き直し済みだが 保存値のズレ自体は残る)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
