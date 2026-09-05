@@ -37,14 +37,26 @@ const eq = (label: string, got: unknown, want: unknown) => {
   else fails.push(`${label}: got ${JSON.stringify(got)} / want ${JSON.stringify(want)}`);
 };
 
+// ⚠ サンプル「未投入」(0件) と「投入したのに集計に出ない」(壊れている) を区別する。
+// 前者は合格でも不合格でもない (verify-jogen-kanri.mts と同じ規律)。
+const { count: sampleClients, error: scErr } = await sb
+  .from("clients").select("id", { count: "exact", head: true }).like("user_number", "ZH9%");
+if (scErr) throw new Error(`サンプル利用者の確認に失敗: ${scErr.message}`);
+if (!sampleClients || sampleClients === 0) {
+  console.log("障害サンプル検証 — 2026-12");
+  console.log("⚠ 分母 0 — サンプル未投入。**合格でも不合格でもありません**。");
+  console.log("   node migrations/seed_sample_shogai_h.mjs --execute で投入してください");
+  process.exit(0);
+}
+
 const res = await aggregateMonthlyShogaiSeikyu(sb, { year: Y, month: M, officeId: OFFICE_ID });
 const rows = res.rows.filter((r) => /\[sample-h\]/.test(r.user_name));
 
 console.log(`障害サンプル検証 — 2026-12 / 事業所 ${OFFICE_ID}`);
-console.log(`  集計の全行 ${res.rows.length} / うち ★ サンプル ${rows.length} 行\n`);
+console.log(`  【分母】サンプル利用者 ${sampleClients} 名 / 集計の全行 ${res.rows.length} / うち ★ サンプル ${rows.length} 行\n`);
 if (rows.length === 0) {
-  console.log("★ FAIL サンプルが 0 行です。合格ではありません。");
-  console.log("   seed を --execute したか / 月・事業所が合っているかを確認してください。");
+  console.log(`★ FAIL サンプル利用者は${sampleClients}名いるのに集計に0行しか出ません。壊れています。`);
+  console.log("   月・事業所が合っているかを確認してください。");
   process.exit(1);
 }
 

@@ -65,6 +65,13 @@ async function main() {
   if (ce) throw new Error(`利用者取得失敗: ${ce.message}`);
   const tagById = new Map((cs ?? []).map((c) => [c.id, c.user_number as string]));
   console.log(`サンプル利用者: ${tagById.size} 名 (期待5名)`);
+  // ⚠ サンプル「未投入」(0件) と「投入したのに壊れている」は区別する。
+  // 前者は合格でも不合格でもない (verify-jogen-kanri.mts と同じ規律)。
+  if (tagById.size === 0) {
+    console.log("⚠ 分母 0 — サンプル未投入。**合格でも不合格でもありません**。");
+    console.log("   seed script (障害・行動援護サンプル) を --execute で投入してください");
+    process.exit(0);
+  }
   check(tagById.size === 5, "投入件数が5名", String(tagById.size));
 
   // ── 段1: 集計 (実アプリと同じ関数) ────────────────────────────

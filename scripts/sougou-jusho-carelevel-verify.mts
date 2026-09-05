@@ -63,9 +63,14 @@ async function main() {
     .from("clients").select("id, user_number, care_level")
     .like("user_number", `Z${TAG}%`).order("user_number");
   if (cErr) throw new Error(`clients 取得失敗: ${cErr.message}`);
-  if (!clients || clients.length !== 4) {
-    console.error(`✗ サンプルが揃っていません (${clients?.length ?? 0}/4)。` +
-      `先に node migrations/seed_sample_sougou_m.mjs --execute を実行してください`);
+  if (!clients || clients.length === 0) {
+    console.log("⚠ 分母 0 — サンプル未投入。**合格でも不合格でもありません**。");
+    console.log("   node migrations/seed_sample_sougou_m.mjs --execute で投入してください");
+    process.exit(0);
+  }
+  if (clients.length !== 4) {
+    console.error(`✗ サンプルが揃っていません (${clients.length}/4)。` +
+      `--delete --execute で撤去してから node migrations/seed_sample_sougou_m.mjs --execute を実行してください`);
     process.exit(1);
   }
   const byUn = new Map(clients.map((c) => [c.user_number, c]));

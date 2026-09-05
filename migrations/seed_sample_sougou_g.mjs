@@ -119,7 +119,9 @@ async function main() {
     const c = sampleClient({ tag: TAG, seq: s.seq, careLevel: s.careLevel, insurerNumber: s.insurer });
     clients.push(c);
     certs.push({
-      ...sampleInsurance(null, { careLevel: s.careLevel, insurerNumber: s.insurer }),
+      // ⚠ 2026-09-05 是正: tag+seq (または insuredNumber) を渡さないと sampleInsurance が
+      //   即 throw する (_sample_data.mjs 2026-09-03 是正で追加された安全チェック)。
+      ...sampleInsurance(null, { careLevel: s.careLevel, insurerNumber: s.insurer, tag: TAG, seq: s.seq }),
       _seq: s.seq,
       // ⚠ 集計は **被保険者番号を認定 (cert) から**読む。sampleInsurance は入れないので
       //   ここで必ず付ける。無いと伝送から除外され「請求 0 円」になる (実際に踏んだ)。
