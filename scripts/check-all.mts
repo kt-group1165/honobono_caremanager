@@ -30,6 +30,8 @@ const CHECKS: Check[] = [
   //   実績の行種マーカーが TS 側と取込 script 側に 二重定義されている。片方だけ直すと
   //   ★ 請求集計と実績記録票の判定が 黙って食い違う (落ちないので気づけない)。
   { name: "record-markers", script: "check:record-markers", why: "★ 行種マーカーの TS/.mjs 二重定義が ずれていないか" },
+  //   ★ 同型。過去に 574 件の実バグ (キーが揃わず支給量欄が空・超過警告が出ない)。
+  { name: "shikyuryo-keys", script: "check:shikyuryo-keys", why: "★ 支給量キーの TS/.mjs 二重定義が ずれていないか" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
