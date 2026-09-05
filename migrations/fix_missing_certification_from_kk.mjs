@@ -93,7 +93,7 @@ for (const t of TARGETS) {
   // 二重投入防止 ①: 同一 (insurer_number, insured_number) の行が (client問わず) 既に無いか
   const { data: byInsurance, error: e1 } = await sb
     .from("client_insurance_records")
-    .select("id, client_id")
+    .select("id, client_id, created_at, notes")
     .eq("insurer_number", t.insurer_number)
     .eq("insured_number", t.insured_number);
   if (e1) throw new Error(`既存確認失敗①(${t.name}): ${e1.message}`);
@@ -107,7 +107,17 @@ for (const t of TARGETS) {
   if (e2) throw new Error(`既存確認失敗②(${t.name}): ${e2.message}`);
 
   if (byInsurance.length > 0) {
-    console.log(`  スキップ: (保険者,被保番)一致の行が既に${byInsurance.length}件存在 (二重投入防止①)`);
+    // ⚠ 2026-09-05 H指摘で是正: このメッセージは「投入に失敗した」と誤読されやすかった。
+    //   このscript自身が過去に投入した行 (notesの接頭辞で判定) なら「投入済み(成功)」と
+    //   明示し、そうでなければ「別経路で既に存在」と分けて出す。
+    const row = byInsurance[0];
+    const bySelf = (row.notes ?? "").startsWith("[認定バックフィル");
+    if (bySelf) {
+      console.log(`  ✓ 投入済み (このscriptで過去に成功): id=${row.id.slice(0, 8)}… created_at=${row.created_at}`);
+    } else {
+      console.log(`  スキップ: (保険者,被保番)一致の行が既に${byInsurance.length}件存在 (別経路。二重投入防止①)`);
+      console.log(`    id=${row.id.slice(0, 8)}… created_at=${row.created_at} notes=${row.notes ?? "(なし)"}`);
+    }
     continue;
   }
   if (byClient.length > 0) {
