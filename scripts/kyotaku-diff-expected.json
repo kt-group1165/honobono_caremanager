@@ -1,0 +1,180 @@
+{
+  "_readme": [
+    "★ 居宅の伝送バイト照合の基準値 (2026-09-05 取得)。",
+    "★ 差 0 を目指す検査ではない。ほのぼのの伝送は「送信時点の写し」なので、",
+    "★ 当方のデータが正しく更新されるほど 差は増える。",
+    "★ 見張るのは「分母 (newRows/honoRows) が同じなのに 一致 (match) が減った」= 回帰 だけ。",
+    "⚠ 2026-08-21 に「15 事業所 バイト一致」が確認されたが、",
+    "  ★ 8/31 の利用者マスタ出し直しで 認定が更新され、成り立たなくなった。",
+    "  ★ 四街道 被保番 1004371512 で 認定終了日が 11/30 → 6/30 に変わった例を実データで確認済み。",
+    "⚠ 悪化したまま --update すると 穴を焼き付ける。★ 先に原因を潰すこと。"
+  ],
+  "month": "2026-06",
+  "rows": [
+    {
+      "area": "K姉",
+      "officeId": "6bfdc931-184d-4477-ab1a-0e9ee1d52e54",
+      "s": {
+        "newRows": 252,
+        "honoRows": 253,
+        "match": 246,
+        "diff": 7
+      },
+      "k": null
+    },
+    {
+      "area": "いすみ",
+      "officeId": "99e48725-94a2-47f7-8717-2f4f8d6980db",
+      "s": {
+        "newRows": 271,
+        "honoRows": 272,
+        "match": 271,
+        "diff": 1
+      },
+      "k": null
+    },
+    {
+      "area": "おゆみ野",
+      "officeId": "1b22d425-2ec4-4c2f-a002-c1c994e94507",
+      "s": {
+        "newRows": 283,
+        "honoRows": 283,
+        "match": 282,
+        "diff": 1
+      },
+      "k": null
+    },
+    {
+      "area": "ちはら台",
+      "officeId": "9acd5523-5901-4e89-adce-dea3ed1d8744",
+      "s": {
+        "newRows": 110,
+        "honoRows": 110,
+        "match": 106,
+        "diff": 4
+      },
+      "k": null
+    },
+    {
+      "area": "五井",
+      "officeId": "cec8dcca-ce17-49fb-850a-8cc3606e4609",
+      "s": {
+        "newRows": 180,
+        "honoRows": 180,
+        "match": 177,
+        "diff": 3
+      },
+      "k": null
+    },
+    {
+      "area": "八千代",
+      "officeId": "30e0298e-4bbe-4fe5-a1d7-0baa03af4294",
+      "s": {
+        "newRows": 184,
+        "honoRows": 184,
+        "match": 177,
+        "diff": 7
+      },
+      "k": null
+    },
+    {
+      "area": "四街道",
+      "officeId": "36542370-378b-4f75-b514-080f49b16225",
+      "s": {
+        "newRows": 135,
+        "honoRows": 137,
+        "match": 134,
+        "diff": 3
+      },
+      "k": null
+    },
+    {
+      "area": "大網",
+      "officeId": "755e64de-1289-473f-9423-150a9a9268d4",
+      "s": {
+        "newRows": 142,
+        "honoRows": 142,
+        "match": 139,
+        "diff": 3
+      },
+      "k": null
+    },
+    {
+      "area": "姉ム",
+      "officeId": "f1340c79-c324-4fac-be57-f587a96c3aaa",
+      "s": {
+        "newRows": 210,
+        "honoRows": 210,
+        "match": 202,
+        "diff": 8
+      },
+      "k": null
+    },
+    {
+      "area": "木更津",
+      "officeId": "fdb39d26-003a-4beb-9867-6855c01cd1a3",
+      "s": {
+        "newRows": 142,
+        "honoRows": 142,
+        "match": 137,
+        "diff": 5
+      },
+      "k": null
+    },
+    {
+      "area": "船橋",
+      "officeId": "255681a4-baf2-4daa-b489-1ea87e082670",
+      "s": {
+        "newRows": 251,
+        "honoRows": 251,
+        "match": 246,
+        "diff": 5
+      },
+      "k": null
+    },
+    {
+      "area": "花見川",
+      "officeId": "d20ae925-29a9-417a-a56f-5d713c8ff370",
+      "s": {
+        "newRows": 134,
+        "honoRows": 134,
+        "match": 132,
+        "diff": 2
+      },
+      "k": null
+    },
+    {
+      "area": "茂原",
+      "officeId": "63311546-7cf5-4d27-af4d-6c39393befc8",
+      "s": {
+        "newRows": 120,
+        "honoRows": 119,
+        "match": 117,
+        "diff": 3
+      },
+      "k": null
+    },
+    {
+      "area": "袖ケ浦",
+      "officeId": "cb3190b6-4a74-4952-b0c9-76f913cbd1c8",
+      "s": {
+        "newRows": 254,
+        "honoRows": 254,
+        "match": 249,
+        "diff": 5
+      },
+      "k": null
+    },
+    {
+      "area": "高品",
+      "officeId": "18dab72e-0445-49f1-a8fc-44637f9fd676",
+      "s": {
+        "newRows": 138,
+        "honoRows": 137,
+        "match": 135,
+        "diff": 3
+      },
+      "k": null
+    }
+  ]
+}
