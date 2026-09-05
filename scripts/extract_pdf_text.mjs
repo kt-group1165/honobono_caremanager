@@ -1,3 +1,6 @@
+// ⚠ 調査用・常設でない (2026-09-05 分類)。PDF パスを引数で指定する一度きりのツール。
+//   npm alias は付けない (固定の既定引数が無いため)。
+//
 // PDF.js (Mozilla) でテキスト抽出。
 // Adobe-Japan1 CMap を bundle してるので、CJK fonts が CID-keyed でも正しく decode できる。
 //

@@ -1,4 +1,9 @@
 /**
+ * ⚠ 調査用・常設でない (2026-09-05 分類)。migrations/seed_fake_gendo_test.mjs --execute で
+ *   投入したサンプル (_fake_gendo_test_meta.json) が無いと動かない。撤去済のため現状は
+ *   ENOENT で終了する。再度回すには seed → このscript → delete_fake_gendo_test.mjs の順。
+ *   npm alias は付けない (単独では実行できないため)。
+ *
  * 区分支給限度基準額 (限度額) 超過計算の検証
  *
  *   npx tsx scripts/gendo-verify.mts

@@ -1,4 +1,8 @@
 /**
+ * ⚠ 調査用・常設でない (2026-09-05 分類)。migrations/seed_fake_kohi_test.mjs --execute で
+ *   投入したサンプルが無いと動かない (撤去済でENOENT)。再度回すには
+ *   seed → このscript → delete_fake_kohi_test.mjs の順。npm alias は付けない。
+ *
  * 介護保険 公費併用の負担計算 検証
  *
  *   npx tsx scripts/kohi-verify.mts

@@ -76,6 +76,9 @@ const CHECKS: Check[] = [
   //   ★ DB 書込を伴わない = gate に入れてよい (もう一方の check:bath-sample は
   //   サンプル投入が要るので 意図的に入れていない)。2026-09-05 に編入。
   { name: "bath-fixture", script: "check:bath-fixture", why: "★ 訪問入浴の請求 (DB書込不要のモックテスト。実データは 0 行)" },
+  // ★ 2026-09-05 追加。apply.ts は本番コードなのに検証0本だった (parse.ts の fixture テストはあるが
+  //   ★ DB反映ロジック=返戻フラグ/支払決定額/冪等性 は未検証)。Supabase を丸ごとモックするので DB書込不要。
+  { name: "kokuho-tsuchi", script: "check:kokuho-tsuchi", why: "★ 国保連通知取込の DB 反映 (突合フォールバック・返戻/支払決定の冪等性・金額境界値。モックのみ)" },
   { name: "kyotaku-diff", script: "check:kyotaku-diff", why: "★ 居宅の伝送バイト照合 (ほのぼの実出力との突合。認定更新で差が増えるので 回帰だけ見張る)", slow: true,
     kind: "baseline" }, // 基準値=現状の一致率。認定更新のたび差が動くため0件を目指さない
   { name: "densou-diff", script: "check:densou-diff", why: "★ ほのぼの実出力との突合 (介護保険7拠点 + 障害17拠点)", slow: true,
@@ -89,7 +92,9 @@ const NOT_COVERED = [
   "福祉用具 — ★ ほのぼの実出力が手元に 1 本も無い (月 ¥17,527,920)",
   "住宅改修 — ★ 請求の実装が存在しない (5年 ¥113,055,753)",
   "payroll-app の給与本体 — ★ 別アプリ。apps/payroll-app 側で回す",
-  "国保連からの通知取込 — ★ 実ファイルで一度も検証していない",
+  "国保連からの通知取込 — ★ 実ファイルで一度も検証していない (check:kokuho-tsuchi はモック fixture のみ。" +
+    "実ファイルは repo 内のどこにも見つからず、初回取込時のプレビュー目視確認が必須。" +
+    "また過誤決定(取消)通知は仕様書上も専用フィールドが無く、マイナス金額の通常通知と構造上区別できない)",
 ];
 
 const results: { name: string; ok: boolean; ms: number; skipped?: boolean; out?: string; kind: "strict" | "baseline"; knownDiff?: number; noSample?: boolean }[] = [];

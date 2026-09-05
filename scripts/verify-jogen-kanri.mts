@@ -1,4 +1,8 @@
 /**
+ * ⚠ 調査用・常設でない (2026-09-05 分類)。seed_fake_jogen_kanri_test.mjs --execute の
+ *   サンプルが無いと動かない (現在は .deleted.json があり撤去済状態。自身で回し方を表示する)。
+ *   再度回すには seed → このscript → delete_fake_jogen_kanri_test.mjs の順。
+ *
  * 利用者負担上限額管理 の検算ハーネス (READ ONLY — DB 書込なし)
  *
  *   npx tsx scripts/verify-jogen-kanri.mts

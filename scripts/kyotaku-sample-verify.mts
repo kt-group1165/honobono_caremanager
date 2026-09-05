@@ -1,4 +1,8 @@
 /**
+ * ⚠ 調査用・常設でない (2026-09-05 分類)。migrations/seed_sample_kyotaku_j.mjs --execute で
+ *   投入した2026-12サンプルが無いと「ローダが0件」で失敗する (撤去済)。再度回すには
+ *   seed → このscript → 対応する delete script の順 (SAMPLE_DATA_PROTOCOL.md参照)。
+ *
  * 居宅介護支援 サンプルデータ検証 (担当 J / マーカー j) — SAMPLE_DATA_PROTOCOL.md §5
  *
  *   npx tsx scripts/kyotaku-sample-verify.mts

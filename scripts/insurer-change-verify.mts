@@ -1,4 +1,8 @@
 /**
+ * ⚠ 調査用・常設でない (2026-09-05 分類)。migrations/seed_fake_insurer_change_test.mjs
+ *   --execute で投入したサンプルが無いと動かない (撤去済でENOENT)。再度回すには
+ *   seed → このscript → delete_fake_insurer_change_test.mjs の順。npm alias は付けない。
+ *
  * 月途中の保険者変更 (転居) によるレセプト分割 の検証
  *
  *   npx tsx scripts/insurer-change-verify.mts
