@@ -16,7 +16,23 @@ import { spawnSync } from "node:child_process";
 
 const FAST = process.argv.includes("--fast");
 
-type Check = { name: string; script: string; why: string; slow?: boolean };
+/**
+ * kind
+ *   "strict"   ★ 0 を目指す。壊れたら (=差が出たら) 落ちる
+ *   "baseline" ★ 既知の差・既知のリスク件数を基準値として許容したうえでの PASS。0件PASSではない
+ * knownDiff — baseline のとき、現在許容している既知差の件数 (数える単位が同じもののみ設定)。
+ */
+type Check = { name: string; script: string; why: string; slow?: boolean; kind?: "strict" | "baseline"; knownDiff?: number };
+
+/**
+ * ★ 「サンプル未投入で分母0のためPASS(exit 0)」を、出力本文の文言から機械的に検出する。
+ * kaigo-app の *-sample-verify.mts / verify-jogen-kanri.mts はこの言い回しの規約に従う。
+ * (2026-09-05 claude-06 指摘: PASSの中に「本当にPASS」と「未検証」が混ざって見分けが付かなかった)
+ */
+const NO_SAMPLE_MARKERS = ["サンプル未投入", "合格とは言わない", "合格でも不合格でもありません"];
+function looksLikeNoSampleSkip(out: string): boolean {
+  return NO_SAMPLE_MARKERS.some((m) => out.includes(m));
+}
 
 /** ★ 落ちたら金額か返戻に効くものだけ */
 const CHECKS: Check[] = [
@@ -51,7 +67,8 @@ const CHECKS: Check[] = [
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
   { name: "sougou-shoguu", script: "check:sougou-shoguu", why: "総合事業の処遇改善 (自治体独自率)" },
   { name: "shoguu-4impl", script: "check:shoguu-4impl", why: "★ 処遇改善の % 計算が 4 制度の実装で一致するか" },
-  { name: "service-code-gap", script: "check:service-code-gap", why: "★ 単位数0・加算率未設定のコードが 実発火しうるか" },
+  { name: "service-code-gap", script: "check:service-code-gap", why: "★ 単位数0・加算率未設定のコードが 実発火しうるか",
+    kind: "baseline" }, // 「理論上のみ」の件数は基準値 (0件を目指す検査ではない)。実発火(NG)は0を維持
   { name: "teigen", script: "check:teigen", why: "逓減制" },
   { name: "shogai-jogen", script: "check:shogai-jogen", why: "障害の上限額管理" },
   { name: "tokutei", script: "check:tokutei", why: "特定事業所加算" },
@@ -59,8 +76,10 @@ const CHECKS: Check[] = [
   //   ★ DB 書込を伴わない = gate に入れてよい (もう一方の check:bath-sample は
   //   サンプル投入が要るので 意図的に入れていない)。2026-09-05 に編入。
   { name: "bath-fixture", script: "check:bath-fixture", why: "★ 訪問入浴の請求 (DB書込不要のモックテスト。実データは 0 行)" },
-  { name: "kyotaku-diff", script: "check:kyotaku-diff", why: "★ 居宅の伝送バイト照合 (ほのぼの実出力との突合。認定更新で差が増えるので 回帰だけ見張る)", slow: true },
-  { name: "densou-diff", script: "check:densou-diff", why: "★ ほのぼの実出力との突合 (介護保険7拠点 + 障害17拠点)", slow: true },
+  { name: "kyotaku-diff", script: "check:kyotaku-diff", why: "★ 居宅の伝送バイト照合 (ほのぼの実出力との突合。認定更新で差が増えるので 回帰だけ見張る)", slow: true,
+    kind: "baseline" }, // 基準値=現状の一致率。認定更新のたび差が動くため0件を目指さない
+  { name: "densou-diff", script: "check:densou-diff", why: "★ ほのぼの実出力との突合 (介護保険7拠点 + 障害17拠点)", slow: true,
+    kind: "baseline" }, // 同上。分母が違う=データが変わった/一致数が下がった=回帰、で区別する運用
 ];
 
 /** ★ この一覧が見ていないもの。緑でも安心しないための明示 */
@@ -73,9 +92,10 @@ const NOT_COVERED = [
   "国保連からの通知取込 — ★ 実ファイルで一度も検証していない",
 ];
 
-const results: { name: string; ok: boolean; ms: number; skipped?: boolean; out?: string }[] = [];
+const results: { name: string; ok: boolean; ms: number; skipped?: boolean; out?: string; kind: "strict" | "baseline"; knownDiff?: number; noSample?: boolean }[] = [];
 for (const c of CHECKS) {
-  if (FAST && c.slow) { results.push({ name: c.name, ok: true, ms: 0, skipped: true }); continue; }
+  const kind = c.kind ?? "strict";
+  if (FAST && c.slow) { results.push({ name: c.name, ok: true, ms: 0, skipped: true, kind, knownDiff: c.knownDiff }); continue; }
   process.stdout.write(`\n${"=".repeat(70)}\n▶ ${c.name}  — ${c.why}\n${"=".repeat(70)}\n`);
   const t = Date.now();
   // ⚠ stdio:"inherit" だと、この出力を tail 等に通したとき ★ 子の出力だけ落ちる。
@@ -84,19 +104,42 @@ for (const c of CHECKS) {
   const r = spawnSync("npm", ["run", c.script], { shell: true, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   const out = `${r.stdout ?? ""}${r.stderr ?? ""}`;
   process.stdout.write(out);
-  results.push({ name: c.name, ok: r.status === 0, ms: Date.now() - t, out });
+  results.push({ name: c.name, ok: r.status === 0, ms: Date.now() - t, out, kind, knownDiff: c.knownDiff, noSample: looksLikeNoSampleSkip(out) });
 }
 
 console.log(`\n${"=".repeat(70)}\n結果\n${"=".repeat(70)}`);
 for (const r of results) {
-  const mark = r.skipped ? "－ skip" : r.ok ? "  PASS" : "★ FAIL";
-  console.log(`${mark}  ${r.name.padEnd(16)} ${r.skipped ? "" : `${(r.ms / 1000).toFixed(1)}s`}`);
+  const mark = r.skipped ? "－ skip" : r.noSample ? "？ 未検証" : r.ok ? "  PASS" : "★ FAIL";
+  const kindTag = r.kind === "baseline" ? " [基準値]" : "";
+  const noSampleTag = r.noSample ? " (サンプル未投入。合格ではない)" : "";
+  console.log(`${mark}  ${r.name.padEnd(16)} ${r.skipped ? "" : `${(r.ms / 1000).toFixed(1)}s`}${kindTag}${noSampleTag}`);
 }
 const failed = results.filter((r) => !r.ok);
 console.log("");
 console.log("⚠ この一覧が ★ 見ていないもの:");
 for (const n of NOT_COVERED) console.log(`   ${n}`);
 console.log("");
+
+// ★ [基準値] は「0件PASS」ではない。既知の差・既知のリスクを許容している検査を一覧化する
+// (2026-09-05 claude-06 指摘: PASSの中に2種類が混ざっていて出力から区別が付かなかった)。
+const baselineChecks = results.filter((r) => r.kind === "baseline" && !r.skipped);
+if (baselineChecks.length) {
+  console.log("★ 基準値方式の検査 (既知の差を許容したうえでのPASS。0件PASSではない):");
+  for (const r of baselineChecks) {
+    console.log(`   ${r.name.padEnd(16)} ${r.knownDiff != null ? `既知 ${r.knownDiff} 件` : "(件数は出力本文を参照)"}`);
+  }
+  const summable = baselineChecks.filter((r) => r.knownDiff != null);
+  if (summable.length) {
+    const total = summable.reduce((s, r) => s + (r.knownDiff ?? 0), 0);
+    console.log(`   → 合計 (同一単位=既知差件数で数えられるもののみ): ${total} 件 (${summable.map((r) => r.name).join(" + ")})`);
+  }
+  console.log("");
+}
+const noSampleChecks = results.filter((r) => r.noSample);
+if (noSampleChecks.length) {
+  console.log(`？ サンプル未投入で「合格」でも「不合格」でもない検査: ${noSampleChecks.map((r) => r.name).join("、")}`);
+  console.log("");
+}
 if (failed.length) {
   // ★ 失敗したものの出力を末尾に再掲する。上に流れて見えなくなるため
   const bar = "=".repeat(70);
