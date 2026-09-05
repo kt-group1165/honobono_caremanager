@@ -241,6 +241,20 @@ export function shogaiCodeFromTime(
   //    先行する帯は **四捨五入**、末尾に残りを寄せる (clock 順)。
   //    ⚠ floor にすると step 未満の先頭区分が消える (姉ム 森田汐音 07:40-08:40 の
   //      早20分が消えて 身体日１．０ になっていた)。取込 script 側と同じ規則。
+
+  // 生の滞在分数が最大の時間帯 (同着は開始時間帯優先)。③のフォールバックで使う。
+  //   ★ 2026-09-05 是正: 従来は segs[0].zone (開始時間帯) 固定だったが、
+  //   取込 script (migrations/import_meisai_shougai_records.mjs) は
+  //   2026-07-27 に「常に開始時間帯固定だと、開始側セグメントの方が短いケースで
+  //   誤った時間帯に倒れる」不具合をほのぼの実データで是正済み (majorityZone 採用)。
+  //   この module は切り出した時点のロジックのまま取り残されていたため、
+  //   取込 script 側に合わせる (量子化(floor+残余配分)ではなく生分数で決めるのが重要)。
+  let majorityZone = segs[0].zone;
+  let majorityMin = segs[0].min;
+  for (let i = 1; i < segs.length; i++) {
+    if (segs[i].min > majorityMin) { majorityMin = segs[i].min; majorityZone = segs[i].zone; }
+  }
+
   const totalUnits = Math.round(quantizeHours(minutes, step, mode) / (step / 60));
   const alloc: number[] = [];
   let used = 0;
@@ -274,11 +288,11 @@ export function shogaiCodeFromTime(
     if (hit) return hit;
   }
 
-  // ③ 合成コードが無いときは **算定開始の時間帯**の単一コードへ落とす
+  // ③ 合成コードが無いときは **生の滞在分数が最大の時間帯** の単一コードへ落とす
   //    (家事 0.25 セグメントや夜増などは合成が存在しない)
   const hours = quantizeHours(minutes, step, mode);
   const map = twoPerson ? maps.single2 : maps.single;
-  return map.get(`${kind}|${segs[0].zone}|${hours.toFixed(2)}|${mk}`) ?? null;
+  return map.get(`${kind}|${majorityZone}|${hours.toFixed(2)}|${mk}`) ?? null;
 }
 
 /** サービス名 (介護・障害どちらでも) から種別を推測する。判定できなければ null */
