@@ -6115,6 +6115,8 @@ export function ReportsContent({
   const isCertLinked = useMemo(
     // ⚠ page.tsx の isCertLinked と必ず同じにする。ずれると __docsCache のキーが
     //   食い違って「帳票が無い」と判断され、空の帳票が自動生成される
+    // ⚠ service-usage を将来ここに足す場合は、先に certification_id の backfill が必須
+    //   (2026-09-05実測: 3,221/3,221件がnull。詳細はpage.tsx側のコメント参照)
     () => ["care-plan-1", "care-plan-2", "care-plan-3", "yobo-care-plan", "shujii-iken"].includes(reportType),
     [reportType]
   );
@@ -6315,6 +6317,15 @@ export function ReportsContent({
   // ──────────────────────────────────────────────────────────────
   // Auto-generate fallback (client side): server から initialDocs が
   // 空で来た場合、自動で 1 件作る (旧 server 動作の代替)
+  //
+  // ⚠ 2026-09-05実測: この構造は「対象cert(またはcert無し)でdocsが0件」なら
+  //   ★いつでも発火する。certification_id が null のまま帳票が既存でも、cert
+  //   フィルタで docs.length===0 に見えれば新しい行 (今度は正しいcert_id付き)
+  //   を追加INSERTしてしまい、古いnull-cert行が孤児として残る (=帳票が増殖する)。
+  //   care-plan-1/2/3で実際に複数の重複行(作成時刻がミリ秒単位で近接)を確認済みだが、
+  //   これは移行scriptの複数回実行が原因で、★現時点でライブ発火し続けている証拠は
+  //   見つかっていない。ただしこの発火条件自体は今も解消されていないので、
+  //   null-cert行が残っている限り再発しうる。直すかはuser判断 (2026-09-05時点は保留)。
   // ──────────────────────────────────────────────────────────────
   const autoGenInFlightRef = useRef<string>("");
   useEffect(() => {

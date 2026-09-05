@@ -44,6 +44,11 @@ export default async function ReportTypePage({
   }
 
   // 主治医意見書は認定申請ごとに 1 通なので、計画書と同じく認定に紐づける
+  // ⚠ service-usage (第6表・利用票) は★意図的にここに含めていない。2026-09-05実測:
+  //   kaigo_report_documents の service-usage は★3,221/3,221件が certification_id=null
+  //   (100%)。isCertLinked に含まれていないため今は画面のフィルタが効かず実害は無いが、
+  //   ★将来この帳票を cert-linked にする場合は、先に certification_id の backfill が必須
+  //   (このリストに追加した瞬間、3,221件が画面から一斉に見えなくなる)。
   const isCertLinked = ["care-plan-1", "care-plan-2", "care-plan-3", "yobo-care-plan", "shujii-iken"].includes(reportType);
 
   let initialDocs: ReportDoc[] = [];
