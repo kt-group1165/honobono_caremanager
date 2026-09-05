@@ -4,7 +4,7 @@
  *
  *   npx tsx scripts/bath-resolve-code-verify.mts
  */
-import { resolveBathCode } from "../src/lib/bath-seikyu/resolve-code";
+import { resolveBathCode, bathAddonCodesFor, isBathBaseCode } from "../src/lib/bath-seikyu/resolve-code";
 
 let n = 0, ng = 0;
 function eq(label: string, actual: unknown, expected: unknown) {
@@ -64,6 +64,36 @@ console.log("\n═══ 負のコントロール ═══");
   } else {
     ng++;
     console.log(`  NG  負のコントロール②失敗`);
+  }
+}
+
+console.log("\n═══ ★ 加算コード (bathAddonCodesFor) — 2026-09-05 追加 ═══");
+eq("要介護 → 初回加算124113", bathAddonCodesFor("要介護2").shokai, "124113");
+eq("要介護 → 認知症Ⅰ126133/Ⅱ126134", [bathAddonCodesFor("要介護2").ninchiI, bathAddonCodesFor("要介護2").ninchiII], ["126133", "126134"]);
+eq("要介護 → 中山間128110", bathAddonCodesFor("要介護2").chuusankan, "128110");
+eq("★ 要支援1 → 初回加算624001(予防)", bathAddonCodesFor("要支援1").shokai, "624001");
+eq("★ 要支援2 → 認知症Ⅰ626133/Ⅱ626134(予防)", [bathAddonCodesFor("要支援2").ninchiI, bathAddonCodesFor("要支援2").ninchiII], ["626133", "626134"]);
+eq("★ 事業対象者 → 中山間628110(予防)", bathAddonCodesFor("事業対象者").chuusankan, "628110");
+eq("未設定(null) → 介護系(既定)", bathAddonCodesFor(null).shokai, "124113");
+
+console.log("\n═══ isBathBaseCode ═══");
+eq("121111 → 基本コード", isBathBaseCode("121111"), true);
+eq("621111 → 基本コード(予防)", isBathBaseCode("621111"), true);
+eq("124113(加算) → 基本コードではない", isBathBaseCode("124113"), false);
+eq("null → false", isBathBaseCode(null), false);
+
+console.log("\n═══ 負のコントロール③ (加算コードの制度混在を検出できるか) ═══");
+{
+  // 「加算だけ介護給付固定」の壊れた実装 (修正前の状態) を再現し、正しい実装と差が出ることを確認
+  const brokenAddonCodes = () => ({ shokai: "124113", ninchiI: "126133", ninchiII: "126134", chuusankan: "128110" });
+  const real = bathAddonCodesFor("要支援2");
+  const broken = brokenAddonCodes();
+  n++;
+  if (real.shokai !== broken.shokai) {
+    console.log(`  OK  負のコントロール③ — 修正前(常に${broken.shokai})と現実装(要支援2で${real.shokai})が別の値 (制度混在バグを検出できる)`);
+  } else {
+    ng++;
+    console.log(`  NG  負のコントロール③失敗`);
   }
 }
 

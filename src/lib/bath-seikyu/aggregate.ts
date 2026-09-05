@@ -43,6 +43,7 @@ import {
 } from "@/lib/cert-for-month";
 import { resolveKohiForMonth, kohiHobetsuLabel } from "@/lib/kohi";
 import { isYoboLevel } from "@/lib/yobo-kubun";
+import { bathAddonCodesFor, isBathBaseCode, BATH_ADDON_CODES_KAIGO, BATH_ADDON_CODES_YOBO } from "@/lib/bath-seikyu/resolve-code";
 import type { MonthlySeikyuResult, UserSeikyuRow, SeikyuDetailLine } from "@/lib/visit-seikyu/aggregate";
 
 type BathRec = {
@@ -61,10 +62,10 @@ const fmtMD = (iso: string) => {
   return m ? `${Number(m[1])}/${Number(m[2])}` : iso;
 };
 
-// 回単位加算コード (種類12)
-const CODE_SHOKAI = "124113"; // 訪問入浴初回加算 200単位/月 (限度額管理**対象**)
-const CODE_NINCHI = { I: "126133", II: "126134" } as const; // 認知症専門ケア加算Ⅰ3/Ⅱ4 (/回)
-const CODE_CHUUSANKAN = "128110"; // 中山間地域等提供加算 = 所定単位 × 5%
+// 回単位加算コード。★ 2026-09-05: 要介護(種類12)/予防給付(種類62)で別コード体系。
+//   一本化した src/lib/bath-seikyu/resolve-code.ts の bathAddonCodesFor() で
+//   クライアントごとに解決する (B-1w修正の続き。基本コードだけ62系に直すと
+//   加算が12xxx固定のままになり制度混在の明細になるため)。
 
 export async function aggregateBathVisitSeikyu(
   supabase: SupabaseClient,
@@ -169,7 +170,12 @@ export async function aggregateBathVisitSeikyu(
 
   // 2) サービスコード → 単位数 (基本 + 回単位加算コード, 対象月世代)
   const baseCodes = Array.from(new Set(records.map((r) => r.service_code).filter(Boolean))) as string[];
-  const codeSet = Array.from(new Set([...baseCodes, CODE_SHOKAI, CODE_NINCHI.I, CODE_NINCHI.II]));
+  // 加算コードは要介護/予防給付どちらの体系も (この office に両方の利用者が混在しうるため)
+  const codeSet = Array.from(new Set([
+    ...baseCodes,
+    BATH_ADDON_CODES_KAIGO.shokai, BATH_ADDON_CODES_KAIGO.ninchiI, BATH_ADDON_CODES_KAIGO.ninchiII, BATH_ADDON_CODES_KAIGO.chuusankan,
+    BATH_ADDON_CODES_YOBO.shokai, BATH_ADDON_CODES_YOBO.ninchiI, BATH_ADDON_CODES_YOBO.ninchiII, BATH_ADDON_CODES_YOBO.chuusankan,
+  ]));
   const codeMap = new Map<string, { units: number; name: string; short: string | null }>();
   {
     const { data, error } = await validInMonth(
@@ -431,17 +437,25 @@ export async function aggregateBathVisitSeikyu(
       if (ex) { ex.count += 1; ex.units += info.units; }
       else detailMap.set(code, { service_type: info.name, short_name: info.short, service_code: code, unit_per: info.units, count: 1, units: info.units });
     }
-    // 所定単位 (基本 121xxx のみ) = %加算 (中山間等) の母数
+    // このクライアントの加算コード体系 (要介護=12xxx / 予防給付=62xxx)。B-1w修正の続き。
+    const addonCodes = bathAddonCodesFor(cert?.care_level);
+    // 所定単位 (基本 121xxx/621xxx) = %加算 (中山間等) の母数
+    //   ★ 2026-09-05 是正: 621xxx (予防給付) を含めていなかったため、
+    //     予防給付クライアントは常に serviceBaseUnits=0 になり中山間加算が
+    //     一律0単位になっていた (基本コードだけ62系に直した副作用)。
     const serviceBaseUnits = Array.from(detailMap.values())
-      .filter((d) => (d.service_code ?? "").startsWith("121"))
+      .filter((d) => isBathBaseCode(d.service_code))
       .reduce((s, d) => s + d.units, 0);
 
     // %加算 (マスタ units=0 の率加算)。提供表のサービス追加で行として入った場合は
-    // 所定単位×率で単位数を計算し直す (0単位のまま出さない)
+    // 所定単位×率で単位数を計算し直す (0単位のまま出さない)。要介護/予防給付 両系統。
     const RATE_ADDONS: Record<string, { rate: number; label: string }> = {
-      "128000": { rate: 0.15, label: "特別地域訪問入浴介護加算" },
-      "128100": { rate: 0.10, label: "訪問入浴小規模事業所加算" },
-      "128110": { rate: 0.05, label: "訪問入浴中山間地域等提供加算" },
+      [BATH_ADDON_CODES_KAIGO.tokubetsu]: { rate: 0.15, label: "特別地域訪問入浴介護加算" },
+      [BATH_ADDON_CODES_KAIGO.shokibo]: { rate: 0.10, label: "訪問入浴小規模事業所加算" },
+      [BATH_ADDON_CODES_KAIGO.chuusankan]: { rate: 0.05, label: "訪問入浴中山間地域等提供加算" },
+      [BATH_ADDON_CODES_YOBO.tokubetsu]: { rate: 0.15, label: "予防特別地域訪問入浴介護加算" },
+      [BATH_ADDON_CODES_YOBO.shokibo]: { rate: 0.10, label: "予防訪問入浴小規模事業所加算" },
+      [BATH_ADDON_CODES_YOBO.chuusankan]: { rate: 0.05, label: "予防訪問入浴中山間地域等提供加算" },
     };
     for (const [code, { rate }] of Object.entries(RATE_ADDONS)) {
       const row = detailMap.get(code);
@@ -481,20 +495,20 @@ export async function aggregateBathVisitSeikyu(
       details.push({ service_type: info.name, short_name: info.short, service_code: code, unit_per: info.units, count, units });
     };
     // 初回加算: 月1回(いずれかの記録でON)。**限度額管理の対象** (visit と同じ / ほのぼの突合で確定)
-    if (recs.some((r) => r.addon_shokai)) pushAddon(CODE_SHOKAI, 1, false);
+    if (recs.some((r) => r.addon_shokai)) pushAddon(addonCodes.shokai, 1, false);
     // 認知症専門ケア: 記録(回)ごと。Ⅰ/Ⅱ別に集計
     const ninchiI = recs.filter((r) => r.addon_ninchi === "I").length;
     const ninchiII = recs.filter((r) => r.addon_ninchi === "II").length;
-    if (ninchiI > 0) pushAddon(CODE_NINCHI.I, ninchiI, false);
-    if (ninchiII > 0) pushAddon(CODE_NINCHI.II, ninchiII, false);
+    if (ninchiI > 0) pushAddon(addonCodes.ninchiI, ninchiI, false);
+    if (ninchiII > 0) pushAddon(addonCodes.ninchiII, ninchiII, false);
     // 中山間地域等提供加算 = 所定単位 × 5% (いずれかの記録でON、行が無い場合のみ)
-    if (recs.some((r) => r.addon_chuusankan) && serviceBaseUnits > 0 && !detailMap.has(CODE_CHUUSANKAN)) {
+    if (recs.some((r) => r.addon_chuusankan) && serviceBaseUnits > 0 && !detailMap.has(addonCodes.chuusankan)) {
       const cu = Math.round(serviceBaseUnits * 0.05);
-      const info = codeMap.get(CODE_CHUUSANKAN);
+      const info = codeMap.get(addonCodes.chuusankan);
       grossBaseUnits += cu;
       // 中山間は率加算 = 限度額管理**対象外** (2026-09-01 是正。従来は管理対象に入れていた)
       taishougaiUnits += cu;
-      details.push({ service_type: info?.name ?? "訪問入浴中山間地域等提供加算", short_name: info?.short ?? null, service_code: CODE_CHUUSANKAN, unit_per: cu, count: 1, units: cu });
+      details.push({ service_type: info?.name ?? (isYoboLevel(cert?.care_level) ? "予防訪問入浴中山間地域等提供加算" : "訪問入浴中山間地域等提供加算"), short_name: info?.short ?? null, service_code: addonCodes.chuusankan, unit_per: cu, count: 1, units: cu });
     }
 
     details.sort((a, b) => b.units - a.units);
