@@ -43,6 +43,7 @@
     "check:staff-suggest": "tsx scripts/staff-suggest-verify.mts",
     "check:gendo-allocation": "tsx scripts/gendo-allocation-verify.mts",
     "check:hospitalization": "tsx scripts/hospitalization-verify.mts",
+    "check:yobo-kubun": "tsx scripts/yobo-kubun-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
