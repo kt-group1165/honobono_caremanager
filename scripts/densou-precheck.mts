@@ -122,7 +122,11 @@ async function main(): Promise<void> {
   const certs = await fetchAll<{
     client_id: string; insurer_number: string | null; insured_number: string | null;
     certification_start_date: string | null; certification_end_date: string | null;
-  }>("client_insurance_records", "id, client_id, insurer_number, insured_number, certification_start_date, certification_end_date");
+    certification_status: string | null; care_level: string | null;
+    copay_rate: string | null; service_limit_amount: number | null; effective_date: string | null;
+  }>("client_insurance_records",
+    "id, client_id, insurer_number, insured_number, certification_start_date, certification_end_date, " +
+    "certification_status, care_level, copay_rate, service_limit_amount, effective_date");
 
   const badInsurer = new Map<string, number>();
   const badInsured: string[] = [];
@@ -233,6 +237,79 @@ async function main(): Promise<void> {
   }
   section("実績があるのに対象月に有効な認定・受給者証が無い", noCert,
     "資格が切れているか、認定の取込が古い。そのまま請求すると返戻になる");
+
+  // ── 5.5 認定が申請中のため当月の請求を保留した利用者 (2026-09-05 追加) ──
+  // ⚠ これは aggregate.ts / aggregate-sougou.ts が「ほのぼの準拠」で意図的に行っている
+  //   保留 (バグではない)。ただし当方の certification_status は取込CSVスナップショットの
+  //   ままで自動更新されないため、ほのぼの側で既に認定が確定していても当方だけ保留し続け、
+  //   気づかないまま請求が漏れ続けるリスクがある (B-6f)。月をまたぐたび対象が変わるので
+  //   ★基準値方式にはしない (①②とは性質が違う)。実績が0件の人はノイズになるため
+  //   一覧には出さず、件数だけ集計する。
+  {
+    const certCompleteness = (c: { copay_rate: string | null; care_level: string | null; service_limit_amount: number | null }): number =>
+      (c.copay_rate == null || c.copay_rate === "" ? 0 : 4) +
+      (c.care_level == null || c.care_level === "" ? 0 : 2) +
+      (c.service_limit_amount == null ? 0 : 1);
+
+    const byClientCert = new Map<string, typeof certs>();
+    for (const c of certs) { if (!byClientCert.has(c.client_id)) byClientCert.set(c.client_id, []); byClientCert.get(c.client_id)!.push(c); }
+
+    const pendingHeld: { client_id: string; cert: (typeof certs)[number] }[] = [];
+    for (const [cid, list] of byClientCert) {
+      const inMonth = list.filter(covers);
+      if (inMonth.length === 0) continue;
+      // cert-for-month.ts と同じ並び (start DESC, effective DESC) + 同着は completeness で決定
+      inMonth.sort((a, b) => {
+        const s = (b.certification_start_date ?? "").localeCompare(a.certification_start_date ?? "");
+        if (s !== 0) return s;
+        return (b.effective_date ?? "").localeCompare(a.effective_date ?? "");
+      });
+      const head = inMonth[0];
+      let best = head, bestScore = certCompleteness(head);
+      for (const r of inMonth) {
+        if (r.certification_start_date !== head.certification_start_date || r.effective_date !== head.effective_date) break;
+        const s = certCompleteness(r);
+        if (s > bestScore) { best = r; bestScore = s; }
+      }
+      if (best.certification_status === "申請中") pendingHeld.push({ client_id: cid, cert: best });
+    }
+
+    const withVisit = pendingHeld.filter((p) => (worked.get(p.client_id)?.kaigo ?? 0) > 0);
+
+    if (pendingHeld.length === 0) {
+      console.log(`${EOL}  OK  認定が申請中のため当月の請求を保留した利用者 — 0 件`);
+    } else {
+      console.log(`${EOL}★ 認定が申請中のため当月の請求を保留した利用者 — 保留 ${pendingHeld.length} 名 / うち当月実績あり ${withVisit.length} 名`);
+      console.log(`   ⚠ これは仕様どおりの保留 (バグではない)。ただし当方のstatusは取込CSV`);
+      console.log(`     スナップショットのままなので、ほのぼの側で既に確定していても気づけない。`);
+      console.log(`     実績が無い人は一覧に出していない (0件はノイズになるため)。`);
+      if (withVisit.length > 0) {
+        // 事業所 (現在有効な割当のみ)
+        const officeAssigns = await fetchAll<{ client_id: string; office_id: string; start_date: string | null; end_date: string | null }>(
+          "client_office_assignments", "id, client_id, office_id, start_date, end_date",
+          (q) => (q as unknown as { in: (a: string, b: string[]) => unknown }).in("client_id", withVisit.map((p) => p.client_id)));
+        const officeIds = [...new Set(officeAssigns.map((a) => a.office_id))];
+        const officeRows = await fetchAll<{ id: string; name: string; short_name: string | null }>(
+          "offices", "id, name, short_name", (q) => (q as unknown as { in: (a: string, b: string[]) => unknown }).in("id", officeIds));
+        const officeName = new Map(officeRows.map((o) => [o.id, o.short_name || o.name]));
+        const officeOf = new Map<string, string>();
+        for (const a of officeAssigns) {
+          if (a.end_date && a.end_date < monthStart) continue;
+          if (a.start_date && a.start_date > monthEnd) continue;
+          if (!officeOf.has(a.client_id)) officeOf.set(a.client_id, officeName.get(a.office_id) ?? a.office_id);
+        }
+        for (const p of withVisit.slice(0, 25)) {
+          const nm = nameOf.get(p.client_id) ?? "?";
+          const off = officeOf.get(p.client_id) ?? "(割当不明)";
+          const c = p.cert;
+          console.log(`   ${nm}  事業所:${off}  保険者${c.insurer_number ?? "?"} 被保番${c.insured_number ?? "?"}` +
+            `  申請中の認定期間 ${c.certification_start_date ?? "?"}〜${c.certification_end_date ?? "?"}` +
+            `  当月実績 ${worked.get(p.client_id)?.kaigo ?? 0} 件`);
+        }
+        if (withVisit.length > 25) console.log(`   … 他 ${withVisit.length - 25} 名`);
+      }
+    }
+  }
 
   // ── 6. 事業所番号 ────────────────────────────────────────────────────
   const offices = await fetchAll<{ name: string; business_number: string | null; shogai_business_number: string | null; is_active: boolean | null }>(
