@@ -805,7 +805,19 @@ function loadTjBodySpans(targetMonth, areaDir) {
       let e = toMin(c[16]);
       if (!c[7] || !Number.isInteger(day) || s == null || e == null) continue;
       if (e <= s) e += 1440;
-      const k = `${c[7]}|${day}`;
+      // ★ 区分ごとに分けて持つ。111xxx = 身体介護 / 112xxx = 家事援助。
+      //   ⚠ 分けないと **家事の枠が身体の行に割り当てられる**。
+      //   実例 (K姉 1221918178 6/03,10,17,24):
+      //     TJ  111000 12:00-13:00 / 112000 13:00-13:30 / 111000 15:30-16:00 (人数2)
+      //     MEISAI 身体は 3 行 (12:00-13:00 と 15:30-16:00 が 2 人分)。
+      //     区分を混ぜると TJ も 3 本で所要時間の多重集合 {30,30,60} が一致し、
+      //     15:30-16:00 の 1 本が **13:00-13:30 (家事の枠) に書き換わる**。
+      //     その結果 12:00-13:00 と連続になり、次段の同日合算 (2時間ルール) が
+      //     本来間隔 2.5 時間の 2 本を繋いで 90 分にしてしまう。
+      //   ★ 身体/家事 以外 (通院・同行等) は MEISAI 側に対応するグループが無いので取らない。
+      const kind = /^111/.test(c[12]) ? "身体" : /^112/.test(c[12]) ? "家事" : null;
+      if (!kind) continue;
+      const k = `${c[7]}|${day}|${kind}`;
       if (!out.has(k)) out.set(k, []);
       out.get(k).push({ s, e });
     }
@@ -1006,11 +1018,11 @@ async function main() {
         }
       }
       const nameKey2 = (n) => (n || "").normalize("NFKC").replace(/[（(].*$/, "").replace(/[\s　]/g, "");
-      const tjBodyByNameDay = new Map(); // `${氏名key}|${日}` -> [{s,e}]
+      const tjBodyByNameDay = new Map(); // `${氏名key}|${日}|${区分}` -> [{s,e}]
       for (const [k, arr] of tjBody) {
-        const [ben, dayStr] = k.split("|");
+        const [ben, dayStr, kind] = k.split("|");
         const nm = nameByBeneficiary2.get(ben);
-        if (nm) tjBodyByNameDay.set(`${nameKey2(nm)}|${Number(dayStr)}`, arr);
+        if (nm) tjBodyByNameDay.set(`${nameKey2(nm)}|${Number(dayStr)}|${kind}`, arr);
       }
 
       // MEISAI 側: 利用者 x 日 x 区分(身体/家事) でグループ化
@@ -1028,8 +1040,8 @@ async function main() {
       let fixedCount = 0, countMismatch = 0, durMismatch = 0, matchedCount = 0;
       const fixedSamples = [];
       for (const [k, rows] of meisaiByNameDayKind) {
-        const [nameK, dayStr] = k.split("|");
-        const tjSpans = tjBodyByNameDay.get(`${nameK}|${dayStr}`);
+        const [nameK, dayStr, kindK] = k.split("|");
+        const tjSpans = tjBodyByNameDay.get(`${nameK}|${dayStr}|${kindK}`);
         if (!tjSpans?.length) continue;
         matchedCount++;
         if (rows.length !== tjSpans.length) {

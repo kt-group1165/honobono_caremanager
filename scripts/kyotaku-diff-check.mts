@@ -59,6 +59,18 @@ if (UPDATE || !existsSync(EXPECTED)) {
 }
 
 const exp = JSON.parse(readFileSync(EXPECTED, "utf8")) as { month: string; rows: Row[] };
+
+// ★ 負のコントロール: NEGATIVE_CONTROL=1 で 基準値をメモリ上だけ 1 上げる。
+//   ★ FAIL するのが正しい。PASS したら この検査は効いていない。
+//   ⚠ ★ ファイルは書き換えない (途中で落ちても 基準値が壊れないようにするため)。
+if (process.env.NEGATIVE_CONTROL === "1") {
+  const t = exp.rows.find((r) => r.s);
+  if (!t?.s) { console.log("★ FAIL 負のコントロールを仕掛けられません (基準値に S がありません)"); process.exit(1); }
+  t.s.match += 1;
+  console.log(`⚠ ★ 負のコントロール中: ${t.area} の S 基準値を 1 上げました → ★ FAIL になるのが正しい
+`);
+}
+
 const byArea = new Map(exp.rows.map((r) => [r.area, r]));
 const fails: string[] = [];
 const notes: string[] = [];

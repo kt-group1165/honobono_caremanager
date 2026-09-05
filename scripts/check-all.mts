@@ -35,13 +35,17 @@ const CHECKS: Check[] = [
   { name: "teigen", script: "check:teigen", why: "逓減制" },
   { name: "shogai-jogen", script: "check:shogai-jogen", why: "障害の上限額管理" },
   { name: "tokutei", script: "check:tokutei", why: "特定事業所加算" },
+  // ★ 訪問入浴は 実データが 0 行だが、これだけは Supabase をモックする純関数テストなので
+  //   ★ DB 書込を伴わない = gate に入れてよい (もう一方の check:bath-sample は
+  //   サンプル投入が要るので 意図的に入れていない)。2026-09-05 に編入。
+  { name: "bath-fixture", script: "check:bath-fixture", why: "★ 訪問入浴の請求 (DB書込不要のモックテスト。実データは 0 行)" },
   { name: "kyotaku-diff", script: "check:kyotaku-diff", why: "★ 居宅の伝送バイト照合 (ほのぼの実出力との突合。認定更新で差が増えるので 回帰だけ見張る)", slow: true },
   { name: "densou-diff", script: "check:densou-diff", why: "★ ほのぼの実出力との突合 (介護保険7拠点 + 障害17拠点)", slow: true },
 ];
 
 /** ★ この一覧が見ていないもの。緑でも安心しないための明示 */
 const NOT_COVERED = [
-  "訪問入浴 — ★ 実データが 0 行。サンプルでしか通せない",
+  "訪問入浴の ★ 実データ — 0 行 (check:bath-fixture はモック。★ 実データでは一度も通っていない)",
   "介護予防支援(46) — ★ レセプトが 0 件",
   "福祉用具 — ★ ほのぼの実出力が手元に 1 本も無い (月 ¥17,527,920)",
   "住宅改修 — ★ 請求の実装が存在しない (5年 ¥113,055,753)",
