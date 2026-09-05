@@ -77,7 +77,8 @@
     "matrix": "tsx scripts/sample-matrix.mts",
     "check:densou-diff": "tsx scripts/densou-diff-check.mts",
     "check:densou-diff-extra": "tsx scripts/kaigo-densou-diff-check-extra.mts",
-    "check:tj-juho": "node scripts/tj-juho-analyze.mjs"
+    "check:tj-juho": "node scripts/tj-juho-analyze.mjs",
+    "check:two-hour-sensitivity": "tsx scripts/two-hour-rule-sensitivity.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
