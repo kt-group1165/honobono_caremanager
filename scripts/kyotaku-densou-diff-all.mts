@@ -131,7 +131,9 @@ for (const j of jobs) {
   results.push(line.join("   "));
   // ★ 機械可読にも出す (回帰網が読む)。分母 (new/hono) と 一致/差 を持たせる
   const parse = (out: string) => {
-    const m = /突合:\s*new\s*(\d+)\s*\/\s*hono\s*(\d+)\s*→\s*一致\s*(\d+)\s*\/\s*差\s*(\d+)/.exec(out);
+    // ⚠ ★ S は「new N / hono M」、K は「new N ★票★ / hono M 票」。★ 票 を許さないと K だけ拾えない
+    //   (2026-09-05: 実際に K だけ 0 件になり、基準値に K が入らなかった)
+    const m = /突合:\s*new\s*(\d+)\s*票?\s*\/\s*hono\s*(\d+)\s*票?\s*→\s*一致\s*(\d+)\s*\/\s*差\s*(\d+)/.exec(out);
     return m ? { newRows: +m[1], honoRows: +m[2], match: +m[3], diff: +m[4] } : null;
   };
   jsonRows.push({ area: j.area, officeId: j.officeId, s: parse(sOut), k: parse(kOut) });

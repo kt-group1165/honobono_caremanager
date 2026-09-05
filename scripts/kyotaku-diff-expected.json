@@ -7,6 +7,8 @@
     "⚠ 2026-08-21 に「15 事業所 バイト一致」が確認されたが、",
     "  ★ 8/31 の利用者マスタ出し直しで 認定が更新され、成り立たなくなった。",
     "  ★ 四街道 被保番 1004371512 で 認定終了日が 11/30 → 6/30 に変わった例を実データで確認済み。",
+    "⚠ 突合ハーネスは _kyotaku_superseded.json / _densou_intentional_diff.json を読んでいない。",
+    "  ★ 登録 3 件ぶんは 差として残る (いすみ 元吉敏枝 / 四街道 北原武夫 ほか)。",
     "⚠ 悪化したまま --update すると 穴を焼き付ける。★ 先に原因を潰すこと。"
   ],
   "month": "2026-06",
@@ -20,7 +22,12 @@
         "match": 246,
         "diff": 7
       },
-      "k": null
+      "k": {
+        "newRows": 247,
+        "honoRows": 253,
+        "match": 241,
+        "diff": 12
+      }
     },
     {
       "area": "いすみ",
@@ -31,7 +38,12 @@
         "match": 271,
         "diff": 1
       },
-      "k": null
+      "k": {
+        "newRows": 271,
+        "honoRows": 272,
+        "match": 268,
+        "diff": 4
+      }
     },
     {
       "area": "おゆみ野",
@@ -42,7 +54,12 @@
         "match": 282,
         "diff": 1
       },
-      "k": null
+      "k": {
+        "newRows": 282,
+        "honoRows": 283,
+        "match": 282,
+        "diff": 1
+      }
     },
     {
       "area": "ちはら台",
@@ -53,7 +70,12 @@
         "match": 106,
         "diff": 4
       },
-      "k": null
+      "k": {
+        "newRows": 108,
+        "honoRows": 110,
+        "match": 108,
+        "diff": 2
+      }
     },
     {
       "area": "五井",
@@ -64,7 +86,12 @@
         "match": 177,
         "diff": 3
       },
-      "k": null
+      "k": {
+        "newRows": 177,
+        "honoRows": 180,
+        "match": 176,
+        "diff": 4
+      }
     },
     {
       "area": "八千代",
@@ -75,7 +102,12 @@
         "match": 177,
         "diff": 7
       },
-      "k": null
+      "k": {
+        "newRows": 177,
+        "honoRows": 184,
+        "match": 176,
+        "diff": 8
+      }
     },
     {
       "area": "四街道",
@@ -86,7 +118,12 @@
         "match": 134,
         "diff": 3
       },
-      "k": null
+      "k": {
+        "newRows": 135,
+        "honoRows": 137,
+        "match": 135,
+        "diff": 2
+      }
     },
     {
       "area": "大網",
@@ -97,7 +134,12 @@
         "match": 139,
         "diff": 3
       },
-      "k": null
+      "k": {
+        "newRows": 139,
+        "honoRows": 142,
+        "match": 138,
+        "diff": 4
+      }
     },
     {
       "area": "姉ム",
@@ -108,7 +150,12 @@
         "match": 202,
         "diff": 8
       },
-      "k": null
+      "k": {
+        "newRows": 205,
+        "honoRows": 210,
+        "match": 204,
+        "diff": 6
+      }
     },
     {
       "area": "木更津",
@@ -119,7 +166,12 @@
         "match": 137,
         "diff": 5
       },
-      "k": null
+      "k": {
+        "newRows": 138,
+        "honoRows": 142,
+        "match": 137,
+        "diff": 5
+      }
     },
     {
       "area": "船橋",
@@ -130,7 +182,12 @@
         "match": 246,
         "diff": 5
       },
-      "k": null
+      "k": {
+        "newRows": 247,
+        "honoRows": 251,
+        "match": 237,
+        "diff": 14
+      }
     },
     {
       "area": "花見川",
@@ -141,7 +198,12 @@
         "match": 132,
         "diff": 2
       },
-      "k": null
+      "k": {
+        "newRows": 132,
+        "honoRows": 134,
+        "match": 131,
+        "diff": 3
+      }
     },
     {
       "area": "茂原",
@@ -152,7 +214,12 @@
         "match": 117,
         "diff": 3
       },
-      "k": null
+      "k": {
+        "newRows": 118,
+        "honoRows": 119,
+        "match": 116,
+        "diff": 4
+      }
     },
     {
       "area": "袖ケ浦",
@@ -163,7 +230,12 @@
         "match": 249,
         "diff": 5
       },
-      "k": null
+      "k": {
+        "newRows": 250,
+        "honoRows": 254,
+        "match": 250,
+        "diff": 4
+      }
     },
     {
       "area": "高品",
@@ -174,7 +246,12 @@
         "match": 135,
         "diff": 3
       },
-      "k": null
+      "k": {
+        "newRows": 136,
+        "honoRows": 137,
+        "match": 134,
+        "diff": 4
+      }
     }
   ]
 }
