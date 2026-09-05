@@ -26,6 +26,7 @@
     "check:riyou-final": "tsx scripts/riyou-seikyu-final-amount-verify.mts",
     "check:shuchu-gensan": "tsx scripts/shuchu-gensan-verify.mts",
     "check:shogai-fukushi-billing": "tsx scripts/shogai-fukushi-billing-verify.mts",
+    "check:kyotaku-addon-active": "tsx scripts/kyotaku-addon-active-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
