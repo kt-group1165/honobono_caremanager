@@ -384,16 +384,11 @@ console.log("\n=== §C 実績のある月×自治体で処遇改善が解決で�
       )),
     );
   }
-  // 保険者 → 自治体 prefix (実装の SOUGOU_PREFIX_BY_INSURER をソースから読む)
-  const aggSrc = readFileSync(
-    fileURLToPath(new URL("../src/lib/visit-seikyu/aggregate-sougou.ts", import.meta.url)), "utf8");
-  const pm = aggSrc.slice(
-    aggSrc.indexOf("const SOUGOU_PREFIX_BY_INSURER"),
-    aggSrc.indexOf("};", aggSrc.indexOf("const SOUGOU_PREFIX_BY_INSURER")),
-  );
-  const prefixByInsurer = new Map(
-    [...pm.matchAll(/"(\d{6})":\s*"([A-Z]*_?)"/g)].map((m) => [m[1], m[2]]),
-  );
+  // 保険者 → 自治体 prefix (2026-09-05: sougou-insurer-map.mjs に一本化済みなので直接 import する。
+  //   以前はaggregate-sougou.tsのソーステキストを正規表現で読んでいたが、
+  //   一本化でその場所からは無くなったため、読み先を変更した)
+  const { SOUGOU_PREFIX_BY_INSURER } = await import("../src/lib/visit-seikyu/sougou-insurer-map.mjs");
+  const prefixByInsurer = new Map(Object.entries(SOUGOU_PREFIX_BY_INSURER as Record<string, string>));
 
   const inMonth = (r: Row, ym: string) => {
     const f = String(r.valid_from ?? ""), u = String(r.valid_until ?? "");

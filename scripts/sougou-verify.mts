@@ -197,15 +197,35 @@ check("項: 事業費請求額 = 27000 (9割)", F(11), "27000");
 check("恒等式: 費用 = 単位数 × 単価10.00", Number(F(10)), Number(F(9)) * 10);
 
 console.log("\n=== §6 単価マップの網羅性 (本番 DB を READ ONLY 参照) ===");
-// SOUGOU_UNITPRICE_BY_INSURER は非 export のため、ソースからキーを読む。
-const srcPath = fileURLToPath(new URL("../src/lib/visit-seikyu/aggregate-sougou.ts", import.meta.url));
-const src = readFileSync(srcPath, "utf8");
-const mapBody = src.slice(
-  src.indexOf("const SOUGOU_UNITPRICE_BY_INSURER"),
-  src.indexOf("};", src.indexOf("const SOUGOU_UNITPRICE_BY_INSURER")),
+// 2026-09-05: SOUGOU_PREFIX_BY_INSURER / SOUGOU_UNITPRICE_BY_INSURER は
+// sougou-insurer-map.mjs に一本化済み (aggregate-sougou.ts と
+// migrations/import_meisai_sougou_records.mjs の両方がここから import する)。
+// 以前はソーステキストを正規表現で読んでいたが、一本化後は直接 import できる。
+const { SOUGOU_PREFIX_BY_INSURER, SOUGOU_UNITPRICE_BY_INSURER } = await import(
+  "../src/lib/visit-seikyu/sougou-insurer-map.mjs"
 );
-const mapped = new Set([...mapBody.matchAll(/"(\d{6})":/g)].map((m) => m[1]));
+const priceMap = SOUGOU_UNITPRICE_BY_INSURER as Record<string, number>;
+const mapped = new Set(Object.keys(priceMap));
 console.log(`  単価マップ登録: ${mapped.size} 保険者`);
+
+// ★ 一本化の防護: import_meisai_sougou_records.mjs が sougou-insurer-map.mjs を
+// 実際に import しているか (ローカルに独自の PREFIX 辞書を再度持っていないか) を
+// 機械的に確認する。2026-09-05 に発見した「2箇所目のコピーが未登録のままサイレント
+// スキップする」再発を防ぐための同期チェック。
+{
+  const importScriptPath = fileURLToPath(new URL("../migrations/import_meisai_sougou_records.mjs", import.meta.url));
+  const importSrc = readFileSync(importScriptPath, "utf8");
+  check(
+    "import_meisai_sougou_records.mjs が sougou-insurer-map.mjs から PREFIX を import している",
+    /from\s+["']\.\.\/src\/lib\/visit-seikyu\/sougou-insurer-map\.mjs["']/.test(importSrc),
+    true,
+  );
+  check(
+    "import_meisai_sougou_records.mjs にローカルな PREFIX 辞書リテラルが復活していない",
+    /const\s+PREFIX\s*=\s*\{/.test(importSrc),
+    false,
+  );
+}
 
 const env = Object.fromEntries(
   readFileSync(fileURLToPath(new URL("../.env.local", import.meta.url)), "utf8")
@@ -296,9 +316,7 @@ console.log("\n=== §7 単価は「保険者」で決まる — 事業所単位�
 // memory project_sougou_insurer_scoped_master の「事業所単位で持つと誤請求」を
 // 実データで裏付ける。**保険者の単価 ≠ 事業所の単価** の行が何行あるかを数える。
 {
-  const priceMap = Object.fromEntries(
-    [...mapBody.matchAll(/"(\d{6})":\s*([\d.]+)/g)].map((m) => [m[1], Number(m[2])]),
-  ) as Record<string, number>;
+  // priceMap は §6 で sougou-insurer-map.mjs から直接 import 済みのものを再利用する
   const offices = await rest("offices?select=id,name,unit_price&limit=200");
   const officeById = new Map(offices.map((o) => [String(o.id), o]));
   const schedFull: Record<string, unknown>[] = [];
@@ -357,10 +375,8 @@ console.log("\n=== §8 君津市(122259)の登録前提を見張る (2026-09-05 
     check("君津市(122259)の実績件数 = 0 (現状の影響ゼロを明示)", insurerNum122259Count, 0);
   } else {
     // 実績が付き始めたら、実際に使われる単価とマスタ解決の成否を検証する
-    const priceMap122259 = Object.fromEntries(
-      [...mapBody.matchAll(/"(\d{6})":\s*([\d.]+)/g)].map((m) => [m[1], Number(m[2])]),
-    ) as Record<string, number>;
-    check("君津市(122259)の単価マップは10.21のまま (未確認の値に変わっていないか)", priceMap122259["122259"], 10.21);
+    check("君津市(122259)の単価マップは10.21のまま (未確認の値に変わっていないか)", priceMap["122259"], 10.21);
+    check("君津市(122259)のprefixはMB_のまま (未確認の値に変わっていないか)", SOUGOU_PREFIX_BY_INSURER["122259"], "MB_");
     console.log("  ⚠ 実績が付き始めました。マスタ解決 (MB_バケットで名前が引けるか) は本番の警告ログ (aggregateSougouSeikyu の warnings) を別途確認してください — このスクリプトは件数と単価定数のみ見ています");
   }
 }

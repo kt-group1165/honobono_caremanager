@@ -14,6 +14,11 @@ import { readFileSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+// 保険者→総合コードprefix。src/lib/visit-seikyu/aggregate-sougou.ts と同じ定義を
+// 一本化して参照する (2026-09-05。ここが2箇所目のコピーとしてズレて、君津市(122259)が
+// 集計側にだけ登録されaggregate-sougou.tsは請求できる一方、この取込scriptは
+// 未登録のまま skipNoCode でサイレントにスキップしていたのを実測で発見)。
+import { SOUGOU_PREFIX_BY_INSURER as PREFIX } from "../src/lib/visit-seikyu/sougou-insurer-map.mjs";
 
 const EXECUTE=process.argv.includes("--execute");
 // TARGET_MONTH=2026-07 で対象月を切替 (既定は 2026-06)。
@@ -24,23 +29,6 @@ const YM=TARGET_MONTH.replace("-","");
 const OFFICE=process.env.OFFICE_ID||"e08c3706-ad59-4913-b4e2-67f2675422e9";
 const AREA_DIR=process.env.AREA_DIR||"茂原";
 const TAG=process.env.TAG||"";
-// 保険者→総合コードprefix。app側 SOUGOU_PREFIX_BY_INSURER と一致させること。
-// 大網エリア(大網白里/山武/九十九里)はみなし現行相当コードのみ→単位数全国共通なので MB_ 流用。
-const PREFIX={
-  "122101":"MB_", "124214":"IC_", "124230":"CS_",
-  "122390":"OA_", "122374":"SM_", "124032":"KJ_", "122291":"SD_", // 大網白里/山武/九十九里/袖ケ浦(公式表投入済)
-  "121012":"CB_","121020":"CB_","121038":"CB_","121046":"CB_","121053":"CB_","121061":"CB_", // 千葉市6区
-  "122192":"IH_", "122069":"K_",                          // 市原市 / 木更津市
-  "122283":"YT_",                                         // 四街道市 (国保連統一CSVから投入済)
-  // いすみエリア (いすみ営業所の管轄)。**みなし現行相当コードのみ**で単位数は全国共通。
-  //   実伝送 KK260804 で検算済: A21111=1176 / A21211=2349 / A21321=3727 / 処遇改善266‰
-  //   いずれも MB_ と同値なので MB_ を流用する (大網エリアと同じ扱い)。
-  "122184":"MB_", "122382":"MB_", "124412":"MB_",
-  // 山武エリアの近隣市町村。実伝送 KK260803 で単位数が全国共通と一致 (同上)
-  "122135":"MB_", "122358":"MB_", "124099":"MB_",
-  "122168":"MB_",   // 八千代市 (花見川)。実伝送で全国共通単位数を確認
-  "124263":"MB_",   // 睦沢町 (東郷)。同上
-};
 const STEP1_MARK=`[MEISAI-STEP1 ${TARGET_MONTH}${TAG?" "+TAG:""}]`;
 const KAIGO=fileURLToPath(new URL("../",import.meta.url));
 const MEISAI=path.join(KAIGO,`サービス実績データ/${AREA_DIR}/${YM}`);
@@ -72,12 +60,13 @@ async function main(){
   // 利用者の保険者。STEP1 マーカー付きを優先し、無い利用者は認定レコード全体から補う。
   // ⚠ マーカーだけに頼ると、TAG 無しで取り込まれた拠点 (茂原・姉ム・四街道) で
   //   保険者が引けず総合事業が丸ごと未解決になる (2026-08-07 に 3 拠点で発生)。
-  const insurerBy={};
+  const insurerBy={}; const insurerNameByNum={};
   {
-    const all=await fetchAll("client_insurance_records","client_id,insurer_number,notes");
+    const all=await fetchAll("client_insurance_records","client_id,insurer_number,insurer_name,notes");
     for(const r of all){ if(!r.insurer_number) continue;
       if(r.notes===STEP1_MARK) insurerBy[r.client_id]=r.insurer_number;         // 当拠点・当月が最優先
-      else if(!(r.client_id in insurerBy)) insurerBy[r.client_id]=r.insurer_number; }
+      else if(!(r.client_id in insurerBy)) insurerBy[r.client_id]=r.insurer_number;
+      if(r.insurer_name && !insurerNameByNum[r.insurer_number]) insurerNameByNum[r.insurer_number]=r.insurer_name; }
   }
 
   // 総合コード名 (prefix付き, 対象月)
@@ -89,12 +78,22 @@ async function main(){
   for(const m of members){const k=normStaff(m.name); if(!memBy.has(k))memBy.set(k,[]); memBy.get(k).push(m.id);}
 
   const payloads=[]; let skipNoClient=0, skipNoCode=0; const skipCodes={};
+  // ⚠ 保険者が PREFIX に一切登録されていない (=総合事業のこの市町村を一度も
+  //   取り込めたことがない) 場合と、登録はあるがそのコードだけ master に無い場合を
+  //   分けて集計する。前者は「サイレントスキップ」の実害が大きい (2026-09-05実測:
+  //   君津市(122259)未登録で加藤紀久代さんの6行がこの経路で無警告に消えていた)。
+  const skipByUnregisteredInsurer={};
   for(const r of rows){
     const cid=numToClient[r.num]; if(!cid){skipNoClient++;continue;}
     const insurer=insurerBy[cid]; const pref=PREFIX[insurer];
     const scode=pref?`${pref}${r.code}`:null;   // MEISAI A21111 → MB_A21111
     const info=scode?nameByCode[scode]:null;
-    if(!info){ skipNoCode++; skipCodes[r.code+"@"+(insurer||"?")]=(skipCodes[r.code+"@"+(insurer||"?")]||0)+1; continue; }
+    if(!info){
+      skipNoCode++;
+      skipCodes[r.code+"@"+(insurer||"?")]=(skipCodes[r.code+"@"+(insurer||"?")]||0)+1;
+      if(insurer && !pref) skipByUnregisteredInsurer[insurer]=(skipByUnregisteredInsurer[insurer]||0)+1;
+      continue;
+    }
     const sids=memBy.get(normStaff(r.staff))||[];
     payloads.push({ user_id:cid, staff_id:sids.length===1?sids[0]:null, visit_date:r.date,
       start_time:r.start, end_time:r.end, service_type:info.name, status:"completed",
@@ -105,6 +104,14 @@ async function main(){
   }
   console.log(`取込可能: ${payloads.length} / skip(利用者未マップ):${skipNoClient} / skip(コード未解決):${skipNoCode}`);
   if(Object.keys(skipCodes).length) console.log(`  未解決内訳: ${JSON.stringify(skipCodes)}`);
+  if(Object.keys(skipByUnregisteredInsurer).length){
+    console.log(`\n⚠⚠⚠ 保険者が SOUGOU_PREFIX_BY_INSURER に未登録のため取込から漏れています ⚠⚠⚠`);
+    for(const [ins,cnt] of Object.entries(skipByUnregisteredInsurer)){
+      const label=insurerNameByNum[ins]?`${ins} (${insurerNameByNum[ins]})`:ins;
+      console.log(`  未登録の保険者があります: ${label} — ${cnt} 行がスキップされました`);
+    }
+    console.log(`  → src/lib/visit-seikyu/sougou-insurer-map.mjs の SOUGOU_PREFIX_BY_INSURER に登録してください (実伝送での根拠が必要。判断は保留可)`);
+  }
   const uClients=new Set(payloads.map(p=>p.user_id));
   console.log(`取込対象 利用者数: ${uClients.size}`);
   if(payloads[0]) console.log("payloadサンプル:\n",JSON.stringify(payloads[0],null,1));
