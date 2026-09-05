@@ -1,6 +1,7 @@
 import { FileText } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { UserSidebar } from "@/components/users/user-sidebar";
+import { selectCurrentPlanWithFallback } from "@/lib/careplan-selection";
 import {
   SupportRecordsContent,
   type CarePlanSummary,
@@ -36,9 +37,8 @@ export default async function SupportRecordsPage({
     initialUser = (userRes.data ?? null) as KaigoUser | null;
     initialCarePlans = (planRes.data ?? []) as CarePlanSummary[];
 
-    const initialPlanId = initialCarePlans.find((p) => p.status === "active")?.id
-      ?? initialCarePlans[0]?.id
-      ?? null;
+    // ⚠ initialCarePlans は start_date 降順 (planRes の order) — 前提を崩さないこと
+    const initialPlanId = selectCurrentPlanWithFallback(initialCarePlans)?.id ?? null;
     let q = supabase
       .from("kaigo_support_records")
       .select("*")

@@ -34,6 +34,7 @@ import {
   endOfDay,
 } from "date-fns";
 import { ja } from "date-fns/locale";
+import { selectCurrentPlanWithFallback } from "@/lib/careplan-selection";
 import { TemplatePicker } from "@/components/templates/template-picker";
 
 export interface KaigoUser {
@@ -244,11 +245,9 @@ export function SupportRecordsContent({
   const [loadingRecords, setLoadingRecords] = useState(false);
 
   const [carePlans] = useState<CarePlanSummary[]>(initialCarePlans);
-  const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(() => {
-    if (initialCarePlans.length === 0) return null;
-    const active = initialCarePlans.find((p) => p.status === "active");
-    return active?.id ?? initialCarePlans[0].id;
-  });
+  const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(() =>
+    selectCurrentPlanWithFallback(initialCarePlans)?.id ?? null,
+  );
 
   const [showPreview, setShowPreview] = useState(false);
 

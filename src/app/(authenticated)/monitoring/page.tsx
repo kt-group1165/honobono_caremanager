@@ -2,6 +2,7 @@ import { format } from "date-fns";
 import { ClipboardList } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { UserSidebar } from "@/components/users/user-sidebar";
+import { selectCurrentPlanWithFallback } from "@/lib/careplan-selection";
 import {
   MonitoringContent,
   type CarePlanSummary,
@@ -110,7 +111,8 @@ export default async function MonitoringPage({
 
     initialCarePlans = plans;
 
-    const initialPlanId = plans.find((p) => p.status === "active")?.id ?? plans[0]?.id ?? null;
+    // ⚠ plans は start_date 降順 (planRes の order) — selectCurrentPlanWithFallback の前提
+    const initialPlanId = selectCurrentPlanWithFallback(plans)?.id ?? null;
     let q = supabase
       .from("kaigo_monitoring_sheets")
       .select("id, user_id, monitoring_date, assessor_name, status, care_plan_id, created_at")

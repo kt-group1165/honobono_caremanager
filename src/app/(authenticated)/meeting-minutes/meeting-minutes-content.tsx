@@ -15,6 +15,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { selectCurrentPlanWithFallback } from "@/lib/careplan-selection";
 import {
   emptyAttendee,
   emptyContent,
@@ -70,11 +71,9 @@ export function MeetingMinutesContent({
   const [selectedUser] = useState<KaigoUserLite | null>(initialUser);
   const [carePlans] = useState<CarePlanSummary[]>(initialCarePlans);
   const [certification] = useState<CertificationLite | null>(initialCertification);
-  const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(() => {
-    if (initialCarePlans.length === 0) return null;
-    const active = initialCarePlans.find((p) => p.status === "active");
-    return active?.id ?? initialCarePlans[0].id;
-  });
+  const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(() =>
+    selectCurrentPlanWithFallback(initialCarePlans)?.id ?? null,
+  );
   const [docs, setDocs] = useState<MeetingDoc[]>(initialDocs);
   const [loadingDocs, setLoadingDocs] = useState(false);
 

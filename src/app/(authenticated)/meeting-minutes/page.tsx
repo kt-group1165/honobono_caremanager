@@ -14,6 +14,7 @@ import type {
   MeetingDoc,
 } from "@/lib/meeting-minutes/types";
 import { MeetingMinutesContent } from "./meeting-minutes-content";
+import { selectCurrentPlanWithFallback } from "@/lib/careplan-selection";
 
 export default async function MeetingMinutesPage({
   searchParams,
@@ -38,10 +39,8 @@ export default async function MeetingMinutesPage({
     initialCarePlans = planRes;
     initialCertification = certRes;
 
-    const initialPlanId =
-      initialCarePlans.find((p) => p.status === "active")?.id
-      ?? initialCarePlans[0]?.id
-      ?? null;
+    // ⚠ getCarePlans は start_date 降順で返す前提 (selectCurrentPlanWithFallback の前提)
+    const initialPlanId = selectCurrentPlanWithFallback(initialCarePlans)?.id ?? null;
     initialDocs = await getMeetingDocs(supabase, userId, initialPlanId);
   }
 

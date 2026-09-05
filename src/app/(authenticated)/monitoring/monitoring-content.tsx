@@ -13,6 +13,7 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { selectCurrentPlanWithFallback, hasMonitoringInMonth } from "@/lib/careplan-selection";
 import { ja } from "date-fns/locale";
 import { BunreiPicker } from "@/components/bunrei/bunrei-picker";
 
@@ -376,11 +377,9 @@ export function MonitoringContent({
 
   // Care plan selection
   const [carePlans] = useState<CarePlanSummary[]>(initialCarePlans);
-  const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(() => {
-    if (initialCarePlans.length === 0) return null;
-    const active = initialCarePlans.find((p) => p.status === "active");
-    return active?.id ?? initialCarePlans[0].id;
-  });
+  const [selectedCarePlanId, setSelectedCarePlanId] = useState<string | null>(() =>
+    selectCurrentPlanWithFallback(initialCarePlans)?.id ?? null,
+  );
 
   // List
   const [sheets, setSheets] = useState<MonitoringSheet[]>(initialSheets);
@@ -844,8 +843,7 @@ export function MonitoringContent({
                   未実施は運営基準減算リスク — 監査M-7) */}
               {!isPreventive && (() => {
                 const thisMonth = format(new Date(), "yyyy-MM");
-                const hasThisMonth = sheets.some((s) => (s.monitoring_date ?? "").startsWith(thisMonth));
-                if (hasThisMonth) return null;
+                if (hasMonitoringInMonth(sheets, thisMonth)) return null;
                 return (
                   <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                     <span className="font-semibold">今月（{thisMonth}）のモニタリングが未登録です。</span>
