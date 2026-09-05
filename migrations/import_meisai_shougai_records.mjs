@@ -59,7 +59,9 @@ const MONTH_FIRST = `${TARGET_MONTH}-01`;
 const YM = TARGET_MONTH.replace("-", "");
 const AREA_DIR = process.env.AREA_DIR || "大網"; // 大網 稼働データは 介護 配下に同居
 const OFFICE_ID = process.env.OFFICE_ID || "269d77bc-5b61-4114-a2ea-e8dc2f220823"; // リンクスヘルパーステーション大網白里
-const OFFICE_BN = process.env.OFFICE_BN || "1275800892";
+// 事業所番号チェックの想定値は既定で offices.business_number / shogai_business_number の
+// どちらかに一致すればOKとする (2026-09-05是正。詳細は実装のコメント参照)。
+// process.env.OFFICE_BN は明示的に上書きしたいときだけ指定する。
 const TENANT_ID = "kt-group";
 const MAP_TAG = process.env.MAP_TAG || "大網"; // _meisai_num_to_client_大網.json
 // 月フォルダ配下を再帰で探す (障害の MEISAI が 介護/ に同居している拠点があるため)
@@ -870,17 +872,47 @@ async function main() {
   const uniqNums = [...new Set(target.map((r) => r.clientNum))];
   console.log(`障害利用者: ${uniqNums.length}名\n`);
 
-  // 事業所番号チェック
-  const badBn = target.filter((r) => r.jigyoNum !== OFFICE_BN);
-  if (badBn.length) console.warn(`⚠ 事業所番号が想定(${OFFICE_BN})と異なる行が ${badBn.length} 件`);
-
-  // 2) 事業所
+  // 2) 事業所 (事業所番号チェックにも使うため先に取得)
   const { data: offRows, error: offErr } = await sb
-    .from("offices").select("id,name,tenant_id,service_type,business_number").eq("id", OFFICE_ID);
+    .from("offices").select("id,name,tenant_id,service_type,business_number,shogai_business_number").eq("id", OFFICE_ID);
   if (offErr) throw new Error(`offices: ${offErr.message}`);
   if (!offRows.length) { console.error(`✗ 事業所 ${OFFICE_ID} が見つからない`); process.exit(1); }
   const office = offRows[0];
   console.log(`事業所: ${office.name} (${office.id}) tenant=${office.tenant_id}\n`);
+
+  // 事業所番号チェック
+  // ⚠⚠⚠ 2026-09-05 是正 (H割当・17拠点実測で発見) ⚠⚠⚠
+  //   従来は OFFICE_BN (手入力の環境変数、既定値は大網の**介護**の番号=business_number) と
+  //   MEISAI の「事業所番号」列を単一の値で突合していた。実測すると比較先の番号は
+  //   拠点によって business_number だったり shogai_business_number (障害の別番号) だったり
+  //   **一貫していない**とわかった (どちらの entity 名で ほのぼの に登録されているかで
+  //   決まる。例: いすみ/やわた/四街道 は shogai_business_number と一致、
+  //   姉ム/山武/市原/木更津/東郷/茂原/袖ケ浦/大網 は business_number と一致)。
+  //   単一の値 (どちらか一方) を既定にすると、もう一方の型の拠点で必ず全件不一致になる。
+  //   → **どちらかに一致すれば正常**とする (2値のどちらもDB由来。決め打ちしない)。
+  //   ⚠ さらに、ほのぼの MEISAI は障害エンティティが未登録の拠点だと「事業所番号」列が
+  //   ダミー値 "9999999999" になる (K姉・おゆみ野・さつきが丘・ちはら台・中央・五井・
+  //   花見川・高品の8拠点で確認・2026-09-05実測)。これは誤ったファイルの混入ではなく
+  //   ほのぼの側の登録漏れなので、真の不一致 (=ファイル取り違えの疑い) とは分けて報告する。
+  //   OFFICE_BN で明示的に上書きした場合はその値のみと比較する (原則不要。臨時の当て込み用)。
+  const DUMMY_BN = "9999999999";
+  const expectedBns = process.env.OFFICE_BN
+    ? [process.env.OFFICE_BN]
+    : [office.business_number, office.shogai_business_number].filter(Boolean);
+  if (expectedBns.length === 0) {
+    console.warn(`⚠ 事業所番号チェックをスキップ: offices.business_number / shogai_business_number がどちらも未設定です`);
+  } else {
+    const dummyRows = target.filter((r) => r.jigyoNum === DUMMY_BN);
+    const trueBad = target.filter((r) => !expectedBns.includes(r.jigyoNum) && r.jigyoNum !== DUMMY_BN);
+    if (dummyRows.length) {
+      console.log(`ℹ 事業所番号がほのぼの側ダミー値(${DUMMY_BN})の行: ${dummyRows.length}/${target.length} 件 (障害エンティティが ほのぼの に未登録。ファイル混入チェックの対象外として扱う)`);
+    }
+    if (trueBad.length) {
+      console.warn(`⚠ 事業所番号が想定(${expectedBns.join(" / ")})と異なる行が ${trueBad.length}/${target.length} 件`);
+    } else if (target.length - dummyRows.length > 0) {
+      console.log(`✓ 事業所番号チェック: 判定可能な ${target.length - dummyRows.length} 件すべて想定(${expectedBns.join(" / ")})のいずれかと一致`);
+    }
+  }
 
   // 3) 時間区分モード
   const mode = await getTimeBracketMode();
