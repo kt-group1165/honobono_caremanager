@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { resolveChiikiBathCode } from "@/lib/idou-shien-code";
+import { resolveBathCode } from "@/lib/bath-seikyu/resolve-code";
 import { fetchDaySchedules, type SuggestScheduleRow } from "@/lib/staff-suggest";
 import {
   ChevronLeft, ChevronRight, Plus, Loader2, X, Pencil, Trash2, Truck,
@@ -13,7 +14,7 @@ import {
 
 // ── 型 ─────────────────────────────────────────────────────────────────────
 
-type Client = { id: string; name: string; furigana: string | null };
+type Client = { id: string; name: string; furigana: string | null; care_level: string | null };
 type StaffMember = { id: string; name: string; role: string | null; qualifications: string | null };
 
 type Team = {
@@ -78,11 +79,6 @@ type Tab = "route" | "calendar" | "monthly" | "month" | "patterns" | "teams";
 
 const DOW_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 
-// 入浴種別 × 職員のみ → 介護保険の算定コード (bath-records と同じ規則)
-function resolveBathCode(bathType: "全身浴" | "部分浴", staffOnly: boolean): string {
-  if (bathType === "全身浴") return staffOnly ? "121121" : "121111";
-  return staffOnly ? "121122" : "121112"; // 部分浴・清拭
-}
 
 function isNurse(s: StaffMember): boolean {
   return (s.role ?? "").includes("看護") || (s.qualifications ?? "").includes("看護");
@@ -227,7 +223,7 @@ export function BathShiftContent() {
       const clientIds = Array.from(new Set((assignsRes.data ?? []).map((a: { client_id: string }) => a.client_id)));
       const [clientsRes, teamDaysRes] = await Promise.all([
         clientIds.length
-          ? supabase.from("clients").select("id, name, furigana").in("id", clientIds).is("deleted_at", null).order("furigana")
+          ? supabase.from("clients").select("id, name, furigana, care_level").in("id", clientIds).is("deleted_at", null).order("furigana")
           : Promise.resolve({ data: [], error: null }),
         teamRows.length
           ? supabase.from("kaigo_bath_team_days").select("*").in("team_id", teamRows.map((t) => t.id)).gte("work_date", monthStart).lte("work_date", monthEnd)
@@ -354,7 +350,7 @@ export function BathShiftContent() {
       if (!window.confirm(`${clientName(v.client_id)} 様: ${reason}。従事職員なし (職員のみ減算扱い) で実績反映しますか？`)) return false;
     }
     const staffOnly = !staffIds.some((id) => nurseIds.has(id));
-    const serviceCode = v.scheme === "地域生活支援" ? resolveChiikiBathCode(staffOnly, false) : resolveBathCode(v.bath_type, staffOnly);
+    const serviceCode = v.scheme === "地域生活支援" ? resolveChiikiBathCode(staffOnly, false) : resolveBathCode(v.bath_type, staffOnly, clients.find((c) => c.id === v.client_id)?.care_level);
     const { data: rec, error } = await supabase
       .from("kaigo_bath_visit_records")
       .insert({

@@ -4,11 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { resolveChiikiBathCode } from "@/lib/idou-shien-code";
+import { resolveBathCode } from "@/lib/bath-seikyu/resolve-code";
 import {
   ChevronLeft, ChevronRight, Plus, Loader2, X, Pencil, Trash2, Droplets,
 } from "lucide-react";
 
-export type Client = { id: string; name: string; furigana: string | null; user_number: string | null };
+export type Client = { id: string; name: string; furigana: string | null; user_number: string | null; care_level: string | null };
 export type Staff = { id: string; name: string };
 
 export type BathRecord = {
@@ -40,12 +41,6 @@ export type BathRecord = {
   notes: string | null;
   status: "draft" | "confirmed" | "submitted";
 };
-
-// 入浴種別 × 職員のみ → 算定コード
-function resolveBathCode(bathType: "全身浴" | "部分浴", staffOnly: boolean): string {
-  if (bathType === "全身浴") return staffOnly ? "121121" : "121111";
-  return staffOnly ? "121122" : "121112"; // 部分浴・清拭
-}
 
 const todayStr = () => {
   const d = new Date();
@@ -120,7 +115,7 @@ export function BathRecordsContent({
       const ids = Array.from(new Set((assigns ?? []).map((a: { client_id: string }) => a.client_id)));
       const [clientsRes, staffRes, recordsRes] = await Promise.all([
         ids.length
-          ? supabase.from("clients").select("id, name, furigana, user_number").in("id", ids).is("deleted_at", null).order("furigana")
+          ? supabase.from("clients").select("id, name, furigana, user_number, care_level").in("id", ids).is("deleted_at", null).order("furigana")
           : Promise.resolve({ data: [], error: null }),
         supabase.from("members").select("id, name").eq("status", "active").is("deleted_at", null).order("name"),
         supabase
@@ -330,7 +325,7 @@ function BathRecordForm({
       service_code:
         f.scheme === "地域生活支援"
           ? resolveChiikiBathCode(f.staff_only, false)
-          : resolveBathCode(f.bath_type, f.staff_only),
+          : resolveBathCode(f.bath_type, f.staff_only, clients.find((c) => c.id === f.client_id)?.care_level),
       start_time: f.start_time || null,
       end_time: f.end_time || null,
       condition_before: f.condition_before || null,
@@ -410,7 +405,7 @@ function BathRecordForm({
             </div>
             <p className="mt-1.5 text-[11px] text-gray-500">
               算定コード: <span className="font-mono font-semibold text-cyan-700">
-                {f.scheme === "地域生活支援" ? resolveChiikiBathCode(f.staff_only, false) : resolveBathCode(f.bath_type, f.staff_only)}
+                {f.scheme === "地域生活支援" ? resolveChiikiBathCode(f.staff_only, false) : resolveBathCode(f.bath_type, f.staff_only, clients.find((c) => c.id === f.client_id)?.care_level)}
               </span>
               {f.scheme === "地域生活支援" && <span className="ml-2 text-gray-400">週2回限度 (千葉市算定基準)。中止時コード等は請求機能で対応</span>}
             </p>

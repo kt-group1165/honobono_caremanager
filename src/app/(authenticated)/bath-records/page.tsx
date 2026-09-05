@@ -28,7 +28,7 @@ export default async function BathRecordsPage({
 
     const [clientsRes, staffRes, recordsRes] = await Promise.all([
       ids.length
-        ? supabase.from("clients").select("id, name, furigana, user_number").in("id", ids).is("deleted_at", null).order("furigana")
+        ? supabase.from("clients").select("id, name, furigana, user_number, care_level").in("id", ids).is("deleted_at", null).order("furigana")
         : Promise.resolve({ data: [] }),
       supabase.from("members").select("id, name").eq("status", "active").is("deleted_at", null).order("name"),
       supabase
