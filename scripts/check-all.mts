@@ -73,6 +73,9 @@ const CHECKS: Check[] = [
   { name: "shogai-j11-boundary", script: "check:shogai-j11-boundary", why: "障害 J11 系の境界値" },
   { name: "shogai-j411-boundary", script: "check:shogai-j411-boundary", why: "障害 J411 (上限管理) の境界値" },
   { name: "gendo-allocation", script: "check:gendo-allocation", why: "区分支給限度基準額 超過の割振り (★ 超過単位は 自費金額に直結)" },
+  // ★ 2026-09-05 新設。★ 2 つの役割: ① TS と 取込.mjs の按分ロジックが一致するか (総当たり)
+  //   ② ★ 実データに 時間帯またぎの行が出現したら 検知する (★ 今 0 件。★ 出たら この経路が発火し始めた)
+  { name: "shogai-code-from-time", script: "check:shogai-code-from-time", why: "★ 障害 時刻→コードの2実装一致 + またぎ行の出現監視 (基準値0件)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
