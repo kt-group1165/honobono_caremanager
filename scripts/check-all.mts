@@ -36,6 +36,16 @@ const CHECKS: Check[] = [
   //   ★ 2026-09-05 に 14 本中 2 本が起動しなくなっていた (_sample_data.mjs の変更に追随漏れ)。
   //   ★ 「検証済み」と文書にあっても 再実行したら動かない、が実在したので gate に置く。
   { name: "sample-seeds", script: "check:sample-seeds", why: "★ サンプル seed 14 本が DRY RUN で起動するか (壊れると検証手段ごと失う)" },
+  // ★ 2026-09-05 に積み上がった純関数の検査。★ どれも 落ちたら金額が動く。
+  //   ★ 1 本 2 秒程度で DB を使わないので gate に入れて問題ない。
+  { name: "shuchu-gensan", script: "check:shuchu-gensan", why: "特定事業所集中減算 (80%/法人)" },
+  { name: "kyotaku-addon-active", script: "check:kyotaku-addon-active", why: "居宅加算の月次有効判定・地域単価 (月末/翌月1日の境界)" },
+  { name: "shogai-unit-price", script: "check:shogai-unit-price", why: "★ 障害の地域区分単価 (人件費割合 60%。介護の 70% と取り違えやすい)" },
+  { name: "juho-tier", script: "check:juho-tier", why: "★ 重度訪問介護の段判定 (NFKC で Ⅱ が壊れる)" },
+  { name: "shogai-fukushi-billing", script: "check:shogai-fukushi-billing", why: "障害福祉のコード検索" },
+  { name: "same-building", script: "check:same-building", why: "同一建物減算" },
+  { name: "seikatsu-enjo", script: "check:seikatsu-enjo", why: "生活援助中心型の回数制限" },
+  { name: "visit-addons", script: "check:visit-addons", why: "訪問介護の加算 (116274 混入ガード)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
