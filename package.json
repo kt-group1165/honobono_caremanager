@@ -46,6 +46,7 @@
     "check:yobo-kubun": "tsx scripts/yobo-kubun-verify.mts",
     "check:densou-kana": "tsx scripts/densou-kana-verify.mts",
     "check:idou-second-person": "tsx scripts/idou-second-person-code-verify.mts",
+    "check:idou-shien-code": "tsx scripts/idou-shien-code-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
