@@ -87,6 +87,9 @@ const CHECKS: Check[] = [
   // ★ 保存値とマスタのズレ件数 (基準値 218: 第1表122 / 利用票96)。★ 認定更新のたび自然に増えるので
   //   ★ 0 を目指さない。★ 想定外の急増だけを検知する。
   { name: "report-master-drift", script: "check:report-master-fields-drift", why: "★ 帳票の保存値とマスタのズレ件数 (基準値218。印刷は引き直し済みだが 保存値のズレ自体は残る)" },
+  // ★ 2026-09-05 新設。★ 予防46 は レセプトが 0 件なので 実データでは一度も通っていない。
+  //   ★ 純関数の合成テスト (DB 書込なし)。★ 事業所番号が入った日に 動くことの担保。
+  { name: "yobo-shien-densou", script: "check:yobo-shien-densou", why: "★ 介護予防支援(46) の伝送組み立て (★ レセプト0件のため 合成テストのみ)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
