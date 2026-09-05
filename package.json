@@ -48,6 +48,7 @@
     "check:idou-second-person": "tsx scripts/idou-second-person-code-verify.mts",
     "check:idou-shien-code": "tsx scripts/idou-shien-code-verify.mts",
     "check:service-system-lookup": "tsx scripts/service-system-lookup-verify.mts",
+    "check:service-short-name": "tsx scripts/service-short-name-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
