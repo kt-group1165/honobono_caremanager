@@ -5,9 +5,19 @@
 //   node scripts/tj-juho-analyze.mjs              全 17 拠点
 //   AREA=やわた node scripts/tj-juho-analyze.mjs  1 拠点
 //   DETAIL=1    受給者ごとの内訳も出す
+//   node scripts/tj-juho-analyze.mjs --update     基準値を実測で置き直す
+//
+// ⚠ 2026-09-05 是正: totals.ng を数えるだけで exit code に反映していなかった
+//   (他アプリで6本見つかった穴と同型)。基準値方式にした — 現状 1件 (五井 1221916057・
+//   「・2人」コードの割り振り、月+284単位=約3千円) は規則未特定で記録のみ終了と
+//   memory project_shogai_2nin_pattern_202609.md に既にある。0を目指さない。
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import fs from "node:fs";
 import path from "node:path";
 import iconv from "iconv-lite";
+
+const BASELINE = "scripts/tj-juho-analyze-baseline.json";
+const UPDATE = process.argv.includes("--update");
 
 const ROOT = path.join(process.cwd(), "伝送データ");
 const MONTH = process.env.MONTH || "202606";
@@ -245,3 +255,46 @@ for (const d of allDiffs) {
     );
   }
 }
+
+// ─── 基準値方式 (2026-09-05) ─────────────────────────────────────────────
+let baseline = null;
+if (existsSync(BASELINE)) baseline = JSON.parse(readFileSync(BASELINE, "utf8"));
+
+if (UPDATE || !baseline) {
+  const out = {
+    _readme: [
+      "node scripts/tj-juho-analyze.mjs の基準値 (MONTH=202606 の全拠点実行が前提)。",
+      "",
+      "■ なぜ 1 件なのか",
+      "  五井 受給者証 1221916057 の「・2人」コードの割り振りが規則未特定 (差引 +284単位 =",
+      "  月 約3千円)。memory project_shogai_2nin_pattern_202609.md に既知として記録済み。",
+      "  特定には TJ の c[11] 派遣順をもう一段細かく見る必要があるが、費用対効果は低いと",
+      "  判断され、記録のみで終了している (user判断待ちではなく「今は着手しない」判断済み)。",
+      "",
+      "■ 0件を目指さない",
+      "  上の判断が変わって特定・是正されたら 0 になるはずなので、そのとき基準値を更新すること。",
+      "  MONTH を変えて実行する場合は対象月・拠点構成が変わるため --update で作り直すこと。",
+    ],
+    asOf: new Date().toISOString().slice(0, 10),
+    month: MONTH,
+    ng: totals.ng,
+  };
+  writeFileSync(BASELINE, JSON.stringify(out, null, 2) + "\n", "utf8");
+  console.log(`\n--update: 基準値を書きました (${BASELINE})`);
+  process.exit(0);
+}
+
+console.log(`\n基準値 (${baseline.asOf} / MONTH=${baseline.month}): 不一致 ${baseline.ng} 件`);
+if (MONTH !== baseline.month) {
+  console.log(`⚠ 対象月が基準値と異なる (現在 MONTH=${MONTH})。参考値として比較するが、`);
+  console.log(`  月が変われば拠点構成・実績も変わるため、まずは同じ MONTH で --update すること。`);
+}
+if (totals.ng > baseline.ng) {
+  console.log(`★ FAIL — 不一致が基準値 (${baseline.ng}件) より増えた (現在 ${totals.ng}件)。新しい乖離を確認すること。`);
+  process.exit(1);
+}
+if (totals.ng < baseline.ng) {
+  console.log(`✓ PASS — 不一致が基準値 (${baseline.ng}件) より減った (現在 ${totals.ng}件)。改善している。--update で基準値を下げてよい。`);
+  process.exit(0);
+}
+console.log(`✓ PASS — 基準値どおり ${totals.ng} 件 (既知・低優先度のまま)。`);

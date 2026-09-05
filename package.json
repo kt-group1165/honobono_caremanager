@@ -45,7 +45,8 @@
     "check:coverage-duration": "tsx scripts/coverage-duration.mts",
     "check:coverage": "tsx scripts/coverage-check.mts",
     "matrix": "tsx scripts/sample-matrix.mts",
-    "check:densou-diff": "tsx scripts/densou-diff-check.mts"
+    "check:densou-diff": "tsx scripts/densou-diff-check.mts",
+    "check:tj-juho": "node scripts/tj-juho-analyze.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
