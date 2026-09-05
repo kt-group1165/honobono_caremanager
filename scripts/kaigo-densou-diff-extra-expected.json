@@ -1,0 +1,292 @@
+{
+  "results": [
+    {
+      "office": "K姉",
+      "officeId": "e7c3c270-3310-4e83-9d6a-79761070a2c3",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 401,
+        "honoRows": 400,
+        "honoHash": "cc8d7a47",
+        "newHash": "a2996537"
+      },
+      "person": {
+        "match": 84,
+        "mismatch": 3,
+        "onlyNew": 1,
+        "onlyHono": 1,
+        "total": 89
+      },
+      "group": {
+        "newGroups": 267,
+        "honoGroups": 266,
+        "match": 251,
+        "diff": 19
+      }
+    },
+    {
+      "office": "さつきが丘",
+      "officeId": "be3218e6-9b47-4093-ab7e-46f388242fcc",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 275,
+        "honoRows": 280,
+        "honoHash": "e14c0fa7",
+        "newHash": "89696af8"
+      },
+      "person": {
+        "match": 60,
+        "mismatch": 0,
+        "onlyNew": 0,
+        "onlyHono": 1,
+        "total": 61
+      },
+      "group": {
+        "newGroups": 182,
+        "honoGroups": 185,
+        "match": 181,
+        "diff": 4
+      }
+    },
+    {
+      "office": "やわた",
+      "officeId": "bdeaa7d7-f267-4d80-abe2-f6b61217a34a",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 186,
+        "honoRows": 190,
+        "honoHash": "e073f801",
+        "newHash": "c38b770a"
+      },
+      "person": {
+        "match": 40,
+        "mismatch": 1,
+        "onlyNew": 0,
+        "onlyHono": 1,
+        "total": 42
+      },
+      "group": {
+        "newGroups": 125,
+        "honoGroups": 128,
+        "match": 120,
+        "diff": 8
+      }
+    },
+    {
+      "office": "花見川",
+      "officeId": "39ab7760-e23c-49ce-b17f-c5ccfa776d9c",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 336,
+        "honoRows": 340,
+        "honoHash": "ab2a2db0",
+        "newHash": "f002c38f"
+      },
+      "person": {
+        "match": 76,
+        "mismatch": 0,
+        "onlyNew": 0,
+        "onlyHono": 1,
+        "total": 77
+      },
+      "group": {
+        "newGroups": 230,
+        "honoGroups": 233,
+        "match": 229,
+        "diff": 4
+      }
+    },
+    {
+      "office": "山武",
+      "officeId": "c6e45cbf-e587-41b8-af38-128e04363c0a",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 323,
+        "honoRows": 323,
+        "honoHash": "57a16c94",
+        "newHash": "0c440151"
+      },
+      "person": {
+        "match": 74,
+        "mismatch": 0,
+        "onlyNew": 0,
+        "onlyHono": 0,
+        "total": 74
+      },
+      "group": {
+        "newGroups": 224,
+        "honoGroups": 224,
+        "match": 219,
+        "diff": 5
+      }
+    },
+    {
+      "office": "姉ム",
+      "officeId": "c212da55-7ac3-46ac-8e58-386ee65e7129",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 466,
+        "honoRows": 466,
+        "honoHash": "96d1adb7",
+        "newHash": "96d1adb7"
+      },
+      "person": {
+        "match": 106,
+        "mismatch": 0,
+        "onlyNew": 0,
+        "onlyHono": 0,
+        "total": 106
+      },
+      "group": {
+        "newGroups": 320,
+        "honoGroups": 320,
+        "match": 320,
+        "diff": 0
+      }
+    },
+    {
+      "office": "市原",
+      "officeId": "c0bf0c6a-c3a7-4e66-8dfd-6c6085050066",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 389,
+        "honoRows": 393,
+        "honoHash": "8e3e7538",
+        "newHash": "64cefbb9"
+      },
+      "person": {
+        "match": 84,
+        "mismatch": 2,
+        "onlyNew": 0,
+        "onlyHono": 1,
+        "total": 87
+      },
+      "group": {
+        "newGroups": 261,
+        "honoGroups": 264,
+        "match": 255,
+        "diff": 9
+      }
+    },
+    {
+      "office": "大網",
+      "officeId": "269d77bc-5b61-4114-a2ea-e8dc2f220823",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 445,
+        "honoRows": 445,
+        "honoHash": "8a0673ce",
+        "newHash": "8a0673ce"
+      },
+      "person": {
+        "match": 101,
+        "mismatch": 0,
+        "onlyNew": 0,
+        "onlyHono": 0,
+        "total": 101
+      },
+      "group": {
+        "newGroups": 306,
+        "honoGroups": 306,
+        "match": 306,
+        "diff": 0
+      }
+    },
+    {
+      "office": "中央",
+      "officeId": "0237ed1e-bf80-412e-955d-1102fb06e078",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 129,
+        "honoRows": 138,
+        "honoHash": "ddeb2c40",
+        "newHash": "2b48eeb2"
+      },
+      "person": {
+        "match": 26,
+        "mismatch": 2,
+        "onlyNew": 0,
+        "onlyHono": 2,
+        "total": 30
+      },
+      "group": {
+        "newGroups": 86,
+        "honoGroups": 92,
+        "match": 78,
+        "diff": 14
+      }
+    },
+    {
+      "office": "東郷",
+      "officeId": "66c8a6a4-857e-48bf-a718-6f0f521db8f3",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 379,
+        "honoRows": 385,
+        "honoHash": "b7fbbd80",
+        "newHash": "f6881784"
+      },
+      "person": {
+        "match": 81,
+        "mismatch": 4,
+        "onlyNew": 0,
+        "onlyHono": 1,
+        "total": 86
+      },
+      "group": {
+        "newGroups": 257,
+        "honoGroups": 260,
+        "match": 241,
+        "diff": 19
+      }
+    },
+    {
+      "office": "茂原",
+      "officeId": "e08c3706-ad59-4913-b4e2-67f2675422e9",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 555,
+        "honoRows": 555,
+        "honoHash": "d647e71a",
+        "newHash": "d647e71a"
+      },
+      "person": {
+        "match": 116,
+        "mismatch": 0,
+        "onlyNew": 0,
+        "onlyHono": 0,
+        "total": 116
+      },
+      "group": {
+        "newGroups": 350,
+        "honoGroups": 350,
+        "match": 350,
+        "diff": 0
+      }
+    },
+    {
+      "office": "木更津",
+      "officeId": "24596958-b434-466e-800b-842f66f84a8e",
+      "month": "2026-06",
+      "fingerprint": {
+        "newRows": 444,
+        "honoRows": 444,
+        "honoHash": "ba8bbb27",
+        "newHash": "97cc3895"
+      },
+      "person": {
+        "match": 94,
+        "mismatch": 0,
+        "onlyNew": 0,
+        "onlyHono": 0,
+        "total": 94
+      },
+      "group": {
+        "newGroups": 284,
+        "honoGroups": 284,
+        "match": 281,
+        "diff": 3
+      }
+    }
+  ]
+}

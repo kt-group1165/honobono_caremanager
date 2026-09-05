@@ -247,7 +247,22 @@ async function main() {
 
   // 制度フィルタ: 請求一覧に無い (利用者×コード) は介護保険ではない
   // ⚠ billingBlocked のときは filter をスキップせず target を丸ごと空にする (fail-closed)。
-  if (billingBlocked) {
+  //
+  // ⚠ ★ この突合も「ほのぼのの出力 (一覧CSV) を使って当方の入力の対象を絞り、
+  //   その結果を別のほのぼの出力 (KK伝送) と突合する」という★循環の形をしている
+  //   (SKIP_TJ_TIME_FIX/5ea058b3 で見つかった障害取込の型と同型。ただし障害側は
+  //   ほのぼのの値そのもの (時刻) を書き換えていたのに対し、こちらは行の採否を
+  //   決めるフィルタなので★循環の強さは弱い)。SKIP_BILLING_LIST_FILTER=1 で
+  //   外して測れるようにしてある (= 一覧CSVを使わなかった場合にどう変わるか)。
+  //   ⚠ DRY RUN 専用の測定フラグ。--execute と併用しないこと (障害の混入防止フィルタが
+  //   丸ごと外れるため、実行すると障害の居宅介護等が誤って介護請求に混入する)。
+  if (process.env.SKIP_BILLING_LIST_FILTER === "1") {
+    if (EXECUTE) {
+      console.error("✗ SKIP_BILLING_LIST_FILTER=1 は --execute と併用できません (測定専用)");
+      process.exit(1);
+    }
+    console.log(`★ SKIP_BILLING_LIST_FILTER=1: 請求一覧フィルタを適用しません (${target.length}行のまま。測定専用)\n`);
+  } else if (billingBlocked) {
     console.log(`― fail-closedのため ①介護 ${target.length}行を全てブロック ―\n`);
     target = [];
   } else if (billedKeys.size) {
