@@ -51,6 +51,7 @@
     "check:service-short-name": "tsx scripts/service-short-name-verify.mts",
     "check:chunk-parallel": "tsx scripts/chunk-parallel-verify.mts",
     "check:shogai-code-from-time": "tsx scripts/shogai-code-from-time-verify.mts",
+    "check:report-master-fields": "tsx scripts/report-master-fields-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
