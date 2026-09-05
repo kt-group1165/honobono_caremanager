@@ -26,6 +26,10 @@ const CHECKS: Check[] = [
   { name: "anon", script: "check:anon", why: "★ 個人情報が anon から読めないか (分母は PostgREST の 228 表)" },
   { name: "addon-lines", script: "check:addon-lines", why: "★ 加算行の 書式ずれ (制度で読み方が違う) と マスタ実在" },
   { name: "month-format", script: "check:month-format", why: "★ 月を表す text 列 39 個の 書式ずれ (書く側と読む側で違うと 0 件になる)" },
+  // ★ 同じ規約を 2 箇所で別々に持っているもの の見張り。TS から .mjs を import できないため
+  //   実績の行種マーカーが TS 側と取込 script 側に 二重定義されている。片方だけ直すと
+  //   ★ 請求集計と実績記録票の判定が 黙って食い違う (落ちないので気づけない)。
+  { name: "record-markers", script: "check:record-markers", why: "★ 行種マーカーの TS/.mjs 二重定義が ずれていないか" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
