@@ -19,9 +19,14 @@
  *
  * ⚠ 直さない。測るだけ。
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
 import { selectCurrentPlanForReports, type CarePlanForSelection } from "../src/lib/careplan-selection";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const UPDATE = process.argv.includes("--update");
 
 const env: Record<string, string> = {};
 for (const l of readFileSync(new URL("../.env.local", import.meta.url), "utf8").split(/\r?\n/)) {
@@ -138,3 +143,51 @@ console.log(`\n══ まとめ ══`);
 console.log(`①期限切れactive計画を持つ利用者: ${usersWithExpiredActive.length} 名`);
 console.log(`②実際に隠れている利用者(B型): ${bCases.length} 名`);
 console.log(`\n★ 直していません。測定のみです。`);
+
+// ── 常設チェック (基準値方式。0を目指さない。①②とも増えたらFAIL) ──
+type Baseline = { _readme?: string[]; usersWithExpiredActive: number; bCaseUsers: number };
+const baselinePath = join(__dirname, "careplan-expiry-baseline.json");
+if (UPDATE) {
+  const prevReadme = existsSync(baselinePath) ? (JSON.parse(readFileSync(baselinePath, "utf8")) as Baseline)._readme : undefined;
+  const baseline: Baseline = {
+    _readme: prevReadme ?? [
+      "npm run check:careplan-expiry の基準値。",
+      "",
+      "■ なぜこの数字か",
+      "  2026-09-05 実測。①=status='active'かつend_dateが基準日より前の計画を",
+      "  持つ利用者数。②=①のうち実際に選択ロジック(selectCurrentPlanForReports)が",
+      "  その期限切れ計画を選んでしまい、かつ同じ利用者に選ばれるべき有効な",
+      "  計画が他にある利用者数 (=第2表/モニタリング/支援経過が見えなくなるB型)。",
+      "  2026-09-05時点で②=0 (複数activeを同時に持つ利用者が実データにほぼ無いため)。",
+      "",
+      "■ 0を目指さない",
+      "  ①は日々の経過で自然に増える(計画更新が追いつかない限り)。",
+      "  user判断(案B: 期限切れ警告表示)が実装されたので、①が増えても",
+      "  画面上は警告が出る形に対応済み。②(実害)が増えたときだけ重く見る。",
+      "",
+      "■ 更新のしかた",
+      "  npx tsx scripts/careplan-expiry-exposure-check.mts -- --update",
+    ],
+    usersWithExpiredActive: usersWithExpiredActive.length,
+    bCaseUsers: bCases.length,
+  };
+  writeFileSync(baselinePath, JSON.stringify(baseline, null, 2) + "\n");
+  console.log(`\n★ 基準値を更新しました: ${baselinePath}`);
+} else if (existsSync(baselinePath)) {
+  const baseline = JSON.parse(readFileSync(baselinePath, "utf8")) as Baseline;
+  console.log(`\n══ 基準値比較 ══`);
+  console.log(`①: 基準値 ${baseline.usersWithExpiredActive} → 実測 ${usersWithExpiredActive.length}`);
+  console.log(`②: 基準値 ${baseline.bCaseUsers} → 実測 ${bCases.length}`);
+  let fail = false;
+  if (bCases.length > baseline.bCaseUsers) {
+    console.log(`❌ FAIL — ②(実害)が基準値より増えました (+${bCases.length - baseline.bCaseUsers})。第2表/モニタリング/支援経過が見えなくなっている利用者が新たに発生しています。`);
+    fail = true;
+  }
+  if (usersWithExpiredActive.length > baseline.usersWithExpiredActive) {
+    console.log(`⚠ ①が基準値より増えました (+${usersWithExpiredActive.length - baseline.usersWithExpiredActive})。警告表示(案B)で対応済みだが、傾向として記録。`);
+  }
+  if (!fail) console.log(fail ? "" : "✅ ②(実害)は基準値以下。");
+  if (fail) process.exitCode = 1;
+} else {
+  console.log(`\n⚠ 基準値ファイルが無い。初回は -- --update で作成してください。`);
+}

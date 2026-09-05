@@ -9,13 +9,21 @@
  *   - src/app/(authenticated)/support-records/page.tsx (支援経過)
  *       同上
  *
- * ⚠⚠⚠ 既知の欠陥 (2026-09-05 実データで確認・H割当) ⚠⚠⚠
+ * ── 既知の欠陥 (2026-09-05 実データで確認・H割当) ────────────────────────
  *   どちらの選び方も **end_date (計画の有効期間終了日) を一切見ない**。
  *   status='active' な行の中で start_date が最も新しいものを無条件に選ぶため、
  *   「期限切れの計画」と「現在有効な計画」が両方あるとき、start_date が新しい方が
  *   選ばれる — それが期限切れであっても。
- *   → 直さない (今回は測るだけ・user 判断待ち)。直すときはこのファイルのコメントと
- *     scripts/careplan-selection-sample-verify.mts を更新すること。
+ *   実データでは「複数のactive計画を同時に持つ利用者」がほぼ存在しない
+ *   (旧計画は status='completed' に遷移させる運用) ため、この形での実害は
+ *   0件と確認済み (scripts/careplan-expiry-exposure-check.mts)。
+ *
+ *   ★ 一方、「status='active'かつ期限切れの計画が1件だけ存在し、それが
+ *   そのまま選ばれる」ケースは284名 (2026-09-05実測) 実在する。これは
+ *   ★内容が見えなくなるわけではないが、期限切れである旨の警告が無い★。
+ *   → user判断: **選択の挙動は変えず (案A=除外は不採用)、選ばれた計画が
+ *   期限切れのときは画面に警告を出す (案B)** ことになった。isExpired() が
+ *   その判定。選択ロジック自体 (selectCurrentPlan*) は変更しないこと。
  *
  * reports 側と monitoring/support-records 側で「statusを絞る/絞らない」が違う点も注意:
  *   - reports: status !== 'active' な行 (例: 'completed') は最初から存在しないものとして扱う
@@ -28,6 +36,7 @@ export interface CarePlanForSelection {
   id: string;
   status: string | null;
   start_date: string | null; // YYYY-MM-DD。null は「最も古い」扱い (実データでは通常入る)
+  end_date?: string | null; // 選択ロジック自体は使わない。isExpired() で期限切れ判定するときに使う
 }
 
 const cmpStartDate = (a: string | null, b: string | null): number => (a ?? "") < (b ?? "") ? -1 : (a ?? "") > (b ?? "") ? 1 : 0;
@@ -61,4 +70,15 @@ export function selectCurrentPlanWithFallback(plansOrderedByStartDateDesc: CareP
  */
 export function hasMonitoringInMonth(sheets: { monitoring_date: string | null }[], thisMonth: string): boolean {
   return sheets.some((s) => (s.monitoring_date ?? "").startsWith(thisMonth));
+}
+
+/**
+ * 計画が (today時点で) 期限切れかどうか。
+ * ⚠ end_date が null は「期限なし」= 期限切れではない。
+ * ⚠ end_date === today (当日) は期限切れではない (その日いっぱいは有効)。
+ * ⚠ today は呼出側で `format(new Date(), "yyyy-MM-dd")` として渡すこと
+ *   (このファイルは日付そのものに依存しない)。
+ */
+export function isExpired(endDate: string | null, today: string): boolean {
+  return endDate != null && endDate < today;
 }

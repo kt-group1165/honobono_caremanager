@@ -14,7 +14,13 @@ import { format, parseISO, differenceInYears } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { validInMonth } from "@/lib/service-code-valid";
-import { selectCurrentPlanForReports } from "@/lib/careplan-selection";
+import { selectCurrentPlanForReports, isExpired, type CarePlanForSelection } from "@/lib/careplan-selection";
+import {
+  selectCurrentCertForClient,
+  resolveMasterField,
+  collectChangedNotices,
+  type CertMasterLike,
+} from "@/lib/report-master-fields";
 import { resolveCertForMonth } from "@/lib/cert-for-month";
 import { formKindForCareLevel, type KaigoFormKind } from "@/lib/yobo-kubun";
 import {
@@ -275,6 +281,142 @@ function careLevelLimit(careLevel: string | null | undefined): number {
 /** cert の限度額 (service_limit_amount) を優先し、無ければ care_level から補完。 */
 function resolveLimitAmount(supportLimitAmount: number | null | undefined, careLevel: string | null | undefined): number {
   return (supportLimitAmount && supportLimitAmount > 0) ? supportLimitAmount : careLevelLimit(careLevel);
+}
+
+// ---------------------------------------------------------------------------
+// 帳票の「マスタから引ける欄」を印刷時に引き直す (2026-09-05・user指摘)
+//
+// 保存済みform_dataは変更しない。印刷 (PrintView) にだけマスタの値を優先して渡し、
+// 食い違いは画面 (no-print) にだけ通知する。純関数部分は src/lib/report-master-fields.ts
+// (境界値テスト済み)。ここは DB fetch + 帳票typeごとのフィールド対応表だけを持つ。
+//
+// ⚠ 編集フォーム (EditForm) 側は raw content のままにしている (resolvedへの
+//   置き換えはしない)。理由: resolvedをEditFormにも渡すと、ユーザーが編集した
+//   瞬間に再レンダリングでマスタ値へ「スナップバック」して見え、編集不能に
+//   見えるUXバグになる。印刷にだけ反映すれば user指摘の「印刷内容が古い」は
+//   解消するので、まずはこの範囲に留める (EditForm側の見せ方は別途判断)。
+// ---------------------------------------------------------------------------
+
+type MasterCertRow = CertMasterLike & {
+  care_level: string | null;
+  certification_date: string | null;
+  certification_end_date: string | null;
+  insurer_number: string | null;
+  insurer_name: string | null;
+  insured_number: string | null;
+  service_limit_amount: number | null;
+};
+
+type ClientMasterRow = {
+  birth_date: string | null;
+  address: string | null;
+  postal_code: string | null;
+};
+
+/** 帳票typeごとに「マスタ優先で引き直す」欄を持つかどうか。対象外の帳票はfetch自体をしない */
+const MASTER_OVERRIDE_REPORT_TYPES = ["care-plan-1", "care-plan-3", "yobo-care-plan", "service-usage", "service-usage-detail"];
+
+async function fetchMasterForDoc(
+  supabase: ReturnType<typeof createClient>,
+  doc: ReportDoc,
+): Promise<{ cert: MasterCertRow | null; client: ClientMasterRow | null }> {
+  if (!MASTER_OVERRIDE_REPORT_TYPES.includes(doc.report_type)) return { cert: null, client: null };
+
+  const certSelect = "care_level, certification_status, certification_date, certification_start_date, certification_end_date, insurer_number, insurer_name, insured_number, service_limit_amount";
+  let cert: MasterCertRow | null = null;
+  if (doc.certification_id) {
+    // ★ このドキュメントが特定の認定に紐づいている場合 (care-plan-1/3/yobo-care-planは
+    //   ほぼ100%紐づく)は、その認定「自身」の最新値を引き直す (他の認定には飛ばない)。
+    const { data, error } = await supabase.from("client_insurance_records").select(certSelect).eq("id", doc.certification_id).maybeSingle();
+    if (error) console.error("[report-master] 認定の再取得に失敗:", error.message);
+    else cert = (data as MasterCertRow | null) ?? null;
+  }
+  if (!cert) {
+    // ★ certification_id が無い (service-usage/service-usage-detailは現状100%これ) 場合は
+    //   careplan-selection.tsと同じ考え方で「現在の認定」にフォールバックする。
+    const { data, error } = await supabase.from("client_insurance_records").select(certSelect).eq("client_id", doc.user_id);
+    if (error) console.error("[report-master] 認定一覧の取得に失敗:", error.message);
+    else cert = selectCurrentCertForClient((data ?? []) as MasterCertRow[]);
+  }
+
+  const { data: clientData, error: clientError } = await supabase.from("clients").select("birth_date, address, postal_code").eq("id", doc.user_id).maybeSingle();
+  if (clientError) console.error("[report-master] 利用者基本情報の取得に失敗:", clientError.message);
+
+  return { cert, client: (clientData as ClientMasterRow | null) ?? null };
+}
+
+/**
+ * 保存済みcontentに、マスタ優先の値を上書きしたコピーを返す (印刷専用)。
+ * 帳票typeごとに対象フィールドが違うので、無い欄は何もしない。
+ */
+function buildPrintResolvedContent(
+  reportType: string,
+  content: Record<string, unknown>,
+  cert: MasterCertRow | null,
+  client: ClientMasterRow | null,
+): { resolved: Record<string, unknown>; notices: string[] } {
+  if (!MASTER_OVERRIDE_REPORT_TYPES.includes(reportType)) return { resolved: content, notices: [] };
+
+  const s = (k: string): string | null => (typeof content[k] === "string" ? (content[k] as string) : null);
+  const resolvedFields: Record<string, ReturnType<typeof resolveMasterField>> = {};
+  const out: Record<string, unknown> = { ...content };
+
+  const careLevelMaster = cert?.care_level || null;
+  resolvedFields.care_level = resolveMasterField(careLevelMaster, s("care_level"));
+  out.care_level = resolvedFields.care_level.value;
+
+  if ("birth_date" in content) {
+    resolvedFields.birth_date = resolveMasterField(client?.birth_date ?? null, s("birth_date"));
+    out.birth_date = resolvedFields.birth_date.value;
+  }
+  if ("address" in content) {
+    const masterAddress = client?.address ? [client.postal_code ? `〒${client.postal_code}` : "", client.address].filter(Boolean).join(" ") : null;
+    resolvedFields.address = resolveMasterField(masterAddress, s("address"));
+    out.address = resolvedFields.address.value;
+  }
+  if ("cert_period" in content) {
+    const masterPeriod = cert?.certification_start_date ? `${fmtReiwa(cert.certification_start_date)}　〜　${fmtReiwa(cert.certification_end_date)}` : null;
+    resolvedFields.cert_period = resolveMasterField(masterPeriod, s("cert_period"));
+    out.cert_period = resolvedFields.cert_period.value;
+  }
+  if ("certification_date" in content) {
+    const masterCertDate = cert?.certification_date ? fmtReiwa(cert.certification_date) : null;
+    resolvedFields.certification_date = resolveMasterField(masterCertDate, s("certification_date"));
+    out.certification_date = resolvedFields.certification_date.value;
+  }
+  if ("cert_date" in content) {
+    const masterCertDate = cert?.certification_date ? fmtReiwa(cert.certification_date) : null;
+    resolvedFields.cert_date = resolveMasterField(masterCertDate, s("cert_date"));
+    out.cert_date = resolvedFields.cert_date.value;
+  }
+  if ("insurer_number" in content) {
+    resolvedFields.insurer_number = resolveMasterField(cert?.insurer_number || null, s("insurer_number"));
+    out.insurer_number = resolvedFields.insurer_number.value;
+  }
+  if ("insured_number" in content) {
+    resolvedFields.insured_number = resolveMasterField(cert?.insured_number || null, s("insured_number"));
+    out.insured_number = resolvedFields.insured_number.value;
+  }
+  if ("insurer_name" in content) {
+    resolvedFields.insurer_name = resolveMasterField(cert?.insurer_name || null, s("insurer_name"));
+    out.insurer_name = resolvedFields.insurer_name.value;
+  }
+  if ("limit_amount" in content) {
+    const masterLimit = cert ? resolveLimitAmount(cert.service_limit_amount, cert.care_level) : 0;
+    const masterLimitStr = masterLimit > 0 ? String(masterLimit) : null;
+    const savedLimit = content.limit_amount != null ? String(content.limit_amount) : null;
+    const resolvedLimit = resolveMasterField(masterLimitStr, savedLimit);
+    resolvedFields.limit_amount = resolvedLimit;
+    out.limit_amount = resolvedLimit.value ? Number(resolvedLimit.value) : content.limit_amount;
+  }
+
+  const labels: Record<string, string> = {
+    care_level: "要介護度", birth_date: "生年月日", address: "住所", cert_period: "認定有効期間",
+    certification_date: "認定日", cert_date: "認定日", insurer_number: "保険者番号",
+    insured_number: "被保険者番号", insurer_name: "保険者名", limit_amount: "支給限度額",
+  };
+  const notices = collectChangedNotices(resolvedFields, labels);
+  return { resolved: out, notices };
 }
 
 // モジュールレベルでキャッシュ（複数のインスタンスで共有）
@@ -5672,6 +5814,35 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
   const [dirty, setDirty] = useState(false);
   const [showSendModal, setShowSendModal] = useState(false);
   const { currentOffice } = useBusinessType();
+
+  // ★ 印刷内容をマスタ優先で引き直す (2026-09-05・user指摘の是正)。
+  //   保存済みcontentは変更しない。resolvedはPrintViewにだけ渡す。
+  //   マスタ (cert/client) は doc 切替のときだけ fetch し、content の編集の度には
+  //   再fetchしない (無駄なDB往復を避けるため)。ただし合成 (printResolved) は
+  //   content が変わるたびに作り直す — マスタをキャッシュしたまま content 側の
+  //   他フィールドの編集を print プレビューに反映させるため。
+  const [masterData, setMasterData] = useState<{ cert: MasterCertRow | null; client: ClientMasterRow | null } | null>(null);
+  useEffect(() => {
+    // doc.id が変わると親が key で remount するので state は常に null から始まる。
+    // 対象外の帳票typeは fetch 自体をしない (masterData は null のまま = printResolved は素通し)。
+    if (!MASTER_OVERRIDE_REPORT_TYPES.includes(doc.report_type)) return;
+    let cancelled = false;
+    const supabase = createClient();
+    fetchMasterForDoc(supabase, doc).then((m) => {
+      if (!cancelled) setMasterData(m);
+    }).catch((e) => {
+      console.error("[report-master] マスタ引き直しに失敗 (保存済みの値で表示継続):", e instanceof Error ? e.message : e);
+    });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [doc.id, doc.report_type, doc.user_id, doc.certification_id]);
+
+  const printResolved = useMemo(
+    () => masterData
+      ? buildPrintResolvedContent(doc.report_type, content, masterData.cert, masterData.client)
+      : { resolved: content, notices: [] },
+    [doc.report_type, content, masterData],
+  );
   const isLandscape = config.landscape ?? false;
   const paperWidth = isLandscape ? "297mm" : "210mm";
   const paperMinHeight = isLandscape ? "210mm" : "297mm";
@@ -5781,10 +5952,18 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
       <div className="no-print px-4 py-2 text-xs text-gray-400 flex items-center gap-1">
         <Printer size={11} /> 印刷プレビュー（A4{isLandscape ? "横" : "縦"}）
       </div>
+      {printResolved.notices.length > 0 && (
+        <div className="no-print mx-4 mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <p className="font-medium">保存内容と現在の認定が食い違っています (印刷には現在の認定を使います):</p>
+          <ul className="mt-1 list-disc pl-4">
+            {printResolved.notices.map((n) => <li key={n}>{n}</li>)}
+          </ul>
+        </div>
+      )}
       <PreviewScaler paperWidth={paperWidth} paperMinHeight={paperMinHeight} paperPadding={paperPadding}>
         {/* プレビューのセルをダブルクリックすると、その値だけを直すモーダルが出る */}
         <PrintEditCtx.Provider value={setEditTarget}>
-          <PrintView reportType={doc.report_type} content={content} config={config} />
+          <PrintView reportType={doc.report_type} content={printResolved.resolved} config={config} />
         </PrintEditCtx.Provider>
       </PreviewScaler>
 
@@ -6150,6 +6329,29 @@ export function ReportsContent({
   const [docs, setDocs] = useState<ReportDoc[]>(() => initialDocsForSelected);
   const [docsLoading, setDocsLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<ReportDoc | null>(() => initialDocsForSelected[0] ?? null);
+
+  // 選択中の計画が期限切れかどうかの表示専用フェッチ (案B・2026-09-05)。
+  // ⚠ autoGenerateDoc とは別経路 (docs/certsのキャッシュ機構に触れると
+  //   "帳票が無いと誤判定して空帳票を自動生成する" 既知の脆さがあるため独立させる)。
+  // ⚠ 選択ロジック自体 (autoGenerateDoc 内の selectCurrentPlanForReports 呼出) は変更しない。
+  const [expiredPlanEndDate, setExpiredPlanEndDate] = useState<string | null>(null);
+  const isCarePlanReportForBanner = ["care-plan-1", "care-plan-2", "care-plan-3"].includes(reportType);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!isCarePlanReportForBanner) {
+        if (!cancelled) setExpiredPlanEndDate(null);
+        return;
+      }
+      const { data } = await supabase.from("kaigo_care_plans").select("id,status,start_date,end_date").eq("user_id", userId);
+      if (cancelled) return;
+      const current = selectCurrentPlanForReports((data ?? []) as CarePlanForSelection[]);
+      const today = format(new Date(), "yyyy-MM-dd");
+      const endDate = current?.end_date ?? null;
+      setExpiredPlanEndDate(current && isExpired(endDate, today) ? endDate : null);
+    })();
+    return () => { cancelled = true; };
+  }, [isCarePlanReportForBanner, userId, supabase]);
   const [newLoading, setNewLoading] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [clientName, setClientName] = useState<string | null>(
@@ -6641,6 +6843,14 @@ export function ReportsContent({
                   >
                     {REPORT_CONFIG[matchingFormType]?.titleJa ?? ""} を開く
                   </button>
+                </div>
+              )}
+
+              {/* 選択中の計画が期限切れの警告 (案B・2026-09-05。選択の挙動自体は変えない) */}
+              {expiredPlanEndDate && (
+                <div className="no-print mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  <span className="font-semibold">この計画は {expiredPlanEndDate} で期限切れです。</span>
+                  最新の認定・状況に応じて計画の更新を検討してください。
                 </div>
               )}
 

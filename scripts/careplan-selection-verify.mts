@@ -11,7 +11,7 @@
  *   5箇所に散っていたインラインロジックを src/lib/careplan-selection.ts に
  *   統合した後の回帰検査 (2026-09-05 に統合実施。以前は5箇所が別々のコピーだった)。
  */
-import { selectCurrentPlanForReports, selectCurrentPlanWithFallback, hasMonitoringInMonth, type CarePlanForSelection } from "../src/lib/careplan-selection";
+import { selectCurrentPlanForReports, selectCurrentPlanWithFallback, hasMonitoringInMonth, isExpired, type CarePlanForSelection } from "../src/lib/careplan-selection";
 
 let n = 0, ng = 0;
 function eq(label: string, actual: unknown, expected: unknown) {
@@ -96,6 +96,31 @@ console.log("\n═══ 「今月未登録」警告の判定 (hasMonitoringInMo
   eq("月初日ちょうど", hasMonitoringInMonth([{ monitoring_date: "2026-09-01" }], "2026-09"), true);
   eq("前月末日は含まない (境界)", hasMonitoringInMonth([{ monitoring_date: "2026-08-31" }, { monitoring_date: "2026-10-01" }], "2026-09"), false);
   eq("複数件中1件でも今月なら true", hasMonitoringInMonth([{ monitoring_date: "2026-01-01" }, { monitoring_date: "2026-09-20" }], "2026-09"), true);
+}
+
+console.log("\n═══ isExpired (案B: 期限切れ警告の判定) — 境界値 ═══");
+{
+  const TODAY = "2026-09-05";
+  eq("前日 (end_date=昨日) → 期限切れ", isExpired("2026-09-04", TODAY), true);
+  eq("当日 (end_date=今日) → 期限切れではない (その日いっぱい有効)", isExpired("2026-09-05", TODAY), false);
+  eq("翌日 (end_date=明日) → 期限切れではない", isExpired("2026-09-06", TODAY), false);
+  eq("end_date=null → 期限切れではない (期限なし)", isExpired(null, TODAY), false);
+  eq("遠い過去 → 期限切れ", isExpired("2020-01-01", TODAY), true);
+  eq("遠い未来 → 期限切れではない", isExpired("2030-01-01", TODAY), false);
+}
+{
+  // 負のコントロール: 「当日を期限切れに含める」誤実装(<=)にすると当日ケースの結果が変わることを確認
+  const TODAY = "2026-09-05";
+  const buggyInclusive = (endDate: string | null, today: string) => endDate != null && endDate <= today;
+  const real = isExpired("2026-09-05", TODAY);
+  const buggy = buggyInclusive("2026-09-05", TODAY);
+  n++;
+  if (real !== buggy) {
+    console.log(`  OK  負のコントロール — 現実装(当日=期限切れでない:${real})と「当日を含める」誤実装(${buggy})が別の結果 (境界値テストが機能している)`);
+  } else {
+    ng++;
+    console.log(`  NG  負のコントロール失敗 — 当日の扱いで結果が変わらない`);
+  }
 }
 
 console.log(`\n══ 検査 ${n} 件 / NG ${ng} 件 ══`);

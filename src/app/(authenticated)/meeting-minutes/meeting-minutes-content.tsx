@@ -15,7 +15,7 @@ import {
   UserPlus,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
-import { selectCurrentPlanWithFallback } from "@/lib/careplan-selection";
+import { selectCurrentPlanWithFallback, isExpired } from "@/lib/careplan-selection";
 import {
   emptyAttendee,
   emptyContent,
@@ -339,6 +339,18 @@ function ListView({
           新規作成
         </button>
       </div>
+
+      {/* 選択中の計画が期限切れの警告 (案B・2026-09-05。選択の挙動自体は変えない) */}
+      {(() => {
+        const plan = carePlans.find((p) => p.id === selectedCarePlanId);
+        if (!plan || !isExpired(plan.end_date, format(new Date(), "yyyy-MM-dd"))) return null;
+        return (
+          <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span className="font-semibold">この計画は {plan.end_date} で期限切れです。</span>
+            最新の認定・状況に応じて計画の更新を検討してください。
+          </div>
+        );
+      })()}
 
       {carePlans.length === 0 ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
