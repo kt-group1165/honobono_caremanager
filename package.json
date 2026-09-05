@@ -41,6 +41,7 @@
     "check:keiei-bunseki": "tsx scripts/keiei-bunseki-verify.mts",
     "check:keiei-bunseki-kyotaku": "tsx scripts/keiei-bunseki-kyotaku-verify.mts",
     "check:staff-suggest": "tsx scripts/staff-suggest-verify.mts",
+    "check:gendo-allocation": "tsx scripts/gendo-allocation-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
