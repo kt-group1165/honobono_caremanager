@@ -32,6 +32,10 @@ const CHECKS: Check[] = [
   { name: "record-markers", script: "check:record-markers", why: "★ 行種マーカーの TS/.mjs 二重定義が ずれていないか" },
   //   ★ 同型。過去に 574 件の実バグ (キーが揃わず支給量欄が空・超過警告が出ない)。
   { name: "shikyuryo-keys", script: "check:shikyuryo-keys", why: "★ 支給量キーの TS/.mjs 二重定義が ずれていないか" },
+  // ★ sample seed が「今も起動するか」だけを見る (DRY RUN・DB 書込なし)。
+  //   ★ 2026-09-05 に 14 本中 2 本が起動しなくなっていた (_sample_data.mjs の変更に追随漏れ)。
+  //   ★ 「検証済み」と文書にあっても 再実行したら動かない、が実在したので gate に置く。
+  { name: "sample-seeds", script: "check:sample-seeds", why: "★ サンプル seed 14 本が DRY RUN で起動するか (壊れると検証手段ごと失う)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
