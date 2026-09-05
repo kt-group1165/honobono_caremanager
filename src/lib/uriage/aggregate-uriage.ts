@@ -20,7 +20,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ID_IN_CHUNK, mapChunksParallel } from "@/lib/chunk-parallel";
 import { aggregateMonthlyVisitSeikyu, type UserSeikyuRow } from "@/lib/visit-seikyu/aggregate";
 import { aggregateBathVisitSeikyu } from "@/lib/bath-seikyu/aggregate";
-import { aggregateMonthlyShogaiSeikyu } from "@/lib/shogai-seikyu/aggregate";
+import { aggregateMonthlyShogaiSeikyu, type ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
 
 /** table/列 未作成 (機能未適用) 系のエラーコードか */
 const isMissingSchema = (code: string | null | undefined) =>
@@ -96,6 +96,72 @@ export const EMPTY_URIAGE: UriageBreakdown = {
 /** UserSeikyuRow[] の費用額 (10割) 合計。限度額超過の全額自費は jihi 側で数えるので除く */
 const sumCost = (rows: UserSeikyuRow[]) => rows.reduce((s, r) => s + (r.totalAmount ?? 0), 0);
 const sumSelfPay = (rows: UserSeikyuRow[]) => rows.reduce((s, r) => s + (r.selfPayAmount ?? 0), 0);
+
+/** 介護(+総合事業)・障害の集計行を売上の制度別内訳に畳む結果 */
+export interface UriageFoldResult {
+  kaigo: number;
+  sougou: number;
+  shogai: number;
+  jihi: number;
+  insurance: number;
+  kohi: number;
+  userBurden: number;
+  clientIds: string[];
+}
+
+/**
+ * 介護保険(+総合事業)・障害福祉の集計行を、売上の制度別内訳 (kaigo/sougou/shogai) +
+ * 財源別内訳 (insurance/kohi/userBurden) + 自費 (jihi) に畳む。
+ * aggregateMonthlyUriage の中に埋め込まれていたループをそのまま切り出したもの
+ * (式は1文字も変えていない。挙動不変)。
+ */
+export function foldUriageRows(
+  visitRows: UserSeikyuRow[],
+  sougouRows: UserSeikyuRow[],
+  shogaiRows: ShogaiSeikyuRow[],
+): UriageFoldResult {
+  let kaigo = 0;
+  let sougou = 0;
+  let shogai = 0;
+  let jihi = 0;
+  let insurance = 0;
+  let kohi = 0;
+  let userBurden = 0;
+  const clientIds: string[] = [];
+
+  kaigo = sumCost(visitRows);
+  sougou = sumCost(sougouRows);
+  jihi += sumSelfPay(visitRows) + sumSelfPay(sougouRows);
+  for (const r of [...visitRows, ...sougouRows]) {
+    insurance += r.insuranceAmount ?? 0;
+    kohi += r.kohiAmount ?? 0;
+    kohi += r.kohi2Amount ?? 0;
+    userBurden += r.userAmount ?? 0;
+    clientIds.push(r.user_id);
+  }
+
+  for (const r of shogaiRows) {
+    shogai += r.totalAmount ?? 0;
+    insurance += r.benefitAmount ?? 0;
+    userBurden += r.userAmount ?? 0;
+    clientIds.push(r.user_id);
+  }
+
+  return { kaigo, sougou, shogai, jihi, insurance, kohi, userBurden, clientIds };
+}
+
+/**
+ * 地域生活支援事業 1 件分の円換算。
+ *   単位建ての市町村 (千葉市・大多喜町) は units×10円。
+ *   円建ての市町村 (茂原市・睦沢町) は units が無いので notes の「NNNN円」から読む。
+ *   どちらも無ければ 0 (単価表未登録)。
+ * sumChiiki のループ内に埋め込まれていたロジックを切り出したもの (挙動不変)。
+ */
+export function chiikiYenFromRecord(units: number | null, notes: string | null): number {
+  if (units != null) return units * CHIIKI_UNIT_YEN;
+  const yenInNotes = /(\d+)円/.exec(notes ?? "");
+  return yenInNotes ? Number(yenInNotes[1]) : 0;
+}
 
 export interface UriageOpts {
   officeId: string;
@@ -200,27 +266,15 @@ export async function aggregateMonthlyUriage(
           }),
     ]);
 
-    const rows = visitResult.rows;
-    const sRows = visitResult.sougouRows ?? [];
-    kaigo = sumCost(rows);
-    sougou = sumCost(sRows);
-    jihi += sumSelfPay(rows) + sumSelfPay(sRows);
-    for (const r of [...rows, ...sRows]) {
-      insurance += r.insuranceAmount ?? 0;
-      kohi += r.kohiAmount ?? 0;
-      kohi += r.kohi2Amount ?? 0;
-      userBurden += r.userAmount ?? 0;
-      clientIds.add(r.user_id);
-    }
-
-    if (shogaiResult) {
-      for (const r of shogaiResult.rows) {
-        shogai += r.totalAmount ?? 0;
-        insurance += r.benefitAmount ?? 0;
-        userBurden += r.userAmount ?? 0;
-        clientIds.add(r.user_id);
-      }
-    }
+    const folded = foldUriageRows(visitResult.rows, visitResult.sougouRows ?? [], shogaiResult?.rows ?? []);
+    kaigo = folded.kaigo;
+    sougou = folded.sougou;
+    shogai = folded.shogai;
+    jihi += folded.jihi;
+    insurance += folded.insurance;
+    kohi += folded.kohi;
+    userBurden += folded.userBurden;
+    for (const id of folded.clientIds) clientIds.add(id);
   }
 
   // 地域生活支援事業 (移動支援・養育支援) — 国保連を通さず市町村へ直接請求する分。
@@ -325,7 +379,7 @@ export function sumUriage(month: string, list: UriageBreakdown[]): UriageBreakdo
 }
 
 /** offices.service_type → BusinessType (business-type-context の mapBusinessType と同じ寄せ方) */
-function businessTypeOf(serviceType: string): string {
+export function businessTypeOf(serviceType: string): string {
   if (serviceType === "訪問入浴") return "訪問入浴";
   if (serviceType === "訪問介護" || serviceType === "訪問看護") return "訪問介護";
   return "居宅介護支援";
@@ -550,8 +604,7 @@ async function sumChiiki(
     //     (migrations/_idou_rates.mjs) だけで、
     //     **画面側 (idou-records) は千葉市のコード表しか持たない**。
     //     他市町村は手動選択に落ちる (2026-09-03 に fail-closed 化)。
-    const yenInNotes = /(\d+)円/.exec(r.notes ?? "");
-    const yen = r.units != null ? r.units * CHIIKI_UNIT_YEN : yenInNotes ? Number(yenInNotes[1]) : 0;
+    const yen = chiikiYenFromRecord(r.units, r.notes);
     if (yen === 0) noAmount++;
     total += yen;
     clientIds.push(r.client_id);

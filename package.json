@@ -37,6 +37,7 @@
     "check:re-seikyu-shogai": "tsx scripts/re-seikyu-shogai-verify.mts",
     "check:kubun-gendo": "tsx scripts/kubun-gendo-verify.mts",
     "check:aggregate-honbu": "tsx scripts/aggregate-honbu-verify.mts",
+    "check:aggregate-uriage": "tsx scripts/aggregate-uriage-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -71,6 +72,7 @@
     "check:coverage": "tsx scripts/coverage-check.mts",
     "matrix": "tsx scripts/sample-matrix.mts",
     "check:densou-diff": "tsx scripts/densou-diff-check.mts",
+    "check:densou-diff-extra": "tsx scripts/kaigo-densou-diff-check-extra.mts",
     "check:tj-juho": "node scripts/tj-juho-analyze.mjs"
   },
   "dependencies": {
