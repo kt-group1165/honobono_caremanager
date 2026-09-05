@@ -210,66 +210,85 @@ export async function scanCertExpiry(
   // 4) client ごとに「現在の認定」を選び、段階判定 + 更新申請済み除外
   const alerts: CertExpiryAlert[] = [];
   for (const [clientId, rows] of certsByClient) {
-    // start DESC (null 最後) に並べ直す (page 跨ぎで順序保証が崩れる可能性への防御)
-    const sorted = [...rows].sort((a, b) =>
-      (b.certification_start_date ?? "").localeCompare(a.certification_start_date ?? ""),
-    );
-    const current = sorted.find(
-      (r) =>
-        r.certification_status === "認定済み" &&
-        (r.certification_start_date === null || r.certification_start_date <= todayIso),
-    );
-    if (!current || !current.certification_end_date) continue;
-
-    const end = current.certification_end_date;
-    let stage: CertExpiryStage | null = null;
-    if (end < todayIso) stage = "expired";
-    else if (end <= plus30) stage = "within30";
-    else if (end <= plus60) stage = "within60";
-    if (!stage) continue;
-
-    // 除外: 更新申請済み (「申請中」の新しい行) / 更新決定済み (start が新しい認定済み行)
-    const curStart = current.certification_start_date;
-    const renewalInProgress = sorted.some((r) => {
-      if (r.id === current.id) return false;
-      if (r.certification_status === "申請中") {
-        // start 未入力の申請中行は「結果待ちの更新申請」とみなす
-        return (
-          r.certification_start_date === null ||
-          curStart === null ||
-          r.certification_start_date > curStart
-        );
-      }
-      if (r.certification_status === "認定済み") {
-        return (
-          r.certification_start_date !== null &&
-          curStart !== null &&
-          r.certification_start_date > curStart
-        );
-      }
-      return false;
-    });
-    if (renewalInProgress) continue;
-
-    const endMid = isoToLocalDate(end)?.getTime();
-    const daysLeft =
-      endMid === undefined || endMid === null
-        ? 0
-        : Math.round((endMid - todayMid) / 86_400_000);
-
+    const resolved = resolveClientCertAlert(rows, { todayIso, plus30, plus60, todayMid });
+    if (!resolved) continue;
     alerts.push({
       clientId,
       clientName: nameById.get(clientId) ?? "(名前未取得)",
-      certId: current.id,
-      careLevel: current.care_level,
-      certEndDate: end,
-      stage,
-      daysLeft,
+      ...resolved,
     });
   }
 
   alerts.sort((a, b) => a.certEndDate.localeCompare(b.certEndDate));
   return alerts;
+}
+
+/**
+ * ★ 2026-09-05 切り出し: scanCertExpiry のループ本体 (段階判定 + 更新申請済み除外)。
+ *   client component/DB ループの中にあるとハーネスから呼べないため、
+ *   1 client ぶんの純粋な判定として独立させた。挙動は 1 ミリも変えていない。
+ *
+ * @returns アラート対象でなければ null (clientId/clientName は呼び出し側で付与する)
+ */
+export function resolveClientCertAlert(
+  rows: CertRow[],
+  ctx: { todayIso: string; plus30: string; plus60: string; todayMid: number },
+): Omit<CertExpiryAlert, "clientId" | "clientName"> | null {
+  const { todayIso, plus30, plus60, todayMid } = ctx;
+  // start DESC (null 最後) に並べ直す (page 跨ぎで順序保証が崩れる可能性への防御)
+  const sorted = [...rows].sort((a, b) =>
+    (b.certification_start_date ?? "").localeCompare(a.certification_start_date ?? ""),
+  );
+  const current = sorted.find(
+    (r) =>
+      r.certification_status === "認定済み" &&
+      (r.certification_start_date === null || r.certification_start_date <= todayIso),
+  );
+  if (!current || !current.certification_end_date) return null;
+
+  const end = current.certification_end_date;
+  let stage: CertExpiryStage | null = null;
+  if (end < todayIso) stage = "expired";
+  else if (end <= plus30) stage = "within30";
+  else if (end <= plus60) stage = "within60";
+  if (!stage) return null;
+
+  // 除外: 更新申請済み (「申請中」の新しい行) / 更新決定済み (start が新しい認定済み行)
+  const curStart = current.certification_start_date;
+  const renewalInProgress = sorted.some((r) => {
+    if (r.id === current.id) return false;
+    if (r.certification_status === "申請中") {
+      // start 未入力の申請中行は「結果待ちの更新申請」とみなす
+      return (
+        r.certification_start_date === null ||
+        curStart === null ||
+        r.certification_start_date > curStart
+      );
+    }
+    if (r.certification_status === "認定済み") {
+      return (
+        r.certification_start_date !== null &&
+        curStart !== null &&
+        r.certification_start_date > curStart
+      );
+    }
+    return false;
+  });
+  if (renewalInProgress) return null;
+
+  const endMid = isoToLocalDate(end)?.getTime();
+  const daysLeft =
+    endMid === undefined || endMid === null
+      ? 0
+      : Math.round((endMid - todayMid) / 86_400_000);
+
+  return {
+    certId: current.id,
+    careLevel: current.care_level,
+    certEndDate: end,
+    stage,
+    daysLeft,
+  };
 }
 
 // ─── 通知メッセージ ───────────────────────────────────────────────────

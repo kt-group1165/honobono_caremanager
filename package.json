@@ -31,6 +31,7 @@
     "check:juho-tier": "tsx scripts/juho-tier-verify.mts",
     "check:record-markers": "tsx scripts/record-markers-verify.mts",
     "check:shikyuryo-keys": "tsx scripts/shikyuryo-keys-verify.mts",
+    "check:cert-expiry-alert": "tsx scripts/cert-expiry-alert-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
