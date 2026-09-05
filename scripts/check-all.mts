@@ -81,6 +81,9 @@ const CHECKS: Check[] = [
   // ★ ①status=active なのに期限切れ 284名 / ②実害 (有効な計画が隠れる) 0名 を基準値方式で。
   //   ★ ②が増えたら FAIL。★ ①は 更新されれば減る性質なので 参考情報。
   { name: "careplan-expiry", script: "check:careplan-expiry", why: "★ 期限切れケアプランの露出 (基準値: ①284名 ②実害0名)" },
+  // ★ 2026-09-05 新設。★ 帳票に保存された 要介護度等が 現在の認定と食い違う問題 (218件) の是正。
+  //   ★ 印刷プレビューだけ マスタ優先で引き直す (★ 編集フォームは 生の値のまま)。
+  { name: "report-master-fields", script: "check:report-master-fields", why: "★ 帳票のマスタ引き直し (要介護度・認定日・保険者等を 印刷時に現在の認定から引く)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
