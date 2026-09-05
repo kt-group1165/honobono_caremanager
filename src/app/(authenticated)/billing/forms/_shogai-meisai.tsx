@@ -21,19 +21,7 @@ import {
   municipalityHead,
   municipalityName,
 } from "@/lib/shogai-seikyu/municipalities";
-
-// サービス種類コード (障害福祉サービス)
-const SERVICE_TYPE_CODES: Record<string, string> = {
-  居宅介護: "11",
-  重度訪問介護: "12",
-  行動援護: "13",
-  同行援護: "14",
-};
-
-// サービス種類コード → 種類名 (処遇改善加算行の表示用 逆引き)
-const SERVICE_TYPE_NAMES: Record<string, string> = Object.fromEntries(
-  Object.entries(SERVICE_TYPE_CODES).map(([name, code]) => [code, name]),
-);
+import { SERVICE_TYPE_CODES, SERVICE_TYPE_LABELS } from "@/lib/shogai-seikyu/service-type-code";
 
 // ─── 帳票部品 (_meisai.tsx の MeisaiPrintSheet と同じ流儀) ────────────────────
 
@@ -487,7 +475,7 @@ export function ShogaiMeisaiPrintSheet({
                 <td rowSpan={bodyRows + emptyRows} style={{ border: "0.5pt solid #000" }} />
               )}
               <Vc style={{ fontSize: "7.5pt" }}>
-                {SERVICE_TYPE_NAMES[a.service_code.slice(0, 2)] ?? ""} {a.service_name}
+                {SERVICE_TYPE_LABELS[a.service_code.slice(0, 2)] ?? ""} {a.service_name}
               </Vc>
               <Vc style={{ padding: 0 }}>
                 <DigitCells value={a.service_code} cells={6} cw={3.5} h={5} />

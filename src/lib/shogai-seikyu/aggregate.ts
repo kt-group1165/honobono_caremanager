@@ -36,6 +36,7 @@ import {
   remapJuhoCode,
 } from "@/lib/shogai-seikyu/juho-tier";
 import { isAddonRecord, isBillableRecord } from "@/lib/shogai-seikyu/record-markers";
+import { SERVICE_TYPE_CODES, SERVICE_TYPE_LABELS } from "@/lib/shogai-seikyu/service-type-code";
 
 export interface ShogaiSeikyuDetail {
   /** サービス種別 (居宅介護 等) */
@@ -789,8 +790,11 @@ export async function aggregateMonthlyShogaiSeikyu(
   //   加算コードは master (system='障害') を service_category (=種類コード) で解決する。
   //   対象種類は master の service_category と初回加算コードが 1:1 で一致する
   //   居宅介護(11=116020)/重度訪問介護(12=126020)/行動援護(13=136020) に限定する。
-  //   同行援護 は master の category 割当 (14=重包/15=同援) が本ファイルの SERVICE_TYPE_CODES
-  //   (14=同行援護) と食い違うため自動算定せず、必要時は加算エディタから入力する。
+  //   同行援護 (15=156020 同援初回加算 が master に実在。2026-09-05確認) は
+  //   ここに含めていない。本ファイルの SERVICE_TYPE_CODES が旧コード"14"を
+  //   指していた不整合は service-type-code.ts への一本化で解消したが、
+  //   同行援護を自動算定に含めるかは表示バグ修正とは別の判断のため、
+  //   このリストは変更せず従来どおり手動 (加算エディタから入力) のままにする。
   //   計画相談・自立生活援助等の初回加算は算定条件・単位が異なるため対象外。
   //   contract_start_date が未入力/列未適用 の利用者は算定なし = 従来動作。
   const SHOKAI_TYPE_CODES = ["11", "12", "13"];
@@ -1377,18 +1381,8 @@ export async function aggregateMonthlyShogaiSeikyu(
 }
 
 // ─── 国保連 CSV (介護給付費・訓練等給付費等明細書 J121 相当の簡易形式) ─────────
-
-const SERVICE_TYPE_CODES: Record<string, string> = {
-  居宅介護: "11",
-  重度訪問介護: "12",
-  行動援護: "13",
-  同行援護: "14",
-};
-
-/** サービス種類コード → 種類名 (加算行の表示用 逆引き) */
-export const SERVICE_TYPE_NAMES: Record<string, string> = Object.fromEntries(
-  Object.entries(SERVICE_TYPE_CODES).map(([name, code]) => [code, name]),
-);
+// SERVICE_TYPE_CODES / SERVICE_TYPE_LABELS は src/lib/shogai-seikyu/service-type-code.ts
+// に一本化済み (2026-09-05・同行援護 14→15 修正)。
 
 /** CSV セル: `"` `,` 改行 を含む値は quote + `""` エスケープ */
 function csvCell(v: string | number | null | undefined): string {
@@ -1465,7 +1459,7 @@ export function buildShogaiSeikyuCsv(
           r.user_name,
           r.support_level ?? "",
           tc,
-          SERVICE_TYPE_NAMES[tc] ?? "",
+          SERVICE_TYPE_LABELS[tc] ?? "",
           a.service_code,
           a.service_name,
           a.units,
