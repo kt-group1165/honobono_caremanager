@@ -38,6 +38,7 @@
     "check:kubun-gendo": "tsx scripts/kubun-gendo-verify.mts",
     "check:aggregate-honbu": "tsx scripts/aggregate-honbu-verify.mts",
     "check:aggregate-uriage": "tsx scripts/aggregate-uriage-verify.mts",
+    "check:keiei-bunseki": "tsx scripts/keiei-bunseki-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
