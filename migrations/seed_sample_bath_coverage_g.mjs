@@ -18,6 +18,10 @@
 //     G4 月内の要介護度変更 (detectMidMonthChange)
 //     G5 限度額「ちょうど」(bath_monthly_plan_units で計画単位数を明示指定)
 //     G6 虐防/業未 減算 (kaigo_office_gensan_periods。事業所単位の一時フラグ)
+//     G7 要支援(予防給付)への虐防/業未 減算 (2026-09-05追加。B-1w系④の修正確認用。
+//        G6と同じ事業所×月の減算フラグを共有。修正前は aggregate.ts の
+//        startsWith("121")フィルタで621xxxが対象外になり、減算が一切適用されず
+//        満額(856単位)のままだった=過大請求の方向のバグ)
 //
 // ⚠ サンプルは2026-12のみ。マーカー必須。撤去後0件確認まで。
 // ⚠ office(offices本体)は変更しない。既存の訪問入浴事業所(ムツミ)を使う。
@@ -44,6 +48,7 @@ async function doDelete() {
     dryRun: !EXECUTE,
     extraTables: [
       { table: "kaigo_bath_visit_records", key: "client_id" },
+      { table: "kaigo_bath_schedule", key: "client_id" },
       { table: "bath_monthly_plan_units", key: "client_id" },
     ],
   });
@@ -75,9 +80,10 @@ async function doSeed() {
     sampleClient({ tag: TAG, seq: 4, careLevel: "要介護1", copayIdx: 0 }), // G4 月内変更(開始時点)
     sampleClient({ tag: TAG, seq: 5, careLevel: "要介護2", copayIdx: 0 }), // G5 限度額ちょうど
     sampleClient({ tag: TAG, seq: 6, careLevel: "要介護2", copayIdx: 0 }), // G6 虐防/業未
+    sampleClient({ tag: TAG, seq: 7, careLevel: "要支援2", copayIdx: 0 }), // G7 予防給付+虐防/業未
   ];
   const clientIds = await insertRows("clients", clients, { dryRun: !EXECUTE });
-  const [g1, g2, g3, g4, g5, g6] = EXECUTE ? clientIds : clients.map((_, i) => `dry-g${i + 1}`);
+  const [g1, g2, g3, g4, g5, g6, g7] = EXECUTE ? clientIds : clients.map((_, i) => `dry-g${i + 1}`);
 
   const insuranceRows = [
     sampleInsurance(g1, { careLevel: "要介護2", copayIdx: 0, tag: TAG, seq: 1 }),
@@ -87,6 +93,7 @@ async function doSeed() {
     sampleInsurance(g4, { careLevel: "要介護1", copayIdx: 0, tag: TAG, seq: 4, extra: { effective_date: "2026-04-01", certification_start_date: "2026-04-01", certification_end_date: "2026-12-15" } }),
     sampleInsurance(g5, { careLevel: "要介護2", copayIdx: 0, tag: TAG, seq: 5 }),
     sampleInsurance(g6, { careLevel: "要介護2", copayIdx: 0, tag: TAG, seq: 6 }),
+    sampleInsurance(g7, { careLevel: "要支援2", copayIdx: 0, tag: TAG, seq: 7 }),
   ];
   await insertRows("client_insurance_records", insuranceRows, { dryRun: !EXECUTE });
   // G4の2世代目 (12/16〜要介護3)
@@ -94,7 +101,7 @@ async function doSeed() {
     sampleInsurance(g4, { careLevel: "要介護3", copayIdx: 0, tag: TAG, seq: 4, extra: { effective_date: "2026-12-16", certification_start_date: "2026-12-16", certification_end_date: "2027-03-31" } }),
   ], { dryRun: !EXECUTE });
 
-  await insertRows("client_office_assignments", [g1, g2, g3, g4, g5, g6].map((id) => sampleAssignment(id, OFFICE_ID)), { dryRun: !EXECUTE });
+  await insertRows("client_office_assignments", [g1, g2, g3, g4, g5, g6, g7].map((id) => sampleAssignment(id, OFFICE_ID)), { dryRun: !EXECUTE });
 
   // G2: 部分公費 (法別21=障害(精神通院)。生保ではないので振替されない想定)
   await insertRows(KOHI_TABLE, [sampleKohi(g2, { hohei: "21", futansha: "21123456", jukyusha: "0000021" })], { dryRun: !EXECUTE });
@@ -122,12 +129,21 @@ async function doSeed() {
     // G6: 虐防/業未検証用の通常訪問 (全身浴+看護あり ×2)
     { ...commonFields, client_id: g6, visit_date: "2026-12-05", bath_type: "全身浴", staff_only: false, service_code: "121111", addon_shokai: false, addon_ninchi: null, addon_chuusankan: false },
     { ...commonFields, client_id: g6, visit_date: "2026-12-19", bath_type: "全身浴", staff_only: false, service_code: "121111", addon_shokai: false, addon_ninchi: null, addon_chuusankan: false },
+    // G7: 予防給付(要支援2)への虐防/業未検証用 (全身浴+看護あり ×2、基本コードは621111)
+    { ...commonFields, client_id: g7, visit_date: "2026-12-05", bath_type: "全身浴", staff_only: false, service_code: "621111", addon_shokai: false, addon_ninchi: null, addon_chuusankan: false },
+    { ...commonFields, client_id: g7, visit_date: "2026-12-19", bath_type: "全身浴", staff_only: false, service_code: "621111", addon_shokai: false, addon_ninchi: null, addon_chuusankan: false },
   ];
   await insertRows("kaigo_bath_visit_records", visitRows, { dryRun: !EXECUTE });
 
   // G5: 計画単位数 = 実際の合計 (4回×1266=5,064) にして「限度額ちょうど」を作る
   await insertRows("bath_monthly_plan_units", [
     { tenant_id: "kt-group", client_id: g5, office_id: OFFICE_ID, target_month: "2026-12-01", planned_units: 5064 },
+  ], { dryRun: !EXECUTE });
+
+  // G7: 売上見込 (includeScheduled) の SCHED_CODE 予防給付対応検証用に
+  //     未記録のシフト予定を1件追加 (status=scheduled, record_id=null)
+  await insertRows("kaigo_bath_schedule", [
+    { tenant_id: "kt-group", office_id: OFFICE_ID, client_id: g7, visit_date: "2026-12-26", bath_type: "全身浴", scheme: "介護保険", status: "scheduled", record_id: null, visit_order: 1 },
   ], { dryRun: !EXECUTE });
 
   // G6: 虐防(高齢者虐待防止措置未実施)減算を事業所単位で一時適用
@@ -138,7 +154,7 @@ async function doSeed() {
   console.log(EXECUTE ? "✅ 投入完了" : "【DRY RUN】--execute で実際に投入します");
   if (EXECUTE) {
     console.log(`G1(中山間)=${g1} G2(部分公費)=${g2} G3(認知症Ⅰ)=${g3}`);
-    console.log(`G4(月内変更)=${g4} G5(限度額ちょうど)=${g5} G6(虐防業未)=${g6}`);
+    console.log(`G4(月内変更)=${g4} G5(限度額ちょうど)=${g5} G6(虐防業未)=${g6} G7(予防+虐防業未)=${g7}`);
   }
 }
 

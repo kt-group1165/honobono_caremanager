@@ -15,18 +15,20 @@ export default async function BathProvisionPage({
 }) {
   const { user: userId, office: officeId } = await searchParams;
   let userName: string | null = null;
+  let careLevel: string | null = null;
   const month = currentMonthStr();
   let initialData: LoadBathProvisionDataResult | null = null;
   let loadedOfficeId: string | null = null;
   if (userId) {
     const supabase = await createClient();
-    const { data } = await supabase.from("clients").select("name").eq("id", userId).maybeSingle();
+    const { data } = await supabase.from("clients").select("name, care_level").eq("id", userId).maybeSingle();
     userName = (data as { name?: string } | null)?.name ?? null;
+    careLevel = (data as { care_level?: string | null } | null)?.care_level ?? null;
 
     if (officeId) {
       const [y, m] = month.split("-").map(Number);
       try {
-        initialData = await loadBathProvisionData(supabase, userId, officeId, y, m);
+        initialData = await loadBathProvisionData(supabase, userId, officeId, y, m, careLevel);
         loadedOfficeId = officeId;
       } catch (e) {
         console.error("bath-provision: 提供表の取得に失敗:", e instanceof Error ? e.message : e);
@@ -42,6 +44,7 @@ export default async function BathProvisionPage({
           key={userId}
           userId={userId}
           userName={userName}
+          careLevel={careLevel}
           initialOfficeId={loadedOfficeId}
           initialMonth={month}
           initialData={initialData}

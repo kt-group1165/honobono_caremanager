@@ -43,7 +43,7 @@ import {
 } from "@/lib/cert-for-month";
 import { resolveKohiForMonth, kohiHobetsuLabel } from "@/lib/kohi";
 import { isYoboLevel } from "@/lib/yobo-kubun";
-import { bathAddonCodesFor, isBathBaseCode, BATH_ADDON_CODES_KAIGO, BATH_ADDON_CODES_YOBO } from "@/lib/bath-seikyu/resolve-code";
+import { bathAddonCodesFor, isBathBaseCode, resolveBathCode, BATH_ADDON_CODES_KAIGO, BATH_ADDON_CODES_YOBO } from "@/lib/bath-seikyu/resolve-code";
 import type { MonthlySeikyuResult, UserSeikyuRow, SeikyuDetailLine } from "@/lib/visit-seikyu/aggregate";
 
 type BathRec = {
@@ -128,8 +128,11 @@ export async function aggregateBathVisitSeikyu(
   //      も 1 件 = 1 訪問として積む。record_id が付いた行は 1) で拾っているので除外
   //      (二重計上防止)。算定コードは 入浴種別 × 通常体制 (職員のみでない) で仮置きする
   //      — 職員のみ (staff_only) は実績記録時に確定する情報なので予定段階では解決できない。
+  //      ⚠ 要介護度は resolveBathCode で判定する (isYoboLevel 経由。2026-09-05修正)。
+  //        以前は 121111/121112 固定で、予防給付の利用者の予定分だけ売上見込が
+  //        1.48倍の過大表示になっていた (B-1w系⑤)。
   if (opts.includeScheduled) {
-    const SCHED_CODE = { 全身浴: "121111", 部分浴: "121112" } as const;
+    const scheduled: { client_id: string; visit_date: string; bath_type: "全身浴" | "部分浴" }[] = [];
     let offset = 0;
     while (true) {
       let sq = supabase
@@ -150,17 +153,35 @@ export async function aggregateBathVisitSeikyu(
       for (const s of page) {
         // 地域生活支援 (千葉市移動支援等) は介護保険請求の対象外
         if (s.scheme && s.scheme !== "介護保険") continue;
+        scheduled.push({ client_id: s.client_id, visit_date: s.visit_date, bath_type: s.bath_type });
+      }
+      if (page.length < PAGE) break;
+      offset += PAGE;
+    }
+    if (scheduled.length > 0) {
+      const schedClientIds = Array.from(new Set(scheduled.map((s) => s.client_id)));
+      const schedCareLevel = new Map<string, string | null>();
+      for (let i = 0; i < schedClientIds.length; i += ID_IN_CHUNK) {
+        const chunk = schedClientIds.slice(i, i + ID_IN_CHUNK);
+        const { data, error } = await supabase
+          .from("client_insurance_records")
+          .select("client_id, care_level")
+          .in("client_id", chunk);
+        if (error) throw error;
+        for (const r of (data ?? []) as { client_id: string; care_level: string | null }[]) {
+          if (!schedCareLevel.has(r.client_id)) schedCareLevel.set(r.client_id, r.care_level);
+        }
+      }
+      for (const s of scheduled) {
         records.push({
           client_id: s.client_id,
           visit_date: s.visit_date,
-          service_code: SCHED_CODE[s.bath_type] ?? SCHED_CODE.全身浴,
+          service_code: resolveBathCode(s.bath_type, false, schedCareLevel.get(s.client_id) ?? null),
           addon_shokai: false,
           addon_ninchi: null,
           addon_chuusankan: false,
         });
       }
-      if (page.length < PAGE) break;
-      offset += PAGE;
     }
   }
   if (records.length === 0)
@@ -203,12 +224,22 @@ export async function aggregateBathVisitSeikyu(
     );
     if (gensanFlags.gyakutai || gensanFlags.bcp) {
       const label = gensanFlagsLabel(gensanFlags);
+      // ⚠ 予防給付(621xxx)も対象。isBathBaseCode で判定し、種類コードも
+      //   コードの体系(121→"12" / 621→"62")に合わせて渡す (B-1w系④・2026-09-05修正)。
+      //   これを直さないと 予防給付の利用者だけ減算が適用されず満額請求のままになる。
       const targets = baseCodes.filter(
-        (c) => c.startsWith("121") && codeMap.has(c),
+        (c) => isBathBaseCode(c) && codeMap.has(c),
       );
       const resolved = await Promise.all(
         targets.map((c) =>
-          resolveGensanVariant(supabase, codeMap.get(c)!.name, gensanFlags, year, month, "12"),
+          resolveGensanVariant(
+            supabase,
+            codeMap.get(c)!.name,
+            gensanFlags,
+            year,
+            month,
+            c.startsWith("621") ? "62" : "12",
+          ),
         ),
       );
       targets.forEach((c, i) => {

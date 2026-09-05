@@ -6,16 +6,22 @@ import { createClient } from "@/lib/supabase/client";
 import { useBusinessType } from "@/lib/business-type-context";
 import { validInMonth, monthRange } from "@/lib/service-code-valid";
 import { registerNavGuard } from "@/lib/nav-guard";
+import { resolveBathCode, isBathBaseCode } from "@/lib/bath-seikyu/resolve-code";
+import { isYoboLevel } from "@/lib/yobo-kubun";
 import { ChevronLeft, ChevronRight, Loader2, Printer, Droplets, Plus, Search, X, Save } from "lucide-react";
 
-// 訪問入浴の提供表 固定サービス行 (全身/部分 × 職員のみ)
-const BATH_ROWS = [
-  { code: "121111", label: "訪問入浴（全身浴）", bath_type: "全身浴" as const, staff_only: false },
-  { code: "121121", label: "訪問入浴（全身浴・職員のみ）", bath_type: "全身浴" as const, staff_only: true },
-  { code: "121112", label: "訪問入浴（部分浴・清拭）", bath_type: "部分浴" as const, staff_only: false },
-  { code: "121122", label: "訪問入浴（部分浴・職員のみ）", bath_type: "部分浴" as const, staff_only: true },
-];
-const BASE_CODES = new Set(BATH_ROWS.map((r) => r.code));
+// 訪問入浴の提供表 固定サービス行 (全身/部分 × 職員のみ)。
+// ⚠ 要介護度で 121xxx(介護給付)/621xxx(予防給付) が切り替わる。以前は 121xxx 固定で
+//   要支援/事業対象者の利用者に介護給付コードで記録を作ってしまっていた
+//   (B-1w系⑥・2026-09-05修正。判定は resolveBathCode = isYoboLevel のみに委ねる)。
+function bathBaseRows(careLevel: string | null | undefined): Row[] {
+  return [
+    { code: resolveBathCode("全身浴", false, careLevel), label: "訪問入浴（全身浴）", bath_type: "全身浴" as const, staff_only: false },
+    { code: resolveBathCode("全身浴", true, careLevel), label: "訪問入浴（全身浴・職員のみ）", bath_type: "全身浴" as const, staff_only: true },
+    { code: resolveBathCode("部分浴", false, careLevel), label: "訪問入浴（部分浴・清拭）", bath_type: "部分浴" as const, staff_only: false },
+    { code: resolveBathCode("部分浴", true, careLevel), label: "訪問入浴（部分浴・職員のみ）", bath_type: "部分浴" as const, staff_only: true },
+  ];
+}
 
 export type Rec = {
   id: string; // 未保存の新規セルは "tmp-<code>-<day>"
@@ -43,6 +49,7 @@ export async function loadBathProvisionData(
   officeId: string,
   y: number,
   m: number,
+  careLevel: string | null | undefined = null,
 ): Promise<LoadBathProvisionDataResult> {
   const { monthStart, monthEnd } = monthRange(y, m);
   const { data: recData, error: recErr } = await supabase
@@ -55,7 +62,7 @@ export async function loadBathProvisionData(
   if (recErr) throw recErr;
   const records = (recData ?? []) as Rec[];
 
-  const codes = Array.from(new Set([...BATH_ROWS.map((r) => r.code), ...records.map((r) => r.service_code).filter(Boolean) as string[]]));
+  const codes = Array.from(new Set([...bathBaseRows(careLevel).map((r) => r.code), ...records.map((r) => r.service_code).filter(Boolean) as string[]]));
   const { data: uData } = await validInMonth(
     supabase.from("kaigo_service_codes").select("service_code, service_name, units").in("service_code", codes).eq("system", "介護"),
     y,
@@ -72,12 +79,14 @@ export async function loadBathProvisionData(
 export function BathProvisionContent({
   userId,
   userName,
+  careLevel = null,
   initialOfficeId = null,
   initialMonth = null,
   initialData = null,
 }: {
   userId: string;
   userName: string | null;
+  careLevel?: string | null;
   initialOfficeId?: string | null;
   initialMonth?: string | null;
   initialData?: LoadBathProvisionDataResult | null;
@@ -133,7 +142,7 @@ export function BathProvisionContent({
     if (!currentOfficeId) { setRecords([]); setSavedRecords([]); setDirty(false); return; }
     setLoading(true);
     try {
-      const result = await loadBathProvisionData(supabase, userId, currentOfficeId, y, m);
+      const result = await loadBathProvisionData(supabase, userId, currentOfficeId, y, m, careLevel);
       setRecords(result.records);
       setSavedRecords(result.records);
       setDirty(false);
@@ -145,7 +154,7 @@ export function BathProvisionContent({
     } finally {
       setLoading(false);
     }
-  }, [supabase, userId, currentOfficeId, y, m]);
+  }, [supabase, userId, currentOfficeId, y, m, careLevel]);
 
   const isInitialMount = useRef(true);
   useEffect(() => {
@@ -158,14 +167,15 @@ export function BathProvisionContent({
     load();
   }, [load, initialData, initialOfficeId, initialMonth, currentOfficeId, month]);
 
-  // 表示行 = 固定4行 + (実績にあるコード + 追加コード) のうち非固定
+  // 表示行 = 固定4行 (要介護度で121xxx/621xxxに切替) + (実績にあるコード + 追加コード) のうち非固定
+  const baseRows = useMemo(() => bathBaseRows(careLevel), [careLevel]);
   const displayRows = useMemo<Row[]>(() => {
     const extra = new Set<string>();
-    for (const c of extraCodes) if (!BASE_CODES.has(c)) extra.add(c);
-    for (const r of records) { const c = r.service_code; if (c && !BASE_CODES.has(c)) extra.add(c); }
+    for (const c of extraCodes) if (!isBathBaseCode(c)) extra.add(c);
+    for (const r of records) { const c = r.service_code; if (c && !isBathBaseCode(c)) extra.add(c); }
     const extraRows: Row[] = Array.from(extra).sort().map((code) => ({ code, label: nameByCode[code] ?? code, bath_type: "全身浴", staff_only: false }));
-    return [...BATH_ROWS, ...extraRows];
-  }, [extraCodes, records, nameByCode]);
+    return [...baseRows, ...extraRows];
+  }, [baseRows, extraCodes, records, nameByCode]);
 
   const recByCell = useMemo(() => {
     const map = new Map<string, Rec>();
@@ -317,8 +327,8 @@ export function BathProvisionContent({
     });
     const totalActual = rows.reduce((s, r) => s + r.actual, 0);
     const totalUnits = rows.reduce((s, r) => s + r.actualUnits, 0);
-    const daysUsed = new Set(records.filter((r) => r.actual && BASE_CODES.has(r.service_code ?? "")).map((r) => r.visit_date)).size;
-    return { rows: rows.filter((r) => BASE_CODES.has(r.code) || r.actual > 0 || r.planned > 0), totalActual, totalUnits, daysUsed };
+    const daysUsed = new Set(records.filter((r) => r.actual && isBathBaseCode(r.service_code)).map((r) => r.visit_date)).size;
+    return { rows: rows.filter((r) => isBathBaseCode(r.code) || r.actual > 0 || r.planned > 0), totalActual, totalUnits, daysUsed };
   }, [displayRows, counts, unitByCode, records]);
 
   const cellCls = (on: boolean, which: "planned" | "actual") =>
@@ -394,7 +404,7 @@ export function BathProvisionContent({
               {displayRows.map((row) => {
                 const c = counts(row.code);
                 const unit = unitByCode[row.code] ?? 0;
-                const isExtra = !BASE_CODES.has(row.code);
+                const isExtra = !isBathBaseCode(row.code);
                 return (
                   <tbody key={row.code}>
                     <tr>
@@ -469,6 +479,7 @@ export function BathProvisionContent({
         <AddServiceModal
           y={y}
           m={m}
+          careLevel={careLevel}
           excludeCodes={shownCodes}
           onClose={() => setShowAdd(false)}
           onPick={(code) => {
@@ -494,12 +505,16 @@ export function BathProvisionContent({
   );
 }
 
-// ── サービス追加モーダル: 種類12 のコードから選ぶ (処遇改善系は除外=請求で自動) ──
+// ── サービス追加モーダル: 種類12(介護給付)/62(予防給付) のコードから選ぶ
+//    (要介護度で切替。処遇改善系は除外=請求で自動)。
+//    ⚠ 以前は "12%" 固定で、予防給付(要支援/事業対象者)の利用者には
+//    加算の選択肢が一切出なかった (B-1w系⑦・2026-09-05修正)。
 function AddServiceModal({
-  y, m, excludeCodes, onClose, onPick,
+  y, m, careLevel, excludeCodes, onClose, onPick,
 }: {
   y: number;
   m: number;
+  careLevel?: string | null;
   excludeCodes: Set<string>;
   onClose: () => void;
   onPick: (code: string) => void;
@@ -508,12 +523,13 @@ function AddServiceModal({
   const [opts, setOpts] = useState<{ code: string; name: string; units: number }[]>([]);
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
+  const prefix = isYoboLevel(careLevel) ? "62%" : "12%";
 
   useEffect(() => {
     let alive = true;
     (async () => {
       const { data } = await validInMonth(
-        supabase.from("kaigo_service_codes").select("service_code, service_name, units").like("service_code", "12%").eq("system", "介護"),
+        supabase.from("kaigo_service_codes").select("service_code, service_name, units").like("service_code", prefix).eq("system", "介護"),
         y,
         m,
       );

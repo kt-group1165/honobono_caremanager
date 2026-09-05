@@ -170,7 +170,10 @@ interface MasterRow {
  *      トークン multiset が期待どおり一致する行を選ぶ (並び順に依存しない安全網)。
  *
  * 対象: system='介護' かつ service_category=serviceCategory
- *   ('11'=訪問介護 (default) / '12'=訪問入浴介護。トークン規則は共通)。
+ *   ('11'=訪問介護 (default) / '12'=訪問入浴介護 / '62'=介護予防訪問入浴介護。
+ *   トークン規則は共通 — 予防側は core が「予防訪問入浴」になるだけで、
+ *   buildGensanCandidateName は base 名の tokens[0] を core として使うため
+ *   呼出側で base 名さえ正しく渡せば自動的に予防側の合成コードも解決できる)。
  * ※ calculation_type では絞らない — 合成変種は マスタ上 基本/加算/減算 type の行がある。
  * 見つからなければ null (呼出側で base のまま集計 + warning)。
  */
@@ -180,7 +183,7 @@ export async function resolveGensanVariant(
   flags: GensanFlags,
   year: number,
   month: number,
-  serviceCategory: "11" | "12" = "11",
+  serviceCategory: "11" | "12" | "62" = "11",
 ): Promise<GensanVariant | null> {
   if (!baseServiceName || (!flags.gyakutai && !flags.bcp)) return null;
   const candidate = buildGensanCandidateName(baseServiceName, flags);
