@@ -62,6 +62,17 @@ const CHECKS: Check[] = [
   { name: "same-building", script: "check:same-building", why: "同一建物減算" },
   { name: "seikatsu-enjo", script: "check:seikatsu-enjo", why: "生活援助中心型の回数制限" },
   { name: "visit-addons", script: "check:visit-addons", why: "訪問介護の加算 (116274 混入ガード)" },
+  // ★ 2026-09-05 の 45 本仕分け (J) で ★ 「作ったのに 回す入口が無かった」と分かったもののうち、
+  //   ★ 金額か返戻に直結する 9 本を編入。★ 全部 実行して EXIT=0 を確認済み。
+  { name: "fb-zengin", script: "check:fb-zengin", why: "★ 全銀フォーマット (口座振替。桁・カナが崩れると 引き落とし不能)" },
+  { name: "kohi-duplicate", script: "check:kohi-duplicate", why: "★ 公費の重複 (取込のたびに増える。部分公費が来た月に返戻)", slow: true },
+  { name: "kohi-tiebreak", script: "check:kohi-tiebreak", why: "公費が複数あるときの採用順" },
+  { name: "keikakuhi-8124", script: "check:keikakuhi-8124", why: "居宅介護支援費 8124 の組み立て" },
+  { name: "kyufu-kanri-8222", script: "check:kyufu-kanri-8222", why: "給付管理票 8222 の組み立て" },
+  { name: "kyufu-kanri-boundary", script: "check:kyufu-kanri-boundary", why: "給付管理票の境界値" },
+  { name: "shogai-j11-boundary", script: "check:shogai-j11-boundary", why: "障害 J11 系の境界値" },
+  { name: "shogai-j411-boundary", script: "check:shogai-j411-boundary", why: "障害 J411 (上限管理) の境界値" },
+  { name: "gendo-allocation", script: "check:gendo-allocation", why: "区分支給限度基準額 超過の割振り (★ 超過単位は 自費金額に直結)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
