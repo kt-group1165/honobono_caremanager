@@ -29,6 +29,7 @@
     "check:kyotaku-addon-active": "tsx scripts/kyotaku-addon-active-verify.mts",
     "check:shogai-unit-price": "tsx scripts/shogai-unit-price-verify.mts",
     "check:juho-tier": "tsx scripts/juho-tier-verify.mts",
+    "check:record-markers": "tsx scripts/record-markers-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
