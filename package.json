@@ -113,6 +113,7 @@
     "check:sougou-densou-71r1": "tsx scripts/sougou-densou-71r1-verify.mts",
     "check:sougou-densou-diff-one": "tsx scripts/sougou-densou-diff.mts",
     "check:teigen-yobo-measure": "tsx scripts/teigen-yobo-measure.mts",
+    "check:yobo-shien-densou": "tsx scripts/yobo-shien-densou-verify.mts",
     "check:unused-tables": "tsx scripts/unused-tables-check.mts",
     "check:uriage-kyotaku-diff": "tsx scripts/uriage-kyotaku-diff.mts",
     "check:uriage-report-diff": "tsx scripts/uriage-report-diff.mts",
