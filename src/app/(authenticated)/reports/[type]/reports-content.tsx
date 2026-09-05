@@ -190,11 +190,13 @@ const TD = ({ children, className = "", colSpan, rowSpan, style }: {
 // Input helpers for edit mode
 // ---------------------------------------------------------------------------
 
-function FI({ label, value, onChange, textarea, rows = 3, className = "", bunrei }: {
+function FI({ label, value, onChange, textarea, rows = 3, className = "", bunrei, hint }: {
   label: string; value: string; onChange: (v: string) => void;
   textarea?: boolean; rows?: number; className?: string;
   /** 指定すると「文例」ボタン (文例データベースからの挿入) をラベル横に表示する */
   bunrei?: BunreiCategory;
+  /** 指定するとラベル横に小さく表示する (例: 保存値とマスタが食い違うときの「現在の認定」表示) */
+  hint?: React.ReactNode;
 }) {
   return (
     <div className={`flex flex-col gap-0.5 ${className}`}>
@@ -204,7 +206,7 @@ function FI({ label, value, onChange, textarea, rows = 3, className = "", bunrei
           <BunreiPicker category={bunrei} currentText={value} onInsert={onChange} multiline={!!textarea} />
         </div>
       ) : (
-        <label className="text-xs font-medium text-gray-500">{label}</label>
+        <label className="text-xs font-medium text-gray-500">{label}{hint}</label>
       )}
       {textarea ? (
         <textarea rows={rows} value={value} onChange={(e) => onChange(e.target.value)}
@@ -354,8 +356,8 @@ function buildPrintResolvedContent(
   content: Record<string, unknown>,
   cert: MasterCertRow | null,
   client: ClientMasterRow | null,
-): { resolved: Record<string, unknown>; notices: string[] } {
-  if (!MASTER_OVERRIDE_REPORT_TYPES.includes(reportType)) return { resolved: content, notices: [] };
+): { resolved: Record<string, unknown>; notices: string[]; fields: Record<string, ReturnType<typeof resolveMasterField>> } {
+  if (!MASTER_OVERRIDE_REPORT_TYPES.includes(reportType)) return { resolved: content, notices: [], fields: {} };
 
   const s = (k: string): string | null => (typeof content[k] === "string" ? (content[k] as string) : null);
   const resolvedFields: Record<string, ReturnType<typeof resolveMasterField>> = {};
@@ -416,7 +418,26 @@ function buildPrintResolvedContent(
     insured_number: "被保険者番号", insurer_name: "保険者名", limit_amount: "支給限度額",
   };
   const notices = collectChangedNotices(resolvedFields, labels);
-  return { resolved: out, notices };
+  return { resolved: out, notices, fields: resolvedFields };
+}
+
+/**
+ * EditForm の該当欄の横に出す「現在のマスタ値」小さなヒント。
+ * ⚠ 値は書き換えない (呼出側がクリックで埋める処理を別途持つ)。一致しているときは
+ *   何も表示しない (呼出側で resolved.changed === false のときに描画しないこと)。
+ */
+function MasterValueHint({ resolved, onFill }: { resolved: ReturnType<typeof resolveMasterField> | undefined; onFill?: (value: string) => void }) {
+  if (!resolved || !resolved.changed) return null;
+  return (
+    <span className="no-print ml-2 inline-flex items-center gap-1 text-xs text-amber-700">
+      現在の認定: {resolved.value}
+      {onFill && (
+        <button type="button" onClick={() => onFill(resolved.value)} className="underline hover:text-amber-900">
+          反映
+        </button>
+      )}
+    </span>
+  );
 }
 
 // モジュールレベルでキャッシュ（複数のインスタンスで共有）
@@ -1030,11 +1051,13 @@ function YOBO_EMPTY_GOAL(): YoboGoal {
 // Edit Forms per report type
 // ---------------------------------------------------------------------------
 
-function EditFormCarePlan1({ content, onChange, userId }: {
+function EditFormCarePlan1({ content, onChange, userId, masterFields }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
   /** clients.id。アセスメント連動 AI 生成に使用。未指定なら AI ボタン非表示。 */
   userId?: string;
+  /** 保存値とマスタが食い違う欄のヒント表示用 (2026-09-05)。無ければ何も出さない */
+  masterFields?: Record<string, ReturnType<typeof resolveMasterField>>;
 }) {
   const s = (key: string) => (String(content[key] ?? ""));
   const set = (key: string, v: string) => onChange({ ...content, [key]: v });
@@ -1201,7 +1224,8 @@ function EditFormCarePlan1({ content, onChange, userId }: {
         <FI label="住所" value={s("address")} onChange={(v) => set("address", v)} className="col-span-2" />
       </div>
       <div className="col-span-2 grid grid-cols-5 gap-3">
-        <FI label="要介護度" value={s("care_level")} onChange={(v) => set("care_level", v)} />
+        <FI label="要介護度" value={s("care_level")} onChange={(v) => set("care_level", v)}
+          hint={<MasterValueHint resolved={masterFields?.care_level} onFill={(v) => set("care_level", v)} />} />
         <FI label="認定日" value={s("certification_date")} onChange={(v) => set("certification_date", v)} />
         <FI label="認定有効期間" value={s("cert_period")} onChange={(v) => set("cert_period", v)} />
         <FI label="計画作成（変更）日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
@@ -1806,13 +1830,15 @@ function EditFormCarePlan3({ content, onChange }: {
  *     利用者負担額 (保険分・全額分) / 適用公費 / 差引利用者負担額 — 既存実装を流用
  *   - 頻度列 (週◯) は仕様どおり入れない
  */
-function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
+function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterFields }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
   /** clients.id - 福祉用具貸与行の単位数自動算出 (order_items 突合) に使う。 */
   userId?: string;
   /** doc.report_month (content.report_month 未設定の旧データ用フォールバック) */
   reportMonth?: string | null;
+  /** 保存値とマスタが食い違う欄のヒント表示用 (2026-09-05)。無ければ何も出さない */
+  masterFields?: Record<string, ReturnType<typeof resolveMasterField>>;
 }) {
   const s = (k: string) => String(content[k] ?? "");
   const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
@@ -2105,7 +2131,8 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth }: {
         <FI label="利用者氏名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
       </div>
       <div className="grid grid-cols-5 gap-3">
-        <FI label="要介護状態区分（要支援含む）" value={s("care_level")} onChange={(v) => set("care_level", v)} />
+        <FI label="要介護状態区分（要支援含む）" value={s("care_level")} onChange={(v) => set("care_level", v)}
+          hint={<MasterValueHint resolved={masterFields?.care_level} onFill={(v) => set("care_level", v)} />} />
         <FI label="変更後要介護状態区分" value={s("care_level_changed")} onChange={(v) => set("care_level_changed", v)} />
         <FI label="変更日" value={s("care_level_change_date")} onChange={(v) => set("care_level_change_date", v)} />
         <FI label="区分支給限度基準額" value={s("limit_amount")} onChange={(v) => set("limit_amount", v)} />
@@ -3357,13 +3384,15 @@ function GendoAllocationPanel({ userId, targetMonth, items, fallbackLimit }: {
   );
 }
 
-function EditFormUsageDetail({ content, onChange, userId, reportMonth }: {
+function EditFormUsageDetail({ content, onChange, userId, reportMonth, masterFields }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
   /** clients.id (限度額割振りの保存キー) */
   userId?: string;
   /** doc.report_month */
   reportMonth?: string | null;
+  /** 保存値とマスタが食い違う欄のヒント表示用 (2026-09-05)。無ければ何も出さない */
+  masterFields?: Record<string, ReturnType<typeof resolveMasterField>>;
 }) {
   const s = (k: string) => String(content[k] ?? "");
   const set = (k: string, v: unknown) => onChange({ ...content, [k]: v });
@@ -3409,7 +3438,8 @@ function EditFormUsageDetail({ content, onChange, userId, reportMonth }: {
     <div className="p-4 space-y-4">
       <div className="grid grid-cols-4 gap-3">
         <FI label="利用者名" value={s("user_name")} onChange={(v) => set("user_name", v)} />
-        <FI label="要介護度" value={s("care_level")} onChange={(v) => set("care_level", v)} />
+        <FI label="要介護度" value={s("care_level")} onChange={(v) => set("care_level", v)}
+          hint={<MasterValueHint resolved={masterFields?.care_level} onFill={(v) => set("care_level", v)} />} />
         <FI label="区分支給限度基準額" value={s("limit_amount")} onChange={(v) => set("limit_amount", v)} />
         <FI label="作成年月日" value={s("creation_date")} onChange={(v) => set("creation_date", v)} />
       </div>
@@ -4884,9 +4914,11 @@ const YOBO_PROGRAM_OPTIONS = [
   "うつ予防・支援",
 ] as const;
 
-function EditFormYoboCarePlan({ content, onChange }: {
+function EditFormYoboCarePlan({ content, onChange, masterFields }: {
   content: Record<string, unknown>;
   onChange: (c: Record<string, unknown>) => void;
+  /** 保存値とマスタが食い違う欄のヒント表示用 (2026-09-05)。無ければ何も出さない */
+  masterFields?: Record<string, ReturnType<typeof resolveMasterField>>;
 }) {
   const s = (key: string) => String(content[key] ?? "");
   const set = (key: string, v: unknown) => onChange({ ...content, [key]: v });
@@ -4928,7 +4960,7 @@ function EditFormYoboCarePlan({ content, onChange }: {
             <input className={inputCls} value={s("cert_period")} onChange={(e) => set("cert_period", e.target.value)} />
           </div>
           <div>
-            <label className={labelCls}>要支援状態区分</label>
+            <label className={labelCls}>要支援状態区分<MasterValueHint resolved={masterFields?.care_level} onFill={(v) => set("care_level", v)} /></label>
             <input className={inputCls} value={s("care_level")} onChange={(e) => set("care_level", e.target.value)} />
           </div>
           <div>
@@ -5255,21 +5287,23 @@ export function PrintView({ reportType, content, config }: {
   }
 }
 
-function EditForm({ reportType, content, onChange, userId, reportMonth }: {
+function EditForm({ reportType, content, onChange, userId, reportMonth, masterFields }: {
   reportType: string; content: Record<string, unknown>; onChange: (c: Record<string, unknown>) => void;
   /** clients.id - 第1表/第2表のアセスメント連動 AI + 別表の限度額割振りに渡す。 */
   userId?: string;
   /** doc.report_month - 利用票/別表の対象月 (世代解決・曜日計算) */
   reportMonth?: string | null;
+  /** 保存値とマスタが食い違う欄のヒント表示用 (2026-09-05・printResolved.fields をそのまま渡す)。無ければ何も出さない */
+  masterFields?: Record<string, ReturnType<typeof resolveMasterField>>;
 }) {
   switch (reportType) {
-    case "care-plan-1":       return <EditFormCarePlan1 content={content} onChange={onChange} userId={userId} />;
+    case "care-plan-1":       return <EditFormCarePlan1 content={content} onChange={onChange} userId={userId} masterFields={masterFields} />;
     case "care-plan-2":       return <EditFormCarePlan2 content={content} onChange={onChange} userId={userId} />;
     case "care-plan-3":       return <EditFormCarePlan3 content={content} onChange={onChange} />;
-    case "yobo-care-plan":    return <EditFormYoboCarePlan content={content} onChange={onChange} />;
+    case "yobo-care-plan":    return <EditFormYoboCarePlan content={content} onChange={onChange} masterFields={masterFields} />;
     case "support-progress":  return <EditFormSupportProgress content={content} onChange={onChange} />;
-    case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} userId={userId} reportMonth={reportMonth} />;
-    case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} userId={userId} reportMonth={reportMonth} />;
+    case "service-usage":        return <EditFormServiceTicket content={content} onChange={onChange} userId={userId} reportMonth={reportMonth} masterFields={masterFields} />;
+    case "service-usage-detail": return <EditFormUsageDetail content={content} onChange={onChange} userId={userId} reportMonth={reportMonth} masterFields={masterFields} />;
     case "shujii-iken":       return <EditFormShujiiIken content={content} onChange={onChange} />;
     default: return <EditFormGeneric content={content} onChange={onChange} label="内容（JSON編集）" />;
   }
@@ -5840,7 +5874,7 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
   const printResolved = useMemo(
     () => masterData
       ? buildPrintResolvedContent(doc.report_type, content, masterData.cert, masterData.client)
-      : { resolved: content, notices: [] },
+      : { resolved: content, notices: [] as string[], fields: {} as Record<string, ReturnType<typeof resolveMasterField>> },
     [doc.report_type, content, masterData],
   );
   const isLandscape = config.landscape ?? false;
@@ -5945,7 +5979,7 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
 
       {/* Edit form */}
       <div className="no-print border-b bg-gray-50">
-        <EditForm reportType={doc.report_type} content={content} onChange={handleChange} userId={doc.user_id} reportMonth={doc.report_month} />
+        <EditForm reportType={doc.report_type} content={content} onChange={handleChange} userId={doc.user_id} reportMonth={doc.report_month} masterFields={printResolved.fields} />
       </div>
 
       {/* Print preview — scales to fit container width */}
