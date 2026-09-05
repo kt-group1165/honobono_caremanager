@@ -36,6 +36,7 @@
     "check:houmon-plan-alert": "tsx scripts/houmon-plan-alert-verify.mts",
     "check:re-seikyu-shogai": "tsx scripts/re-seikyu-shogai-verify.mts",
     "check:kubun-gendo": "tsx scripts/kubun-gendo-verify.mts",
+    "check:aggregate-honbu": "tsx scripts/aggregate-honbu-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

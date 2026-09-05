@@ -67,7 +67,7 @@ function addInto(dst: HonbuSummary, src: HonbuSummary): void {
 }
 
 /** 介護給付 / 総合事業 / 入浴給付 の UserSeikyuRow[] を summary に畳む */
-function sumKaigo(rows: UserSeikyuRow[]): HonbuSummary {
+export function sumKaigo(rows: UserSeikyuRow[]): HonbuSummary {
   const s = emptySummary();
   for (const r of rows) {
     s.count += 1;
@@ -81,7 +81,7 @@ function sumKaigo(rows: UserSeikyuRow[]): HonbuSummary {
 }
 
 /** 障害福祉 の ShogaiSeikyuRow[] を summary に畳む (給付費を insuranceAmount 扱い) */
-function sumShogai(rows: ShogaiSeikyuRow[]): HonbuSummary {
+export function sumShogai(rows: ShogaiSeikyuRow[]): HonbuSummary {
   const s = emptySummary();
   for (const r of rows) {
     s.count += 1;
@@ -231,6 +231,50 @@ async function aggregateOffice(
   };
 }
 
+const NO_COMPANY = "__none__";
+
+/**
+ * 事業所別集計行を 法人 (company_id) でグループ化し、法人小計・全社総計を出す。
+ * company_id=null は「(法人未設定)」として末尾にまとめる (DBループの外に切り出し、
+ * ハーネスから呼べるようにしたもの。挙動不変)。
+ */
+export function groupOfficesByCompany(
+  officeRows: HonbuOfficeRow[],
+  companyNames: Map<string, string>,
+): { groups: HonbuCompanyGroup[]; grand: HonbuSeidoTotals } {
+  const byCompany = new Map<string, HonbuOfficeRow[]>();
+  for (const row of officeRows) {
+    const key = row.companyId ?? NO_COMPANY;
+    if (!byCompany.has(key)) byCompany.set(key, []);
+    byCompany.get(key)!.push(row);
+  }
+
+  const grand = emptyTotals();
+  const groups: HonbuCompanyGroup[] = [];
+  for (const [key, rows] of byCompany) {
+    const subtotal = emptyTotals();
+    for (const row of rows) {
+      addRowIntoTotals(subtotal, row);
+      addRowIntoTotals(grand, row);
+    }
+    groups.push({
+      companyId: key === NO_COMPANY ? null : key,
+      companyName:
+        key === NO_COMPANY ? "(法人未設定)" : companyNames.get(key) ?? "(法人名不明)",
+      offices: rows,
+      subtotal,
+    });
+  }
+  // 法人名の五十音で安定ソート ((法人未設定) は末尾)
+  groups.sort((a, b) => {
+    if (a.companyId === null) return 1;
+    if (b.companyId === null) return -1;
+    return a.companyName.localeCompare(b.companyName, "ja");
+  });
+
+  return { groups, grand };
+}
+
 /**
  * 自社全事業所 (app_type='kaigo-app') の月次請求を横断集計し、法人ごとにグループ化して返す。
  */
@@ -286,36 +330,7 @@ export async function aggregateHonbu(
   });
 
   // 4) 法人でグループ化 (company_id=null は「(法人未設定)」)
-  const NO_COMPANY = "__none__";
-  const byCompany = new Map<string, HonbuOfficeRow[]>();
-  for (const row of officeRows) {
-    const key = row.companyId ?? NO_COMPANY;
-    if (!byCompany.has(key)) byCompany.set(key, []);
-    byCompany.get(key)!.push(row);
-  }
-
-  const grand = emptyTotals();
-  const groups: HonbuCompanyGroup[] = [];
-  for (const [key, rows] of byCompany) {
-    const subtotal = emptyTotals();
-    for (const row of rows) {
-      addRowIntoTotals(subtotal, row);
-      addRowIntoTotals(grand, row);
-    }
-    groups.push({
-      companyId: key === NO_COMPANY ? null : key,
-      companyName:
-        key === NO_COMPANY ? "(法人未設定)" : companyNames.get(key) ?? "(法人名不明)",
-      offices: rows,
-      subtotal,
-    });
-  }
-  // 法人名の五十音で安定ソート ((法人未設定) は末尾)
-  groups.sort((a, b) => {
-    if (a.companyId === null) return 1;
-    if (b.companyId === null) return -1;
-    return a.companyName.localeCompare(b.companyName, "ja");
-  });
+  const { groups, grand } = groupOfficesByCompany(officeRows, companyNames);
 
   return { year, month, groups, grand, errors };
 }
