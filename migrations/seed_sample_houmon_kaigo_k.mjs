@@ -175,9 +175,12 @@ async function main() {
     //   sampleInsurance は insured_number を入れないので、ここで補う。
     //   入れないと buildKokuhoDensou が「被保険者番号が未登録」で伝送から除外し、
     //   段2 が 1 行も検証できない (実際に踏んだ)。
+    // ⚠ 2026-09-05 是正: tag+seq (または insuredNumber) を渡さないと sampleInsurance が
+    //   即 throw する (_sample_data.mjs 2026-09-03 是正で追加された安全チェック)。
+    //   extra.insured_number は throw の後に評価されるため単独では効かない。
     await insertRows("client_insurance_records",
       [sampleInsurance(clientId, {
-        careLevel: p.careLevel, copayIdx: p.copayIdx,
+        careLevel: p.careLevel, copayIdx: p.copayIdx, tag: TAG, seq: p.seq,
         extra: { insured_number: client.insured_number },
       })], { dryRun: DRY });
     await insertRows("client_office_assignments",
