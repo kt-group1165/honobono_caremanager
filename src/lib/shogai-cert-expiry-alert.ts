@@ -195,48 +195,67 @@ export async function scanShogaiCertExpiry(
   // 5) 「現在の受給者証」を選んで段階判定 + 更新済み除外
   const alerts: ShogaiCertAlert[] = [];
   for (const [clientId, rows] of certsByClient) {
-    const sorted = [...rows].sort((a, b) =>
-      (b.certification_start_date ?? "").localeCompare(a.certification_start_date ?? ""),
-    );
-    const current = sorted.find(
-      (r) => r.certification_start_date === null || r.certification_start_date <= todayIso,
-    );
-    if (!current || !current.certification_end_date) continue;
-
-    const end = current.certification_end_date;
-    let stage: ShogaiCertStage | null = null;
-    if (end < todayIso) stage = "expired";
-    else if (end <= plus30) stage = "within30";
-    else if (end <= plus60) stage = "within60";
-    if (!stage) continue;
-
-    // ⚠ 更新済み除外。status 列が無いので「より新しい証があるか」だけで判定する。
-    const curStart = current.certification_start_date;
-    const renewed = sorted.some(
-      (r) =>
-        r.id !== current.id &&
-        r.certification_start_date !== null &&
-        (curStart === null || r.certification_start_date > curStart),
-    );
-    if (renewed) continue;
-
-    const endMid = isoToLocalDate(end)?.getTime();
-    const daysLeft = endMid == null ? 0 : Math.round((endMid - todayMid) / 86_400_000);
-
+    const resolved = resolveClientShogaiCertAlert(rows, { todayIso, plus30, plus60, todayMid });
+    if (!resolved) continue;
     alerts.push({
       clientId,
       clientName: nameById.get(clientId) ?? "(名前未取得)",
-      certId: current.id,
-      supportLevel: current.support_level,
-      beneficiaryNumber: current.beneficiary_number,
-      certEndDate: end,
-      stage,
-      daysLeft,
+      ...resolved,
     });
   }
 
   alerts.sort((a, b) => a.certEndDate.localeCompare(b.certEndDate));
   return alerts;
+}
+
+/**
+ * ★ 2026-09-05 切り出し: scanShogaiCertExpiry のループ本体
+ *   (段階判定 + 更新済み除外)。cert-expiry-alert.ts の
+ *   resolveClientCertAlert と同型。挙動は 1 ミリも変えていない。
+ *
+ * @returns アラート対象でなければ null
+ */
+export function resolveClientShogaiCertAlert(
+  rows: ShogaiCertRow[],
+  ctx: { todayIso: string; plus30: string; plus60: string; todayMid: number },
+): Omit<ShogaiCertAlert, "clientId" | "clientName"> | null {
+  const { todayIso, plus30, plus60, todayMid } = ctx;
+  const sorted = [...rows].sort((a, b) =>
+    (b.certification_start_date ?? "").localeCompare(a.certification_start_date ?? ""),
+  );
+  const current = sorted.find(
+    (r) => r.certification_start_date === null || r.certification_start_date <= todayIso,
+  );
+  if (!current || !current.certification_end_date) return null;
+
+  const end = current.certification_end_date;
+  let stage: ShogaiCertStage | null = null;
+  if (end < todayIso) stage = "expired";
+  else if (end <= plus30) stage = "within30";
+  else if (end <= plus60) stage = "within60";
+  if (!stage) return null;
+
+  // ⚠ 更新済み除外。status 列が無いので「より新しい証があるか」だけで判定する。
+  const curStart = current.certification_start_date;
+  const renewed = sorted.some(
+    (r) =>
+      r.id !== current.id &&
+      r.certification_start_date !== null &&
+      (curStart === null || r.certification_start_date > curStart),
+  );
+  if (renewed) return null;
+
+  const endMid = isoToLocalDate(end)?.getTime();
+  const daysLeft = endMid == null ? 0 : Math.round((endMid - todayMid) / 86_400_000);
+
+  return {
+    certId: current.id,
+    supportLevel: current.support_level,
+    beneficiaryNumber: current.beneficiary_number,
+    certEndDate: end,
+    stage,
+    daysLeft,
+  };
 }
 
 // ─── 通知メッセージ ───────────────────────────────────────────────────
