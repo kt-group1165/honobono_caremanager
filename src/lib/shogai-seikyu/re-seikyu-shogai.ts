@@ -62,6 +62,88 @@ interface FlaggedRow {
   kago_dougetsu?: boolean;
 }
 
+type ClientFlagInfo = { reasons: ShogaiReSeikyuReasons; kago: ShogaiKagoInfo | null };
+
+/**
+ * フラグ行を 提供月 → client_id → 理由 の2段マップにまとめる (DBループの外に切り出し、
+ * ハーネスから呼べるようにしたもの。挙動不変)。
+ */
+export function groupFlaggedByMonth(
+  flagged: FlaggedRow[],
+): Map<string, Map<string, ClientFlagInfo>> {
+  const byMonth = new Map<string, Map<string, ClientFlagInfo>>();
+  for (const f of flagged) {
+    if (!byMonth.has(f.target_month)) byMonth.set(f.target_month, new Map());
+    byMonth.get(f.target_month)!.set(f.client_id, {
+      reasons: {
+        tsukiokure: !!f.tsukiokure,
+        henrei: !!f.henrei,
+        kago: !!f.kago,
+      },
+      kago: f.kago
+        ? {
+            moushitateDate: f.kago_moushitate_date ?? null,
+            jiyuCode: f.kago_jiyu_code ?? null,
+            dougetsu: !!f.kago_dougetsu,
+          }
+        : null,
+    });
+  }
+  return byMonth;
+}
+
+/**
+ * ある提供月の再集計結果から、フラグが立っている利用者の行だけを抜き出し
+ * 元提供月・理由を付与する (フラグの無い利用者は含めない)。
+ */
+export function attachReSeikyuFlags(
+  rows: ShogaiSeikyuRow[],
+  monthKey: string,
+  ym: string,
+  clientFlags: Map<string, ClientFlagInfo>,
+): ShogaiReSeikyuRow[] {
+  const out: ShogaiReSeikyuRow[] = [];
+  for (const r of rows) {
+    const flags = clientFlags.get(r.user_id);
+    if (!flags) continue;
+    out.push({ ...r, __origMonthKey: monthKey, ym, __reasons: flags.reasons, __kago: flags.kago });
+  }
+  return out;
+}
+
+/**
+ * 再集計 warnings を、再請求フラグの立っている利用者分だけに絞り (ノイズ除去)、
+ * 「[再請求 R{和暦}/{月}] 」のプレフィックスを付ける。
+ */
+export function filterReSeikyuWarnings(
+  warnings: string[],
+  rows: ShogaiSeikyuRow[],
+  clientFlags: Map<string, ClientFlagInfo>,
+  y: number,
+  m: number,
+): string[] {
+  const flaggedNames = new Set<string>();
+  for (const r of rows) {
+    if (clientFlags.has(r.user_id)) flaggedNames.add(r.user_name);
+  }
+  return warnings
+    .filter((w) => [...flaggedNames].some((n) => w.includes(n)))
+    .map((w) => `[再請求 R${y - 2018}/${m}] ${w}`);
+}
+
+/** 古い提供月 → ふりがな順 (localeCompare "ja") に並べる */
+export function sortReSeikyuRows(rows: ShogaiReSeikyuRow[]): ShogaiReSeikyuRow[] {
+  return [...rows].sort((a, b) => {
+    if (a.__origMonthKey !== b.__origMonthKey) {
+      return a.__origMonthKey < b.__origMonthKey ? -1 : 1;
+    }
+    return (a.user_name_kana ?? a.user_name).localeCompare(
+      b.user_name_kana ?? b.user_name,
+      "ja",
+    );
+  });
+}
+
 /**
  * currentMonthKey より前の月で、月遅れ/返戻/過誤フラグが立っており、まだ伝送対象化
  * (densou_target) されていない利用者を、元提供月で再集計して返す。
@@ -108,27 +190,7 @@ export async function loadReSeikyuShogai(
   if (flagged.length === 0) return { rows: [], warnings: [] };
 
   // 2) 月ごとにまとめ、client_id → reasons / 過誤付帯情報 を引けるようにする
-  const byMonth = new Map<
-    string,
-    Map<string, { reasons: ShogaiReSeikyuReasons; kago: ShogaiKagoInfo | null }>
-  >();
-  for (const f of flagged) {
-    if (!byMonth.has(f.target_month)) byMonth.set(f.target_month, new Map());
-    byMonth.get(f.target_month)!.set(f.client_id, {
-      reasons: {
-        tsukiokure: !!f.tsukiokure,
-        henrei: !!f.henrei,
-        kago: !!f.kago,
-      },
-      kago: f.kago
-        ? {
-            moushitateDate: f.kago_moushitate_date ?? null,
-            jiyuCode: f.kago_jiyu_code ?? null,
-            dougetsu: !!f.kago_dougetsu,
-          }
-        : null,
-    });
-  }
+  const byMonth = groupFlaggedByMonth(flagged);
 
   // 3) 月ごとに元提供月で再集計 → 該当利用者のみ抽出
   const out: ShogaiReSeikyuRow[] = [];
@@ -145,40 +207,9 @@ export async function loadReSeikyuShogai(
       unitPrice: opts.unitPrice,
     });
 
-    // 再集計 warnings は再請求フラグの立っている利用者分のみに絞る (ノイズ除去)
-    const flaggedNames = new Set<string>();
-    for (const r of result.rows) {
-      if (clientFlags.has(r.user_id)) flaggedNames.add(r.user_name);
-    }
-    warnings.push(
-      ...result.warnings
-        .filter((w) => [...flaggedNames].some((n) => w.includes(n)))
-        .map((w) => `[再請求 R${y - 2018}/${m}] ${w}`),
-    );
-
-    for (const r of result.rows) {
-      const flags = clientFlags.get(r.user_id);
-      if (!flags) continue; // フラグの立っていない利用者は含めない
-      out.push({
-        ...r,
-        __origMonthKey: monthKey,
-        ym,
-        __reasons: flags.reasons,
-        __kago: flags.kago,
-      });
-    }
+    warnings.push(...filterReSeikyuWarnings(result.warnings, result.rows, clientFlags, y, m));
+    out.push(...attachReSeikyuFlags(result.rows, monthKey, ym, clientFlags));
   }
 
-  // 古い提供月 → ふりがな順
-  out.sort((a, b) => {
-    if (a.__origMonthKey !== b.__origMonthKey) {
-      return a.__origMonthKey < b.__origMonthKey ? -1 : 1;
-    }
-    return (a.user_name_kana ?? a.user_name).localeCompare(
-      b.user_name_kana ?? b.user_name,
-      "ja",
-    );
-  });
-
-  return { rows: out, warnings };
+  return { rows: sortReSeikyuRows(out), warnings };
 }
