@@ -20,6 +20,10 @@
 //   ② ①が無ければ 認定のうち一番新しいもの (画面の既定と同じ挙動に寄せる)
 //   ③ 認定を 1 件も持たない利用者は **NULL のまま**
 //      (画面側は selectedCertId が無い状態なので filter が効かず、そのまま表示される)
+//   ④ ⚠ 2026-09-05追加: 同一利用者に★異なる(保険者番号,被保険者番号)の認定が
+//      2件以上ある利用者は**スキップ**する (別人の認定が紛れ込んでいる疑い。
+//      実例: 金綱伸 — 121046|1004866628 と 122291|1004012089。転居か誤結合か
+//      当方データだけでは判定できないため、機械的な開始日順の自動選択はしない)。
 //
 //   node migrations/fix_assessment_cert_link.mjs            # DRY RUN
 //   node migrations/fix_assessment_cert_link.mjs --execute
@@ -71,7 +75,7 @@ async function main() {
   for (let i = 0; i < userIds.length; i += 200) {
     const { data, error } = await sb
       .from("client_insurance_records")
-      .select("id, client_id, care_level, certification_start_date, certification_end_date")
+      .select("id, client_id, insurer_number, insured_number, care_level, certification_start_date, certification_end_date")
       .in("client_id", userIds.slice(i, i + 200));
     if (error) { console.error(`✗ 認定の取得に失敗: ${error.message}`); process.exit(1); }
     certs.push(...data);
@@ -87,6 +91,18 @@ async function main() {
     clients.push(...(data ?? []));
   }
   const nameById = new Map(clients.map((c) => [c.id, c.name]));
+
+  // ⚠ 2026-09-05 H指摘で追加: 同一 client に★異なる (保険者番号, 被保険者番号) の
+  //   認定が2つ以上あるとき、その利用者は別人の認定が紛れ込んでいる疑いがある
+  //   (実例: 金綱伸 — 121046|1004866628 と 122291|1004012089 の2件。転居か誤結合か
+  //   当方データだけでは判定できない。fix_insurance_record_wrong_owner.mjsは検出方向が
+  //   逆 (1被保番→複数client) のためこのケースを拾えない)。
+  //   ★名前では判定しない — (保険者,被保番) の異なり数で機械的に検出する。
+  const multiIdentityUsers = new Set();
+  for (const [uid, list] of certsByUser) {
+    const pairs = new Set(list.map((c) => `${c.insurer_number ?? ""}|${c.insured_number ?? ""}`));
+    if (pairs.size > 1) multiIdentityUsers.add(uid);
+  }
 
   /** 実施日に有効な認定。無ければ一番新しい認定 (fix_care_plan_cert_link.mjs と同一規則) */
   function pickCert(a) {
@@ -110,8 +126,10 @@ async function main() {
 
   const links = [];
   const noCert = [];
+  const multiIdentity = [];
   let fallback = 0;
   for (const a of nulls) {
+    if (multiIdentityUsers.has(a.user_id)) { multiIdentity.push(a); continue; }
     const c = pickCert(a);
     if (!c) { noCert.push(a); continue; }
     const day = String(a.assessment_date ?? "").slice(0, 10);
@@ -134,6 +152,12 @@ async function main() {
 
   console.log(`\n対象外 (認定を 1 件も持たない = NULL のままで画面には出る): ${noCert.length} 件`);
   for (const a of noCert) console.log(`    ${nameById.get(a.user_id) ?? a.user_id} (実施日 ${a.assessment_date})`);
+
+  console.log(`\n要確認・スキップ (同一利用者に異なる(保険者,被保番)の認定が複数=別人混入の疑い): ${multiIdentity.length} 件`);
+  for (const a of multiIdentity) {
+    const pairs = [...new Set((certsByUser.get(a.user_id) ?? []).map((c) => `${c.insurer_number ?? ""}|${c.insured_number ?? ""}`))];
+    console.log(`    ${nameById.get(a.user_id) ?? a.user_id} (実施日 ${a.assessment_date}) — 保有する(保険者,被保番): ${pairs.join(" / ")}`);
+  }
 
   if (!EXECUTE) {
     console.log("\n※ DRY RUN。--execute で更新します。");
