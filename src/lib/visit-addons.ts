@@ -10,9 +10,14 @@ import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
  * - kaigo_service_codes を validInMonth(対象月) で引いて単位数・名称を解決し
  * - 利用者ごとの加算行リストにして返す。
  *
- * 集計 (visit-seikyu/aggregate.ts) はこれを呼んで明細行に足す。旧 3固定
- * (kaigo_visit_month_addons) の読取を置き換える。テーブル未作成 (42P01/PGRST205) は
- * 空 Map (加算なしで続行)。
+ * ⚠ 2026-09-05 是正: このコメントは元々「集計 (visit-seikyu/aggregate.ts) は
+ * これを呼ぶ」としていたが★事実と異なる★。visit-seikyu/aggregate.ts と
+ * shogai-seikyu/aggregate.ts はどちらもこの関数を呼ばず、同じテーブルを読む
+ * ★独自のinlineロジック★を持つ (formula/calculation_type/units<=0 のガード
+ * 付き。こちらには無い)。実際の呼び出し元は provision-tickets / visit-records
+ * の★表示専用★(プレビュー・印字用の投影)。billing の実装を変える際は
+ * ここではなく各 aggregate.ts 側を見ること。
+ * テーブル未作成 (42P01/PGRST205) は空 Map (加算なしで続行)。
  */
 
 export interface VisitAddonLine {
@@ -53,6 +58,10 @@ export async function resolveVisitAddonLines(
   const ids = Array.from(new Set(clientIds));
   if (ids.length === 0 || !officeId) return out;
   const monthStr = `${year}-${String(month).padStart(2, "0")}`;
+  // target_month の書式は制度で異なる (介護/総合事業="YYYY-MM" / 障害="YYYY-MM-01"。
+  // 取込 script が従来書いてきた書式に合わせてある。shogai-seikyu/aggregate.ts の
+  // 障害集計・provision-tickets の加算エディタと同じ規則 — 2026-09-05 是正)。
+  const addonTargetMonth = system === "障害" ? `${monthStr}-01` : monthStr;
 
   // 1) 加算行を取得 (system 列でフィルタ。列未適用は上記 fallback)
   const rows: LineRow[] = [];
@@ -65,7 +74,7 @@ export async function resolveVisitAddonLines(
         .from("kaigo_visit_addon_lines")
         .select("client_id, addon_code, count")
         .eq("office_id", officeId)
-        .eq("target_month", monthStr)
+        .eq("target_month", addonTargetMonth)
         .in("client_id", chunk);
       if (sysFilter) q = q.eq("system", system);
       const { data, error } = await q

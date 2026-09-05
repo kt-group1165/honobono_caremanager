@@ -690,11 +690,14 @@ export function ProvisionTicketsContent({
       //    system 列が無い間は全行を介護扱い (障害行はまだ存在し得ない)。
       let santeiOk = true;
       let sysOk = true;
+      // target_month の書式は制度で異なる (介護/総合事業="YYYY-MM" / 障害="YYYY-MM-01"。
+      // upsertAddonLine の addonTargetMonth と同じ理由)。system で絞る前の一括取得なので
+      // 両方の書式を or で受ける。
       let { data, error } = await supabase
         .from("kaigo_visit_addon_lines")
         .select("addon_code, count, santei_date, system")
         .eq("client_id", userId)
-        .eq("target_month", monthStr)
+        .or(`target_month.eq.${monthStr},target_month.eq.${monthStr}-01`)
         .eq("office_id", currentOfficeId);
       if (error && (error.code === "42703" || error.code === "PGRST204")) {
         sysOk = false;
@@ -1140,6 +1143,11 @@ export function ProvisionTicketsContent({
       const setLines = sys === "障害" ? setShogaiAddonLines : setAddonLines;
       const setDates = sys === "障害" ? setShogaiAddonDates : setAddonDates;
       const curDates = sys === "障害" ? shogaiAddonDates : addonDates;
+      // target_month の書式は制度で異なる (既存データの実態に合わせる — 2026-09-05 是正):
+      //   介護/総合事業 = "YYYY-MM" (このまま) / 障害 = "YYYY-MM-01" (取込 script が
+      //   従来書いてきた書式。shogai-seikyu/aggregate.ts の読取もこちらに合わせてある)。
+      //   ここを揃えないと画面から入れた障害の加算が集計に出ない (是正前は monthStr 固定だった)。
+      const addonTargetMonth = sys === "障害" ? `${monthStr}-01` : monthStr;
       let c = Math.max(0, Math.round(count) || 0);
       // 月上限のある加算は上限で clamp (行追加モーダルの回数合成で超えるのを防ぐ)
       const cap = MAX_PER_MONTH[addonCode];
@@ -1150,7 +1158,7 @@ export function ProvisionTicketsContent({
           .from("kaigo_visit_addon_lines")
           .delete()
           .eq("client_id", userId)
-          .eq("target_month", monthStr)
+          .eq("target_month", addonTargetMonth)
           .eq("office_id", currentOfficeId)
           .eq("addon_code", addonCode);
         if (systemColSupported) dq = dq.eq("system", sys);
@@ -1182,7 +1190,7 @@ export function ProvisionTicketsContent({
         santeiDate !== undefined ? santeiDate : curDates[addonCode] ?? null;
       const payload: Record<string, unknown> = {
         client_id: userId,
-        target_month: monthStr,
+        target_month: addonTargetMonth,
         office_id: currentOfficeId,
         addon_code: addonCode,
         count: c,
@@ -1699,7 +1707,9 @@ export function ProvisionTicketsContent({
   }, [availableFormulaCodes, appliedFormulaCodes, totalPlannedUnits, totalActualUnits]);
 
   // ── サービス加算行 (kaigo_visit_addon_lines の投影) ─────────────────────────
-  // 単位解決は共有リゾルバ resolveVisitAddonLines (集計 aggregate.ts と同一経路) を使う。
+  // 単位解決は共有リゾルバ resolveVisitAddonLines を使う。★これは表示専用のプレビュー
+  // であり、実billing (aggregate.ts) とは別実装 — 同一経路ではない (2026-09-05 是正。
+  // 詳細は lib/visit-addons.ts のコメント参照)。
   // addonLines (保存済み addon_code -> count) が変わるたびに対象月マスタで解決し直す。
   // これらは kaigo_visit_schedule 行には入れない (真実は kaigo_visit_addon_lines)。
   const [resolvedAddonLines, setResolvedAddonLines] = useState<import("@/lib/visit-addons").VisitAddonLine[]>([]);

@@ -873,9 +873,13 @@ export async function aggregateMonthlyShogaiSeikyu(
         .from("kaigo_visit_addon_lines")
         .select("client_id, addon_code, count")
         .eq("office_id", opts.officeId)
-        // ⚠ target_month は **date 型**なので `2026-06` では 0 件になる。
-        //   `${monthStr}-01` で渡すこと (kaigo_monthly_plan_units 等と同じ)。
-        //   これに気づかず「加算行を入れたのに反映されない」で 1 往復した。
+        // ⚠ target_month は text 型 (PostgREST OpenAPI で確認済み。2026-09-05 是正:
+        //   以前このコメントは「date型なので」としていたが誤り)。`2026-06` では
+        //   0 件になるのは型変換の問題ではなく、★障害の加算行がすべて
+        //   `YYYY-MM-01` 形式で保存されている (import_shogai_addon_lines_from_densou.mjs
+        //   の書式) ため。介護/総合事業は逆に `YYYY-MM` (末尾 -01 なし) で保存されている。
+        //   provision-tickets の加算エディタ (upsertAddonLine) はこちらの書式に
+        //   合わせて障害のときだけ `-01` を付けるよう是正済み — 消さないこと。
         .eq("target_month", `${monthStr}-01`)
         .eq("system", "障害")
         .order("id", { ascending: true })
