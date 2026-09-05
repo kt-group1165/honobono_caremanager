@@ -49,6 +49,7 @@ import {
   computeMonthTotal,
   computeCarry,
   computeGrandTotal,
+  computeIryohiAmount,
   type KeigenSetting,
 } from "@/lib/riyou-seikyu-final-amount";
 import type { ShogaiSeikyuRow } from "@/lib/shogai-seikyu/aggregate";
@@ -614,13 +615,11 @@ export function RiyouSeikyuContent() {
   const iryohiAmount = useCallback(
     (r: UserSeikyuRow) => {
       const s = settings.get(r.user_id);
-      if (!s?.iryohi_taisho || r.totalUnits <= 0) return 0;
       const eligibleUnits = r.details
         .filter((d) => !d.service_type.includes("生活援助"))
         .reduce((sum, d) => sum + d.units, 0);
       const afterKeigen = userPlusSelf(r) - keigenAmount(r.user_id, userPlusSelf(r));
-      // 整数演算 (比率を先に float 化しない)
-      return Math.round((afterKeigen * eligibleUnits) / r.totalUnits);
+      return computeIryohiAmount(s?.iryohi_taisho ?? false, r.totalUnits, eligibleUnits, afterKeigen);
     },
     [settings, keigenAmount],
   );

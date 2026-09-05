@@ -16,6 +16,10 @@
  *     当月請求額 = (法定負担 + 超過自費) − 軽減額 + 実費
  *     繰越額     = 前月請求 − 前月入金 (前月レコード無しは 0)
  *     今回御請求額 = 当月請求額 + 繰越額
+ *     医療費控除対象額 = round(軽減後負担額 × 対象単位比率) (対象月に有効な軽減済み負担額を使う)
+ *
+ * ⚠ 2026-09-05 追加: computeIryohiAmount (医療費控除)。kaigo_riyou_settings が
+ *   実データ0件のため未使用の機能だが、金額計算なので境界値を先に固定する。
  */
 import {
   keigenActiveInMonth,
@@ -23,6 +27,7 @@ import {
   computeMonthTotal,
   computeCarry,
   computeGrandTotal,
+  computeIryohiAmount,
   type KeigenSetting,
 } from "@/lib/riyou-seikyu-final-amount";
 
@@ -73,6 +78,29 @@ eq("繰越 0 (ちょうど完済)", computeCarry(5000, 5000), 0);
 eq("今回御請求額 = 当月請求額 + 繰越 (繰越正)", computeGrandTotal(15000, 5000), 20000);
 eq("今回御請求額 = 当月請求額 + 繰越 (繰越負)", computeGrandTotal(15000, -5000), 10000);
 eq("繰越0なら 当月請求額のまま", computeGrandTotal(15000, 0), 15000);
+
+// ── computeIryohiAmount (医療費控除対象額) の境界 ────────────────────────
+eq("対象者でない (iryohiTaisho=false) は 0", computeIryohiAmount(false, 1000, 1000, 20000), 0);
+eq("totalUnits=0 (実績なし) は 0", computeIryohiAmount(true, 0, 0, 20000), 0);
+eq("totalUnits が負 (異常値) も 0 扱い", computeIryohiAmount(true, -1, 0, 20000), 0);
+eq("生活援助のみ (eligibleUnits=0) は 0", computeIryohiAmount(true, 1000, 0, 20000), 0);
+eq("生活援助なし (eligibleUnits=totalUnits) は afterKeigen そのまま", computeIryohiAmount(true, 1000, 1000, 20000), 20000);
+eq("★ 一部が対象 (半分) は 半分の額", computeIryohiAmount(true, 1000, 500, 20000), 10000);
+eq("★ 端数は四捨五入 (割り切れない比率)", computeIryohiAmount(true, 3, 1, 10000), Math.round((10000 * 1) / 3));
+eq("afterKeigen=0 (軽減で全額相殺) は 0", computeIryohiAmount(true, 1000, 500, 0), 0);
+
+// ── 負のコントロール: 丸め順序 (先に比率を float 化すると端数がズレる) ──────
+{
+  // コードのコメント「整数演算 (比率を先に float 化しない)」を裏取りする。
+  // 3等分など割り切れない比率で、演算順序を変えると結果がズレるケースを探す。
+  const afterKeigen = 10000, total = 3, eligible = 1;
+  const correct = computeIryohiAmount(true, total, eligible, afterKeigen); // round(10000*1/3)
+  const ratioFirst = Math.round(afterKeigen * Math.round((eligible / total) * 100) / 100); // 比率を先に丸めてから掛ける (壊れた実装の一例)
+  const detected = correct !== ratioFirst;
+  if (detected) pass++;
+  else fails.push(`★ 負のコントロールが鳴らない: 丸め順序の違いを検出できない (correct=${correct} / ratioFirst=${ratioFirst})`);
+  console.log(`  ${detected ? "✓" : "✗"} ★ 丸め順序を変えると結果がズレることを検出 (正=${correct} / 比率先丸め=${ratioFirst})`);
+}
 
 // ── 複合 (奇数額・丸め境界) ───────────────────────────────────────────────
 {

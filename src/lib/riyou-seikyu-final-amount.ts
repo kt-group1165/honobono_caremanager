@@ -77,3 +77,31 @@ export function computeCarry(
 export function computeGrandTotal(monthTotal: number, carry: number): number {
   return monthTotal + carry;
 }
+
+/**
+ * 医療費控除対象額 = round(軽減後負担額 × 対象単位比率)。
+ * 対象単位比率 = 「生活援助」を含まないサービスの単位数 ÷ 総単位数
+ * (生活援助中心型は控除対象外。加算は比率に按分される)
+ *
+ * ⚠ 2026-09-05 検証: kaigo_riyou_settings が実データ0件のため未使用の機能だが、
+ *   金額計算なので境界値をここで固定する (scripts/riyou-seikyu-final-amount-verify.mts)。
+ *   「身体１生活１」のような身体+生活の複合コードは .includes("生活援助") に
+ *   マッチしないため対象単位に含まれる (= 医療費控除の対象になる)。これは
+ *   「生活援助中心型」(単独コード) だけを対象外とする設計として意図どおりで、
+ *   複合コードを対象外にする実装ではない — 実データ (kaigo_service_codes) で
+ *   「生活援助」を含む名前は「生活援助２」等の単独コード11種のみで、
+ *   身体+生活の複合コード (「身体１生活１」等) 106種とは重ならないことを確認済み。
+ *
+ * ⚠ eligibleUnits/totalUnits は呼び出し側で計算済みの値を渡す (このモジュールは
+ *   service_type の文字列判定を持たない — 判定は呼び出し側の責務のまま)。
+ */
+export function computeIryohiAmount(
+  iryohiTaisho: boolean,
+  totalUnits: number,
+  eligibleUnits: number,
+  afterKeigen: number,
+): number {
+  if (!iryohiTaisho || totalUnits <= 0) return 0;
+  // 整数演算 (比率を先に float 化しない) — (afterKeigen * eligibleUnits) を先に計算してから割る
+  return Math.round((afterKeigen * eligibleUnits) / totalUnits);
+}
