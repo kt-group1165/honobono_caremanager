@@ -28,6 +28,7 @@
     "check:shogai-fukushi-billing": "tsx scripts/shogai-fukushi-billing-verify.mts",
     "check:kyotaku-addon-active": "tsx scripts/kyotaku-addon-active-verify.mts",
     "check:shogai-unit-price": "tsx scripts/shogai-unit-price-verify.mts",
+    "check:juho-tier": "tsx scripts/juho-tier-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

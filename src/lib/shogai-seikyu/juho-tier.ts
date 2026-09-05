@@ -60,7 +60,7 @@ export interface JuhoTierMaps {
 }
 
 /** NFC 正規化した名前から段と素の名前を切り出す。重訪でなければ null */
-function splitTier(name: string): { tier: JuhoTier; base: string } | null {
+export function splitTier(name: string): { tier: JuhoTier; base: string } | null {
   // ⚠ NFKC だと「Ⅱ」が "II" に分解されて一致しなくなる。NFC を使うこと
   const m = /^重訪(Ⅰ|Ⅱ|Ⅲ)(.*)$/.exec((name ?? "").normalize("NFC"));
   return m ? { tier: m[1] as JuhoTier, base: m[2] } : null;
