@@ -76,6 +76,11 @@ const CHECKS: Check[] = [
   // ★ 2026-09-05 新設。★ 2 つの役割: ① TS と 取込.mjs の按分ロジックが一致するか (総当たり)
   //   ② ★ 実データに 時間帯またぎの行が出現したら 検知する (★ 今 0 件。★ 出たら この経路が発火し始めた)
   { name: "shogai-code-from-time", script: "check:shogai-code-from-time", why: "★ 障害 時刻→コードの2実装一致 + またぎ行の出現監視 (基準値0件)" },
+  // ★ 2026-09-05 新設。★ 5 箇所にコピーされていた「有効な計画を選ぶ」を一本化した純関数。
+  { name: "careplan-selection", script: "check:careplan-selection", why: "★ 有効なケアプランの選択 (期限切れ判定の境界値。当日は期限切れにしない)" },
+  // ★ ①status=active なのに期限切れ 284名 / ②実害 (有効な計画が隠れる) 0名 を基準値方式で。
+  //   ★ ②が増えたら FAIL。★ ①は 更新されれば減る性質なので 参考情報。
+  { name: "careplan-expiry", script: "check:careplan-expiry", why: "★ 期限切れケアプランの露出 (基準値: ①284名 ②実害0名)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
