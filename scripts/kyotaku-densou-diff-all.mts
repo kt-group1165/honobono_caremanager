@@ -15,7 +15,7 @@
  *   MONTH=2026-07 AREAS=四街道,木更津 npx tsx scripts/kyotaku-densou-diff-all.mts
  *   KIND=S だけ / KIND=K だけ も指定できる (既定は両方)
  */
-import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFileSync } from "node:child_process";
@@ -26,6 +26,10 @@ const MONTH = process.env.MONTH ?? "2026-06";
 const YM = MONTH.replace("-", "");
 const ONLY = (process.env.AREAS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
 const KIND = (process.env.KIND ?? "SK").toUpperCase();
+/** ★ 回帰網が読む JSON の出力先 (KYOTAKU_DIFF_JSON=path) */
+const JSON_OUT = process.env.KYOTAKU_DIFF_JSON ?? "";
+type DiffCell = { newRows: number; honoRows: number; match: number; diff: number } | null;
+const jsonRows: { area: string; officeId: string; s: DiffCell; k: DiffCell }[] = [];
 // ⚠ URL.pathname は日本語パスを URL エンコードするので使えない
 const ROOT = fileURLToPath(new URL("../", import.meta.url));
 const DENSOU = join(ROOT, "伝送データ");
@@ -117,15 +121,26 @@ for (const j of jobs) {
   //   ②202607 のように ほのぼのから/ が無いフォルダ構成だと ENOENT で全滅する、
   //   という2つの不具合を生んでいた (両スクリプトの自動探索自体は正しく動く)。
   //   → KK_FILE/KY_FILE は渡さず、各スクリプト自身の自動探索に任せる。
-  if (KIND.includes("S")) line.push(verdict(run("scripts/kyotaku-s-diff.mts", {}), "S"));
+  let sOut = "", kOut = "";
+  if (KIND.includes("S")) { sOut = run("scripts/kyotaku-s-diff.mts", {}); line.push(verdict(sOut, "S")); }
   if (KIND.includes("K")) {
     if (!j.ky) line.push("K — KY 無し");
-    else line.push(verdict(run("scripts/kyotaku-k-diff.mts", {}), "K"));
+    else { kOut = run("scripts/kyotaku-k-diff.mts", {}); line.push(verdict(kOut, "K")); }
   }
   console.log("  " + line.join("   "));
   results.push(line.join("   "));
+  // ★ 機械可読にも出す (回帰網が読む)。分母 (new/hono) と 一致/差 を持たせる
+  const parse = (out: string) => {
+    const m = /突合:\s*new\s*(\d+)\s*\/\s*hono\s*(\d+)\s*→\s*一致\s*(\d+)\s*\/\s*差\s*(\d+)/.exec(out);
+    return m ? { newRows: +m[1], honoRows: +m[2], match: +m[3], diff: +m[4] } : null;
+  };
+  jsonRows.push({ area: j.area, officeId: j.officeId, s: parse(sOut), k: parse(kOut) });
 }
 
+if (JSON_OUT) {
+  writeFileSync(JSON_OUT, JSON.stringify({ month: MONTH, rows: jsonRows }, null, 2) + "\n", "utf8");
+  console.log(`\n→ ${JSON_OUT} に ${jsonRows.length} 拠点ぶんを書きました`);
+}
 console.log(`\n===== 居宅 伝送バイト照合 ${MONTH} (${jobs.length} 拠点) =====`);
 for (const r of results) console.log("  " + r);
 if (skipped.length) {

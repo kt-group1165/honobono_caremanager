@@ -35,6 +35,7 @@ const CHECKS: Check[] = [
   { name: "teigen", script: "check:teigen", why: "逓減制" },
   { name: "shogai-jogen", script: "check:shogai-jogen", why: "障害の上限額管理" },
   { name: "tokutei", script: "check:tokutei", why: "特定事業所加算" },
+  { name: "kyotaku-diff", script: "check:kyotaku-diff", why: "★ 居宅の伝送バイト照合 (ほのぼの実出力との突合。認定更新で差が増えるので 回帰だけ見張る)", slow: true },
   { name: "densou-diff", script: "check:densou-diff", why: "★ ほのぼの実出力との突合 (介護保険7拠点 + 障害17拠点)", slow: true },
 ];
 
