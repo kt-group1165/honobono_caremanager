@@ -22,6 +22,48 @@ const PRIORITY: Record<string, number> = {
 };
 
 /**
+ * サービス名の行群 (複数制度が同名で存在しうる) を、優先順位
+ * (介護 > 総合事業 > 独自 > 障害) で1制度に潰したMapに畳む。
+ * getServiceSystemMap のループ内に埋め込まれていたロジックを切り出したもの
+ * (DBを呼ばないので直接テストできる。挙動不変)。
+ */
+export function resolveServiceSystemByPriority(
+  rows: { service_name: string; system: string }[],
+): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    const key = toHankakuDigits(r.service_name);
+    const prev = map.get(key);
+    if (prev == null || (PRIORITY[r.system] ?? 9) < (PRIORITY[prev] ?? 9)) {
+      map.set(key, r.system);
+    }
+  }
+  return map;
+}
+
+/**
+ * サービス名の行群を、**1制度にしか無い名前だけ**を残したMapに畳む
+ * (複数制度にまたがる名前は除外する)。
+ * getUnambiguousServiceSystemMap のループ内に埋め込まれていたロジックを
+ * 切り出したもの (挙動不変)。
+ */
+export function resolveUnambiguousServiceSystem(
+  rows: { service_name: string; system: string }[],
+): Map<string, string> {
+  const found = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const key = toHankakuDigits(r.service_name);
+    if (!found.has(key)) found.set(key, new Set());
+    found.get(key)!.add(r.system);
+  }
+  const map = new Map<string, string>();
+  for (const [k, set] of found) {
+    if (set.size === 1) map.set(k, [...set][0]);
+  }
+  return map;
+}
+
+/**
  * 正規化名 (半角数字) → system のマップを返す。マスタに無い名前は含まれない。
  * 有効期間: targetMonth 指定時は対象月に有効な世代、省略時は今日時点で有効な世代に絞る
  * (改定跨ぎで同名の世代が複数あっても重複ヒットさせない)
@@ -31,10 +73,10 @@ export async function getServiceSystemMap(
   serviceTypes: string[],
   targetMonth?: { year: number; month: number },
 ): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
   const types = Array.from(new Set(serviceTypes.filter(Boolean)));
-  if (types.length === 0) return map;
+  if (types.length === 0) return new Map();
   const variants = serviceNameVariantsAll(types);
+  const rows: { service_name: string; system: string }[] = [];
   for (let i = 0; i < variants.length; i += NAME_IN_CHUNK) {
     const base = supabase
       .from("kaigo_service_codes")
@@ -45,15 +87,9 @@ export async function getServiceSystemMap(
       ? validInMonth(base, targetMonth.year, targetMonth.month)
       : validToday(base));
     if (error) throw new Error(`制度区分取得失敗: ${error.message}`);
-    for (const r of (data ?? []) as { service_name: string; system: string }[]) {
-      const key = toHankakuDigits(r.service_name);
-      const prev = map.get(key);
-      if (prev == null || (PRIORITY[r.system] ?? 9) < (PRIORITY[prev] ?? 9)) {
-        map.set(key, r.system);
-      }
-    }
+    rows.push(...((data ?? []) as { service_name: string; system: string }[]));
   }
-  return map;
+  return resolveServiceSystemByPriority(rows);
 }
 
 /**
@@ -75,10 +111,10 @@ export async function getUnambiguousServiceSystemMap(
   serviceTypes: string[],
   targetMonth?: { year: number; month: number },
 ): Promise<Map<string, string>> {
-  const found = new Map<string, Set<string>>();
   const types = Array.from(new Set(serviceTypes.filter(Boolean)));
   if (types.length === 0) return new Map();
   const variants = serviceNameVariantsAll(types);
+  const rows: { service_name: string; system: string }[] = [];
   for (let i = 0; i < variants.length; i += NAME_IN_CHUNK) {
     const base = supabase
       .from("kaigo_service_codes")
@@ -89,17 +125,9 @@ export async function getUnambiguousServiceSystemMap(
       ? validInMonth(base, targetMonth.year, targetMonth.month)
       : validToday(base));
     if (error) throw new Error(`制度区分取得失敗: ${error.message}`);
-    for (const r of (data ?? []) as { service_name: string; system: string }[]) {
-      const key = toHankakuDigits(r.service_name);
-      if (!found.has(key)) found.set(key, new Set());
-      found.get(key)!.add(r.system);
-    }
+    rows.push(...((data ?? []) as { service_name: string; system: string }[]));
   }
-  const map = new Map<string, string>();
-  for (const [k, set] of found) {
-    if (set.size === 1) map.set(k, [...set][0]);
-  }
-  return map;
+  return resolveUnambiguousServiceSystem(rows);
 }
 
 /** 障害福祉サービスか (介護保険の提供表・請求から除外する対象か) */
