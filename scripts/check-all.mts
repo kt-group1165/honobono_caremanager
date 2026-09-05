@@ -90,6 +90,9 @@ const CHECKS: Check[] = [
   // ★ 2026-09-05 新設。★ 予防46 は レセプトが 0 件なので 実データでは一度も通っていない。
   //   ★ 純関数の合成テスト (DB 書込なし)。★ 事業所番号が入った日に 動くことの担保。
   { name: "yobo-shien-densou", script: "check:yobo-shien-densou", why: "★ 介護予防支援(46) の伝送組み立て (★ レセプト0件のため 合成テストのみ)" },
+  // ★ 2026-09-05 修正 (B-1w)。★ 要支援に 介護給付のコードが付いていた (1,266単位 → 正 856単位)。
+  //   ★ 訪問入浴は 稼働前で実データ 0 行のため ★ 未発火のうちに直した。★ 0 件維持の検査。
+  { name: "bath-yobo-code", script: "check:bath-yobo-code", why: "★ 訪問入浴: 要支援に介護給付コードが付かないか (0件維持)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
