@@ -763,68 +763,23 @@ function loadTjJuhoSpans(targetMonth, areaDir) {
 }
 
 /**
- * TJ (実績記録票) から 身体介護・家事援助 (021001/021002) の提供区間を読む。
+ * ★ 2026-09-05 削除: TJ による身体/家事の時刻検算・補正 (旧 loadTjBodySpans + 旧 4a.4)。
  *
- * ⚠ **なぜ要るか**: MEISAI の時刻 (派遣開始/終了・実時刻・算定開始/終了) は
- *   3つとも常に一致しており、MEISAI 内で選び直しても直らない。実際に
- *   おゆみ野で確認した実例 (2026-09-01):
- *     MEISAI (賃金)   18:00-19:30
- *     TJ     (伝送)   18:30-20:00   ← 国保連提出済みの正しい時刻
- *   賃金側は現地入り〜片付けまでを含み、請求側は利用者への提供時間だけなので
- *   ずれる。「同日合算(概ね2時間未満)」等の間隔計算は請求側の時刻で行うべきで、
- *   MEISAI の時刻のままだと間隔を誤り、無くてよいはずの例外ルールを作りかねない。
- *
- * ⚠ 重訪 (loadTjJuhoSpans) と違って **1日に複数件あるときの対応付けは行わない**
- *   (どの MEISAI 行がどの TJ 行に対応するか、時刻がずれている前提では機械的に
- *   決められないため)。1日1件のときだけ安全に補正する。複数件の日は
- *   件数だけ記録し、書き換えない。
+ * 削除の理由 (claude-06 の測定・2026-06・17拠点・ほのぼの KJ の J121-03 と件数照合):
+ *   ① **突合が循環していた。**「ほのぼのの答え (TJ) を見て入力 (MEISAI由来の時刻) を
+ *      直してから、ほのぼのとの答え合わせ (突合) をする」という構造で、補正の
+ *      正しさをほのぼの以外の基準で検証できなかった。
+ *   ② 実測したところ、★ 補正を入れるとむしろ乖離が悪化する拠点があった
+ *      (おゆみ野: 補正あり 乖離59 / 補正なし 乖離3 = 20倍悪化)。
+ *      他16拠点は補正あり/なしで結果が完全に同じだった。
+ *      「補正ありのほうが近い」拠点は1つも無かった。
+ *   ③ この補正は **ほのぼのが TJ (実績記録票) を発行してくれる移行期にしか
+ *      成立しない足場**で、ほのぼのを置き換えると当方が J611 を作る側になり
+ *      TJ 自体が無くなる。いずれ消える前提の一時しのぎだった。
+ * → 削除前後で DUMP_PAYLOADS の差分が 0 であることを17拠点で確認済み。
+ *   測定 script は `_cmp_tj.mjs` (未コミット・使用後に削除)。
+ *   ⚠ 重訪の loadTjJuhoSpans は **別物** (段の積み上げに使う。削除していない)。
  */
-function loadTjBodySpans(targetMonth, areaDir) {
-  const ym = targetMonth.replace("-", "");
-  const root = fileURLToPath(new URL(`../伝送データ/${areaDir}/`, import.meta.url));
-  const out = new Map(); // `${受給者証番号}|${日}` → [{s,e}]
-  let files = [];
-  try {
-    const walk = (d) => readdirSync(d, { withFileTypes: true })
-      .flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
-    files = walk(root).filter((f) => /TJ\d+\.CSV$/i.test(f) && f.includes(ym));
-  } catch { return out; }
-  const sp = (l) => l.split(",").map((x) => x.replace(/^"|"$/g, ""));
-  const toMin = (v) => {
-    const t = String(v ?? "").padStart(4, "0");
-    return /^\d{4}$/.test(t) ? Number(t.slice(0, 2)) * 60 + Number(t.slice(2)) : null;
-  };
-  for (const f of files) {
-    const recs = iconv.decode(readFileSync(f), "Shift_JIS").split(/\r?\n/)
-      .filter((l) => l.trim()).map(sp)
-      // ⚠ c[12] (サービスコード) が **空でない** = 重訪以外 (身体/家事/通院/同行等)。
-      .filter((c) => c[0] === "2" && c[2] === "J611" && c[3] === "02" && !!c[12]);
-    for (const c of recs) {
-      const day = Number(c[10]);
-      const s = toMin(c[15]);
-      let e = toMin(c[16]);
-      if (!c[7] || !Number.isInteger(day) || s == null || e == null) continue;
-      if (e <= s) e += 1440;
-      // ★ 区分ごとに分けて持つ。111xxx = 身体介護 / 112xxx = 家事援助。
-      //   ⚠ 分けないと **家事の枠が身体の行に割り当てられる**。
-      //   実例 (K姉 1221918178 6/03,10,17,24):
-      //     TJ  111000 12:00-13:00 / 112000 13:00-13:30 / 111000 15:30-16:00 (人数2)
-      //     MEISAI 身体は 3 行 (12:00-13:00 と 15:30-16:00 が 2 人分)。
-      //     区分を混ぜると TJ も 3 本で所要時間の多重集合 {30,30,60} が一致し、
-      //     15:30-16:00 の 1 本が **13:00-13:30 (家事の枠) に書き換わる**。
-      //     その結果 12:00-13:00 と連続になり、次段の同日合算 (2時間ルール) が
-      //     本来間隔 2.5 時間の 2 本を繋いで 90 分にしてしまう。
-      //   ★ 身体/家事 以外 (通院・同行等) は MEISAI 側に対応するグループが無いので取らない。
-      const kind = /^111/.test(c[12]) ? "身体" : /^112/.test(c[12]) ? "家事" : null;
-      if (!kind) continue;
-      const k = `${c[7]}|${day}|${kind}`;
-      if (!out.has(k)) out.set(k, []);
-      out.get(k).push({ s, e });
-    }
-  }
-  for (const [, arr] of out) arr.sort((a, b) => a.s - b.s);
-  return out;
-}
 
 async function main() {
   console.log(`=== MEISAI 障害取込 ${EXECUTE ? "【本番 EXECUTE】" : "【DRY RUN】"} 対象月=${TARGET_MONTH} 事業所=${AREA_DIR} ===\n`);
@@ -993,103 +948,8 @@ async function main() {
   }
   if (threePlus) console.warn(`⚠ 3人以上の同時重複ブロックが ${threePlus} 件 — 2番目以降を全て ・2人 で計上 (・3人 コードは未対応。要確認)`);
 
-  // 4a.4) TJ (実績記録票) で 身体/家事 の時刻を検算・補正する (1日1件のときだけ)
-  //   MEISAI (賃金) と TJ (伝送=請求根拠) の時刻がずれることがある (詳細は loadTjBodySpans 参照)。
-  //   次段の同日合算は「間隔」で判定するため、ここで直しておかないと
-  //   請求の根拠にならない時刻で合算要否を誤る。
-  //
-  // ⚠ ★ これは **移行期にしか存在しない足場**。ほのぼのを置き換えると TJ はもらえなくなり、
-  //   ★ 当方が J611 を作る側になるので この補正ごと消える。
-  //   ★ しかも「ほのぼのの答え (TJ) を見て 入力を直してから 答え合わせ (突合) をしている」ので
-  //   ★ 突合が循環している。★ SKIP_TJ_TIME_FIX=1 で足場を外して測れるようにしてある
-  //   (= ★ 移行後の実力。★ 差が小さければ この補正は 削除してよい)。
-  if (process.env.SKIP_TJ_TIME_FIX === "1") {
-    console.log("★ SKIP_TJ_TIME_FIX=1: TJ による時刻補正を行いません (= 移行後と同じ条件)");
-  } else {
-    const tjBody = loadTjBodySpans(TARGET_MONTH, AREA_DIR);
-    if (tjBody.size) {
-      const asg = await fetchAll("client_office_assignments", "client_id",
-        (q) => q.eq("office_id", OFFICE_ID).order("client_id"));
-      const ids = [...new Set(asg.map((a) => a.client_id))];
-      const nameByBeneficiary2 = new Map();
-      for (let i = 0; i < ids.length; i += 200) {
-        const chunk = ids.slice(i, i + 200);
-        const { data: cls, error: eC } = await sb.from("clients").select("id,name").in("id", chunk);
-        if (eC) { console.error(`✗ clients 取得失敗: ${eC.message}`); process.exit(1); }
-        const { data: cts, error: eT } = await sb.from("shougai_certifications")
-          .select("client_id,beneficiary_number").in("client_id", chunk);
-        if (eT) { console.error(`✗ 受給者証取得失敗: ${eT.message}`); process.exit(1); }
-        const nameById = new Map((cls ?? []).map((c) => [c.id, c.name]));
-        for (const ct of cts ?? []) {
-          const nm = nameById.get(ct.client_id);
-          if (ct.beneficiary_number && nm) nameByBeneficiary2.set(String(ct.beneficiary_number), nm);
-        }
-      }
-      const nameKey2 = (n) => (n || "").normalize("NFKC").replace(/[（(].*$/, "").replace(/[\s　]/g, "");
-      const tjBodyByNameDay = new Map(); // `${氏名key}|${日}|${区分}` -> [{s,e}]
-      for (const [k, arr] of tjBody) {
-        const [ben, dayStr, kind] = k.split("|");
-        const nm = nameByBeneficiary2.get(ben);
-        if (nm) tjBodyByNameDay.set(`${nameKey2(nm)}|${Number(dayStr)}|${kind}`, arr);
-      }
-
-      // MEISAI 側: 利用者 x 日 x 区分(身体/家事) でグループ化
-      const meisaiByNameDayKind = new Map();
-      for (const r of target) {
-        const kind = r.code === "021001" ? "身体" : r.code === "021002" ? "家事" : null;
-        if (!kind) continue;
-        const day = Number(String(r.date).slice(-2));
-        const k = `${nameKey2(r.clientName)}|${day}|${kind}`;
-        if (!meisaiByNameDayKind.has(k)) meisaiByNameDayKind.set(k, []);
-        meisaiByNameDayKind.get(k).push(r);
-      }
-
-      const fmtHm = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-      let fixedCount = 0, countMismatch = 0, durMismatch = 0, matchedCount = 0;
-      const fixedSamples = [];
-      for (const [k, rows] of meisaiByNameDayKind) {
-        const [nameK, dayStr, kindK] = k.split("|");
-        const tjSpans = tjBodyByNameDay.get(`${nameK}|${dayStr}|${kindK}`);
-        if (!tjSpans?.length) continue;
-        matchedCount++;
-        if (rows.length !== tjSpans.length) {
-          // 件数が違う日は、どの MEISAI 行がどの TJ 行に対応するか
-          // 機械的に決められない (欠落/合算/職員違いの可能性)。触らず記録だけする。
-          countMismatch++;
-          continue;
-        }
-        // ⚠ 所要時間の多重集合が一致しない日は補正しない。
-        //   件数だけ合っていても中身が対応しているとは限らない
-        //   (久保田真紀 6/28 の実例: MEISAI {1.5h,1h} vs TJ {1h,0.5h} で
-        //    どの行も一致せず、単純な時刻ズレでは説明がつかなかった)。
-        const meisaiDurs = rows.map((r) => toMinOfDay(r.santeiEnd) - toMinOfDay(r.santeiStart)).sort((a, b) => a - b);
-        const tjDurs = tjSpans.map((s) => s.e - s.s).sort((a, b) => a - b);
-        if (!meisaiDurs.every((d, i) => Math.abs(d - tjDurs[i]) <= 5)) {
-          durMismatch++;
-          continue;
-        }
-        // 所要時間の集合が一致する日は、開始時刻の順序で 1 対 1 に対応付ける
-        // (同じ利用者・同じ日の訪問は、賃金側と請求側で並び順が入れ替わらない前提)。
-        const sorted = [...rows].sort((a, b) => toMinOfDay(a.santeiStart) - toMinOfDay(b.santeiStart));
-        for (let i = 0; i < sorted.length; i++) {
-          const r = sorted[i];
-          const meS = toMinOfDay(r.santeiStart), meE = toMinOfDay(r.santeiEnd);
-          const { s: tjS, e: tjE } = tjSpans[i];
-          if (meS === tjS && meE === tjE) continue; // 一致。何もしない
-          fixedCount++;
-          if (fixedSamples.length < 20) {
-            fixedSamples.push(`${r.clientName} ${r.date} MEISAI ${r.santeiStart}-${r.santeiEnd} → TJ ${fmtHm(tjS)}-${fmtHm(tjE)}`);
-          }
-          setSpan(r, tjS, tjE);
-        }
-      }
-      if (matchedCount) {
-        console.log(`TJ(身体/家事)で時刻を検算: 対象(氏名×日) ${matchedCount} / 補正 ${fixedCount}行 / ` +
-          `件数不一致(対応付け不能) ${countMismatch} / 所要時間不一致(対応付け不能) ${durMismatch}`);
-        for (const s of fixedSamples) console.log(`    ${s}`);
-      }
-    }
-  }
+  // 4a.4) ★ 2026-09-05 削除 (TJによる身体/家事の時刻検算・補正)。理由は loadTjBodySpans の
+  //   旧コメント跡地 (上部) を参照。SKIP_TJ_TIME_FIX 環境変数も不要になったため削除した。
 
   // 4a.5) 同日合算セッション (概ね2時間未満の間隔ルール。要件 #1「家事夜増2.0」是正)
   //   2人派遣行 (_twoPerson=true) は合算対象から除外 (安全側。相互作用未検証のため)。
