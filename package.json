@@ -35,6 +35,7 @@
     "check:shogai-cert-expiry-alert": "tsx scripts/shogai-cert-expiry-alert-verify.mts",
     "check:houmon-plan-alert": "tsx scripts/houmon-plan-alert-verify.mts",
     "check:re-seikyu-shogai": "tsx scripts/re-seikyu-shogai-verify.mts",
+    "check:kubun-gendo": "tsx scripts/kubun-gendo-verify.mts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
