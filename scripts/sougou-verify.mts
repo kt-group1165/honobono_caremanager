@@ -344,5 +344,26 @@ console.log("\n=== §7 単価は「保険者」で決まる — 事業所単位�
   check("単価マップ未登録へのフォールバックは発生していない", fellBack, 0);
 }
 
+console.log("\n=== §8 君津市(122259)の登録前提を見張る (2026-09-05 追加) ===");
+// 材料が加藤紀久代1名・202606の1か月ぶんの実伝送のみで登録した (aggregate-sougou.ts
+// 参照)。前提: ①明細コードに市町村prefixが付いていない(MB_グループと同じ全国共通A2系)
+// ②単価10.21円(7級地)。将来この保険者の実績が増えたときに前提と違う形
+// (prefix付きコードが必要/単価が10.21でない)で出てきたら検知する。
+{
+  const insurerNum122259Count = insurers.get("122259") ?? 0;
+  console.log(`  現在の総合事業実績 (insurer=122259, 提供日に有効な認定で解決): ${insurerNum122259Count} 件`);
+  if (insurerNum122259Count === 0) {
+    console.log("  ★ 現時点の影響は0件 — 登録したが該当実績が無いため、現在の請求額は1円も変わらない");
+    check("君津市(122259)の実績件数 = 0 (現状の影響ゼロを明示)", insurerNum122259Count, 0);
+  } else {
+    // 実績が付き始めたら、実際に使われる単価とマスタ解決の成否を検証する
+    const priceMap122259 = Object.fromEntries(
+      [...mapBody.matchAll(/"(\d{6})":\s*([\d.]+)/g)].map((m) => [m[1], Number(m[2])]),
+    ) as Record<string, number>;
+    check("君津市(122259)の単価マップは10.21のまま (未確認の値に変わっていないか)", priceMap122259["122259"], 10.21);
+    console.log("  ⚠ 実績が付き始めました。マスタ解決 (MB_バケットで名前が引けるか) は本番の警告ログ (aggregateSougouSeikyu の warnings) を別途確認してください — このスクリプトは件数と単価定数のみ見ています");
+  }
+}
+
 console.log(`\n=== 結果: PASS ${pass} / FAIL ${fail} ===`);
 if (fail > 0) process.exit(1);
