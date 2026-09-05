@@ -1,0 +1,46 @@
+{
+  "asOf": "2026-09-05",
+  "byType": {
+    "care-plan-1": {
+      "comparable": 2954,
+      "mismatch": 122
+    },
+    "service-usage": {
+      "comparable": 3219,
+      "mismatch": 96
+    },
+    "care-plan-3": {
+      "comparable": 7,
+      "mismatch": 0
+    },
+    "yobo-care-plan": {
+      "comparable": 3,
+      "mismatch": 0
+    },
+    "service-usage-detail": {
+      "comparable": 2,
+      "mismatch": 0
+    }
+  },
+  "_readme": [
+    "npm run check:report-master-fields-drift の基準値。",
+    "",
+    "■ なぜこの数か (2026-09-05 実測)",
+    "  帳票 (kaigo_report_documents) に保存されたcare_levelと、現在有効な認定の",
+    "  care_levelが食い違う件数。care-plan-1 122件・service-usage 96件が中心",
+    "  (第1表・利用票は認定に紐づく機会が多いため)。",
+    "",
+    "■ 0を目指さない",
+    "  表示・印刷はsrc/lib/report-master-fields.tsで既にマスタ優先に是正済み",
+    "  (2026-09-05・commit 527f98af)。この基準値が見ているのは★保存値そのもの",
+    "  のズレで、認定が更新されるたび自然に増える。0にはならない。",
+    "",
+    "■ 何を検知したいか",
+    "  ★ 想定外の増加 (実装バグ等で急増するケース)。認定更新に伴う自然な増加は",
+    "  --update で基準値を上げてよい。急増した場合は原因を先に確認すること。",
+    "",
+    "■ service-usage (利用票) は外部に渡る帳票",
+    "  変更前後の一覧を report-master-drift-service-usage-detail.json に",
+    "  全件出力している (利用者名付き。後から説明できるように)。"
+  ]
+}

@@ -121,7 +121,8 @@
     "check:shogai-j411-boundary": "tsx scripts/verify-shogai-j411-boundary.mts",
     "check:careplan-selection": "tsx scripts/careplan-selection-verify.mts",
     "check:careplan-expiry": "tsx scripts/careplan-expiry-exposure-check.mts",
-    "check:report-master-fields": "tsx scripts/report-master-fields-verify.mts"
+    "check:report-master-fields": "tsx scripts/report-master-fields-verify.mts",
+    "check:report-master-fields-drift": "tsx scripts/report-master-drift-check.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
