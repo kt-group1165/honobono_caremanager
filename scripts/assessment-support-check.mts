@@ -179,7 +179,7 @@ console.log(`     実施日に有効な認定が無い        ${none} 行`);
 for (const e of noneEx) console.log(`        ${e}`);
 console.log(`     認定が 1 件も無い              ${noCert} 行`);
 console.log(`\n  是正: node migrations/fix_assessment_cert_link.mjs  (DRY RUN)
-         ⚠ backfill_assessment_certification_id.mjs は **使用禁止** (最新の認定を埋めてしまう)`);
+         (2026-09-05: 重複していた backfill_assessment_certification_id.mjs は削除済み)`);
 
 console.log(`\n══ ★ が付いた項目 ${ng} 件 ══`);
 console.log(`⚠ この点検は **伝送にも金額にも出ない**ので、誰も見ていないと気づけない。`);
