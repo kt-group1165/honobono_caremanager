@@ -142,7 +142,11 @@ async function main() {
     if (csv.level) payload.support_level = `区分${csv.level.normalize("NFKC")}`;
     if (csv.limit != null) payload.self_payment_limit = csv.limit;
     if (csv.issue) payload.issue_date = csv.issue;
-    if (csv.city) payload.insurer_municipality = csv.city;
+    // ⚠ 2026-09-05 バグ修正: CSV列21(支給市町村)は「名称」("千葉市"等) であって
+    //   insurer_municipality が持つべき6桁市町村番号ではない。誤って上書きすると
+    //   check:densouのmod10検証に落ちる (実際に109件を壊した→
+    //   fix_shogai_cert_new_generation_municipality.mjs で復元済み)。
+    //   base行(旧世代)が既に正しい番号を持っているので、ここは触らない。
     if (csv.jogenOffice) payload.jogen_kanri_office_name = csv.jogenOffice;
     inserts.push({ jukyu, client_id: base.client_id, name: csv.name, base, payload });
   }
