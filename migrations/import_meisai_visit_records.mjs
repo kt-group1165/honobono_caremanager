@@ -349,6 +349,7 @@ async function main() {
       status: "completed",
       office_id: office.id,
       notes: `[MEISAI取込 ${TARGET_MONTH} code=${r.code}]`,
+      _code: r.code, // ⚠ DB列ではない。system引き継ぎのキー作りにだけ使い、INSERT前に必ず剥がす
     });
   }
   // 2人訪問の二重計上を除去: 同一(利用者×日×開始時刻×サービス)は1訪問。
@@ -367,33 +368,151 @@ async function main() {
   console.log(`  ブロック(利用者未マップ): ${blockedNoClient}`);
   console.log(`  ブロック(コード未解決): ${blockedNoCode}`);
   console.log("");
-  if (deduped[0]) console.log("INSERT payload サンプル:\n", JSON.stringify(deduped[0], null, 2), "\n");
+
+  // 6) system 引き継ぎ (2026-09-14 是正・H/J)
+  //
+  //   ── なぜ要るか ──────────────────────────────────────────────────
+  //   この取込は冪等のため既存の①介護取込行を DELETE してから INSERT し直す
+  //   (削除条件は office_id + 月 + notes LIKE '[MEISAI取込%' のみ。system は見ない)。
+  //   ところが両制度を持つ利用者は set_schedule_system_from_densou.mjs 等の
+  //   別scriptで system が後から '障害' 等に是正されることがあり、その行の notes は
+  //   このscriptが元々書いた '[MEISAI取込...]' のまま残る。結果、削除条件には
+  //   引っかかるのに、再INSERT時は system:"介護" を無条件で書くため、
+  //   ★是正が黙って巻き戻る (2026-09-14 実測: 5拠点・6名・87行が該当していた。
+  //   例: 四街道 秋山久子 4件、その月の一部の日付だけ障害是正済み)。
+  //
+  //   ── 引き継ぎキーに service_code を使う理由 ────────────────────────
+  //   2人訪問の重複除去キー (上の seen) は service_type の**名称**を使っているが、
+  //   名称はサービスコードの世代(validInMonth) 解決を経た**表示用の値**。
+  //   一方 DB 側の既存行の notes には code=xxxxxx がそのまま残っている。
+  //   名称でなくコードで引けば、名称解決を経由しない分だけ一致判定が確実になる
+  //   (同一コードが世代によって別名称になるケースを気にしなくてよい)。
+  //
+  //   ⚠ SKIP_SYSTEM_CARRYOVER=1 は診断専用 (--execute と併用不可)。
+  //     引き継ぎを外した場合に何が「消える」側に回るかを見るための負のコントロール。
+  const SKIP_CARRYOVER = process.env.SKIP_SYSTEM_CARRYOVER === "1";
+  if (SKIP_CARRYOVER && EXECUTE) {
+    console.error("✗ SKIP_SYSTEM_CARRYOVER=1 は --execute と併用できません (診断専用)");
+    process.exit(1);
+  }
+  // ⚠ DB の start_time は time型で "HH:MM:SS" (秒付き) で返るが、MEISAI CSV由来の
+  //   新payload側は "HH:MM" (秒無し)。素の文字列比較だと必ず不一致になるので
+  //   先頭5文字 (HH:MM) に揃えてからキー化する。
+  const carryKey = (userId, visitDate, startTime, code) => `${userId}|${visitDate}|${startTime.slice(0, 5)}|${code}`;
+
+  const [y0, m0] = TARGET_MONTH.split("-").map(Number);
+  const MONTH_LAST0 = `${TARGET_MONTH}-${String(new Date(y0, m0, 0).getDate()).padStart(2, "0")}`;
+  const existingRows = [];
+  {
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await sb.from("kaigo_visit_schedule")
+        .select("id,user_id,visit_date,start_time,system,notes")
+        .eq("office_id", office.id).like("notes", "[MEISAI取込%")
+        .gte("visit_date", MONTH_FIRST).lte("visit_date", MONTH_LAST0)
+        .order("id").range(from, from + PAGE - 1);
+      if (error) throw new Error(`既存行取得失敗: ${error.message}`);
+      existingRows.push(...data);
+      if (data.length < PAGE) break;
+    }
+  }
+  const existingByKey = new Map();
+  for (const r of existingRows) {
+    const code = /code=([^\]]+)\]/.exec(r.notes ?? "")?.[1];
+    if (!code) continue; // 想定外のnotes形式。キー化できないので引き継ぎ対象にしない
+    const k = carryKey(r.user_id, r.visit_date, r.start_time, code);
+    if (!existingByKey.has(k)) existingByKey.set(k, []);
+    existingByKey.get(k).push(r);
+  }
+  const existingNonKaigo = [...existingByKey.entries()].filter(([, list]) => list.some((r) => r.system !== "介護"));
+
+  const newKeys = new Set(deduped.map((p) => carryKey(p.user_id, p.visit_date, p.start_time, p._code)));
+
+  const collisions = [];   // 既存側で同キーが複数 (どちらのsystemを引き継ぐか決められない)
+  const missing = [];      // 既存は非介護行を持つが、新データ (今回のCSV) に同キーが無い → 消える
+  let carriedCount = 0;
+
+  if (!SKIP_CARRYOVER) {
+    for (const [k, list] of existingNonKaigo) {
+      if (list.length > 1) { collisions.push({ key: k, rows: list }); continue; }
+      if (!newKeys.has(k)) { missing.push({ key: k, rows: list }); continue; }
+      // ここまで来れば「既存に1件だけ非介護行があり、新データにも同キーがある」→引き継ぐ
+    }
+    if (collisions.length === 0) {
+      for (const p of deduped) {
+        const k = carryKey(p.user_id, p.visit_date, p.start_time, p._code);
+        const list = existingByKey.get(k);
+        if (list && list.length === 1 && list[0].system !== "介護") {
+          p.system = list[0].system;
+          carriedCount++;
+        }
+      }
+    }
+  } else {
+    for (const [k, list] of existingNonKaigo) {
+      if (list.length > 1) collisions.push({ key: k, rows: list });
+      else missing.push({ key: k, rows: list }); // 引き継ぎを外しているので全部「消える」側
+    }
+  }
+
+  console.log(`― system 引き継ぎ (既存の①介護取込行 ${existingRows.length}件中、system≠介護 ${existingNonKaigo.length}件) ―`);
+  console.log(`  引き継ぐ行数: ${carriedCount}${SKIP_CARRYOVER ? " (SKIP_SYSTEM_CARRYOVER=1のため0固定)" : ""}`);
+  console.log(`  引き継げず消える非介護行数: ${missing.length}`);
+  console.log(`  キー衝突 (既存側で同キー複数、判定不能): ${collisions.length}`);
+  if (missing.length) {
+    console.log("  ★消える非介護行の内訳:");
+    for (const { rows } of missing) {
+      const r = rows[0];
+      console.log(`    ${r.visit_date} ${r.start_time} user_id=${r.user_id.slice(0, 8)}… system=${r.system} notes=${r.notes}`);
+    }
+  }
+  if (collisions.length) {
+    console.log("  ★衝突の内訳:");
+    for (const { key, rows } of collisions) {
+      console.log(`    key=${key} → ${rows.map((r) => `id=${r.id.slice(0, 8)}…(system=${r.system})`).join(" / ")}`);
+    }
+  }
+  console.log("");
+
+  // 最終 INSERT payload (_code は system 引き継ぎのキー計算専用。DB列に無いので剥がす)
+  const insertReady = deduped.map((p) => ({
+    user_id: p.user_id, staff_id: p.staff_id, visit_date: p.visit_date, start_time: p.start_time,
+    end_time: p.end_time, service_type: p.service_type, system: p.system, status: p.status,
+    office_id: p.office_id, notes: p.notes,
+  }));
+  if (insertReady[0]) console.log("INSERT payload サンプル:\n", JSON.stringify(insertReady[0], null, 2), "\n");
 
   if (!EXECUTE) {
     console.log("※ DRY RUN のため INSERT していません。--execute で本番投入。");
     return;
   }
 
+  // ★ B: 引き継げない (消える/衝突する) 非介護行があるときは exit 2 で止める。
+  //   人が一覧を見て、fix系scriptの再実行や対応表の見直しを判断してから再度回すこと。
+  if (missing.length || collisions.length) {
+    console.error(`✗ 引き継げない非介護行が ${missing.length + collisions.length} 件あります。--execute を中止します。`);
+    console.error("  上の「消える非介護行の内訳」「衝突の内訳」を確認し、対処してから再実行してください。");
+    process.exit(2);
+  }
+
   // ★ 削除の前に FK を検証する (削除だけ実行されてデータが消える事故を防ぐ)
   //   ⚠ ここで payloadsFinal (宣言は下) と MAP_TAG (この script の変数名は TAG) を
   //     参照していて、--execute が **必ず TDZ エラーで落ちていた**。
   //     DRY RUN は手前で return するので気づけない。2026-08-31 是正。
-  await assertRefsExist(sb, deduped, [{ column: "user_id", table: "clients", label: "利用者" }, { column: "staff_id", table: "members", label: "職員" }],
+  await assertRefsExist(sb, insertReady, [{ column: "user_id", table: "clients", label: "利用者" }, { column: "staff_id", table: "members", label: "職員" }],
     { hint: `migrations/_meisai_num_to_client${TAG ? "_" + TAG : ""}.json の client_id を確認` });
 
   // 冪等: 既存の①介護取込行を削除してから入れ直す。
   // ⚠ **必ず対象月に絞る**。月スコープを付け忘れると 7 月を取り込んだ瞬間に
   //   同じ事業所の 6 月の実績が丸ごと消える (2026-08-07 に四街道で実際に起きた)。
-  const [y, m] = TARGET_MONTH.split("-").map(Number);
-  const MONTH_LAST = `${TARGET_MONTH}-${String(new Date(y, m, 0).getDate()).padStart(2, "0")}`;
   const { error: delErr } = await sb.from("kaigo_visit_schedule").delete()
     .eq("office_id", office.id).like("notes", "[MEISAI取込%")
-    .gte("visit_date", MONTH_FIRST).lte("visit_date", MONTH_LAST);
+    .gte("visit_date", MONTH_FIRST).lte("visit_date", MONTH_LAST0);
   if (delErr) { console.error(`✗ 既存削除失敗: ${delErr.message}`); process.exit(1); }
   console.log("既存 ①介護取込行 削除完了");
 
   // 本番 INSERT (chunk)
-  const payloadsFinal = deduped;
+  const payloadsFinal = insertReady;
   console.log(`本番 INSERT 開始: ${payloadsFinal.length}行 ...`);
   const CH = 500;
   let done = 0;
