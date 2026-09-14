@@ -20,10 +20,15 @@
 //   ② ①が無ければ 認定のうち一番新しいもの (画面の既定と同じ挙動に寄せる)
 //   ③ 認定を 1 件も持たない利用者は **NULL のまま**
 //      (画面側は selectedCertId が無い状態なので filter が効かず、そのまま表示される)
-//   ④ ⚠ 2026-09-05追加: 同一利用者に★異なる(保険者番号,被保険者番号)の認定が
-//      2件以上ある利用者は**スキップ**する (別人の認定が紛れ込んでいる疑い。
-//      実例: 金綱伸 — 121046|1004866628 と 122291|1004012089。転居か誤結合か
-//      当方データだけでは判定できないため、機械的な開始日順の自動選択はしない)。
+//   ④ ⚠ 2026-09-05追加・2026-09-14緩和: 同一利用者に★異なる(保険者番号,被保険者番号)の
+//      認定が2件以上ある利用者は、原則**スキップ**する (別人の認定が紛れ込んでいる疑い。
+//      実例: 金綱伸 — 121046|1004866628 と 122291|1004012089。★ 保険者番号自体が違う。
+//      転居か誤結合か当方データだけでは判定できないため、機械的な開始日順の自動選択はしない)。
+//      ★ ただし ★ 保険者番号が全件同一で、被保険者番号だけが複数ある場合
+//      (例: 大和久由美子 — 122192|H351000486→122192|1000118241。被保険者証の更新で
+//      よくある形) は、★ 実施日を含む認定が1件に一意に決まるときに限り紐付ける。
+//      「保険者が別」= 別人混入の疑いが強い型と、「保険者は同じで被保番だけ変わった」=
+//      更新履歴の型を分けて扱う (前者のみ 従来どおりスキップ)。
 //
 //   node migrations/fix_assessment_cert_link.mjs            # DRY RUN
 //   node migrations/fix_assessment_cert_link.mjs --execute
@@ -92,16 +97,25 @@ async function main() {
   }
   const nameById = new Map(clients.map((c) => [c.id, c.name]));
 
-  // ⚠ 2026-09-05 H指摘で追加: 同一 client に★異なる (保険者番号, 被保険者番号) の
-  //   認定が2つ以上あるとき、その利用者は別人の認定が紛れ込んでいる疑いがある
-  //   (実例: 金綱伸 — 121046|1004866628 と 122291|1004012089 の2件。転居か誤結合か
-  //   当方データだけでは判定できない。fix_insurance_record_wrong_owner.mjsは検出方向が
-  //   逆 (1被保番→複数client) のためこのケースを拾えない)。
+  // ⚠ 2026-09-05 H指摘で追加・2026-09-14緩和: 同一 client に★異なる (保険者番号,
+  //   被保険者番号) の認定が2つ以上あるとき、その利用者は別人の認定が紛れ込んでいる
+  //   疑いがある (実例: 金綱伸 — 121046|1004866628 と 122291|1004012089 の2件。
+  //   転居か誤結合か当方データだけでは判定できない。fix_insurance_record_wrong_owner.mjs
+  //   は検出方向が逆 (1被保番→複数client) のためこのケースを拾えない)。
   //   ★名前では判定しない — (保険者,被保番) の異なり数で機械的に検出する。
-  const multiIdentityUsers = new Set();
+  //
+  //   ★ 2026-09-14: 「保険者番号自体が複数」(別人混入の疑いが強い) と
+  //   「保険者は同一で被保険者番号だけ複数」(被保険者証の更新で普通に起きる) を分ける。
+  //   後者は crossInsurerUsers には入れず、pickCert 側で「実施日を含む認定が1件に
+  //   一意に決まる」ときだけ紐付ける (決まらなければ multiIdentity へ落とす)。
+  const crossInsurerUsers = new Set(); // 保険者番号自体が複数 → 常にスキップ
+  const sameInsurerMultiInsured = new Set(); // 保険者は同一・被保番だけ複数 → 条件付きで許可
   for (const [uid, list] of certsByUser) {
+    const insurers = new Set(list.map((c) => c.insurer_number ?? ""));
     const pairs = new Set(list.map((c) => `${c.insurer_number ?? ""}|${c.insured_number ?? ""}`));
-    if (pairs.size > 1) multiIdentityUsers.add(uid);
+    if (pairs.size <= 1) continue;
+    if (insurers.size > 1) crossInsurerUsers.add(uid);
+    else sameInsurerMultiInsured.add(uid);
   }
 
   /** 実施日に有効な認定。無ければ一番新しい認定 (fix_care_plan_cert_link.mjs と同一規則) */
@@ -127,9 +141,26 @@ async function main() {
   const links = [];
   const noCert = [];
   const multiIdentity = [];
+  const sameInsurerResolved = []; // ④緩和で紐付けたもの (どの認定が一意に決まったか出力用)
   let fallback = 0;
   for (const a of nulls) {
-    if (multiIdentityUsers.has(a.user_id)) { multiIdentity.push(a); continue; }
+    if (crossInsurerUsers.has(a.user_id)) { multiIdentity.push({ a, reason: "保険者番号が複数" }); continue; }
+    if (sameInsurerMultiInsured.has(a.user_id)) {
+      // ★ 緩和条件: 実施日を含む認定が「ちょうど1件」に絞れるときだけ紐付ける。
+      //   0件(代替フォールバック)・2件以上(同日に重なる認定)はどちらも不確定として
+      //   従来どおりスキップする (「一意に決まる」を保険者違いの場合より厳しくする)。
+      const list = certsByUser.get(a.user_id) ?? [];
+      const day = String(a.assessment_date ?? "").slice(0, 10);
+      const covering = list.filter(
+        (c) =>
+          (!c.certification_start_date || c.certification_start_date <= day) &&
+          (!c.certification_end_date || c.certification_end_date >= day),
+      );
+      if (covering.length !== 1) { multiIdentity.push({ a, reason: `実施日を含む認定が${covering.length}件 (一意に決まらない)` }); continue; }
+      links.push({ a, c: covering[0], covered: true });
+      sameInsurerResolved.push({ a, c: covering[0] });
+      continue;
+    }
     const c = pickCert(a);
     if (!c) { noCert.push(a); continue; }
     const day = String(a.assessment_date ?? "").slice(0, 10);
@@ -143,6 +174,7 @@ async function main() {
   console.log(`\n紐付ける: ${links.length} 件 (${new Set(links.map((x) => x.a.user_id)).size} 名)`);
   console.log(`  うち ①実施日に有効な認定: ${links.length - fallback} 件`);
   console.log(`  うち ②該当が無く「一番新しい認定」で代替: ${fallback} 件  ← 実施日が初回認定より前 等`);
+  console.log(`  うち ④緩和 (保険者は同一・被保番だけ複数だが実施日で1件に一意) : ${sameInsurerResolved.length} 件`);
   for (const { a, c, covered } of links.slice(0, 15)) {
     console.log(
       `    ${(nameById.get(a.user_id) ?? a.user_id).padEnd(12)} 実施日 ${a.assessment_date} → ${c.care_level} (${c.certification_start_date}〜${c.certification_end_date ?? ""})${covered ? "" : "  ※代替"}`,
@@ -150,13 +182,21 @@ async function main() {
   }
   if (links.length > 15) console.log(`    … 他 ${links.length - 15} 件`);
 
+  if (sameInsurerResolved.length) {
+    console.log(`\n★ ④緩和で紐付けたもの (保険者は同一・被保番の更新履歴と判断):`);
+    for (const { a, c } of sameInsurerResolved) {
+      const pairs = [...new Set((certsByUser.get(a.user_id) ?? []).map((x) => `${x.insurer_number ?? ""}|${x.insured_number ?? ""}`))];
+      console.log(`    ${nameById.get(a.user_id) ?? a.user_id} (実施日 ${a.assessment_date}) — 保有していた(保険者,被保番): ${pairs.join(" / ")} → 採用: ${c.insurer_number}|${c.insured_number} (${c.care_level})`);
+    }
+  }
+
   console.log(`\n対象外 (認定を 1 件も持たない = NULL のままで画面には出る): ${noCert.length} 件`);
   for (const a of noCert) console.log(`    ${nameById.get(a.user_id) ?? a.user_id} (実施日 ${a.assessment_date})`);
 
-  console.log(`\n要確認・スキップ (同一利用者に異なる(保険者,被保番)の認定が複数=別人混入の疑い): ${multiIdentity.length} 件`);
-  for (const a of multiIdentity) {
+  console.log(`\n要確認・スキップ (別人混入の疑い、または実施日で認定が一意に決まらない): ${multiIdentity.length} 件`);
+  for (const { a, reason } of multiIdentity) {
     const pairs = [...new Set((certsByUser.get(a.user_id) ?? []).map((c) => `${c.insurer_number ?? ""}|${c.insured_number ?? ""}`))];
-    console.log(`    ${nameById.get(a.user_id) ?? a.user_id} (実施日 ${a.assessment_date}) — 保有する(保険者,被保番): ${pairs.join(" / ")}`);
+    console.log(`    ${nameById.get(a.user_id) ?? a.user_id} (実施日 ${a.assessment_date}) — 理由: ${reason} — 保有する(保険者,被保番): ${pairs.join(" / ")}`);
   }
 
   if (!EXECUTE) {
