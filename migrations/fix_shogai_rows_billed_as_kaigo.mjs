@@ -120,6 +120,12 @@ const hasKaigo = new Set(
 const EXCLUDE_NAME = /重訪|重度|同行/;   // TJ が積み上げなので日単位でも判定できない
 const targets = [];
 for (const r of rows) {
+  // ⚠ 2026-09-14 是正 (H/J): クエリが notes LIKE '*MEISAI障害取込*' なので、
+  //   既に本scriptで是正済み (notesに MARKER を追記済み) の行も再取得してしまい、
+  //   何度実行しても同じ行を「対象」として再報告し続けていた (dry-run誤検出。
+  //   高品 田村ムラエ7行で発覚。実害は無い — --execute側は下でMARKER有無を見て
+  //   冪等に書くため — が、dry-runの表示だけ「まだ直っていない」ように見えて紛らわしい)。
+  if ((r.notes ?? "").includes(MARKER)) continue;    // ⓪ 既に是正済みの行は対象外
   const ben = benByClient.get(r.user_id);
   if (!ben) continue;
   if (!hasKaigo.has(r.user_id)) continue;             // ① 両制度の人だけ
