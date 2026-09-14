@@ -6,6 +6,7 @@
     "check:monitoring-plan-revision": "tsx scripts/monitoring-plan-revision-verify.mts",
     "check:monitoring-rows": "tsx scripts/monitoring-rows-verify.mts",
     "check:bath-yobo-code": "tsx scripts/bath-yobo-code-check.mts",
+    "check:meisai-map-keys": "tsx scripts/meisai-map-keys-check.mts",
     "check:unused-why": "tsx scripts/unused-tables-why.mts",
     "check:cert-overlap": "tsx scripts/check-cert-overlap.mts",
     "check:cert-tiebreak": "tsx scripts/check-cert-tiebreak.mts",

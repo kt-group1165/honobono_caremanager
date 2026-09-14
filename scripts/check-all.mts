@@ -52,6 +52,9 @@ const CHECKS: Check[] = [
   //   ★ 2026-09-05 に 14 本中 2 本が起動しなくなっていた (_sample_data.mjs の変更に追随漏れ)。
   //   ★ 「検証済み」と文書にあっても 再実行したら動かない、が実在したので gate に置く。
   { name: "sample-seeds", script: "check:sample-seeds", why: "★ サンプル seed 14 本が DRY RUN で起動するか (壊れると検証手段ごと失う)" },
+  // ★ 2026-09-14 新設。DB不要・ローカルJSON比較のみで軽い。1b2e9a0aで四街道6名が
+  //   無関係commitに巻き込まれ対応表から消えた事故 (件数は変わらず検知できなかった)の再発防止。
+  { name: "meisai-map-keys", script: "check:meisai-map-keys", why: "★ MEISAI対応表のキーが無関係commitで消えていないか (件数一致の入れ替わりも検知)" },
   // ★ 2026-09-05 に積み上がった純関数の検査。★ どれも 落ちたら金額が動く。
   //   ★ 1 本 2 秒程度で DB を使わないので gate に入れて問題ない。
   { name: "shuchu-gensan", script: "check:shuchu-gensan", why: "特定事業所集中減算 (80%/法人)" },
