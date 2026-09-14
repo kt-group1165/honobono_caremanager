@@ -22,11 +22,16 @@
 //   氏名も weekly/riyouhyou 両ページから拾い、_name_normalize.mjs で正規化して
 //   一致しなければ警告して skip する (別人の取り違え防止)。
 //
-// ── 対象月の決め方 (要確認事項への回答) ──────────────────────────────────
-//   週間計画ページの「令和 年 月分」欄が**空欄のことがある** (H実例: 秋葉法昌)。
-//   このときは**同じPDF内の別表ページ**に印字された提供年月
-//   ("令和 8年 6月　0000375402　秋葉 法昌 様" のような行) で埋める。
-//   別表ページも読めなければ (束ね方が崩れている等) 要確認として skip する。
+// ── 対象月の決め方 (2026-09-14 H指摘で訂正) ────────────────────────────
+//   ★ 週間計画ページの「令和 年 月分」欄は**計画を作成した月**であって
+//   サービス提供年月ではない (実例: 新井秀雄。週間計画ヘッダは「4月分・
+//   作成4/20」だが実際のサービス提供年月は7月。空欄でなくても中身が
+//   誤っていることがあるため、週間計画のヘッダ月は**一切使わない**)。
+//   ★ 対象月は必ず**利用票(第6表)ページ自身に印字された提供年月**
+//   ("令和 8年 7月分" 等、_riyouhyou_pdf.mjs と同じ正規表現) から取る。
+//   利用票ページが無い/月が読めないときだけ、別表ページの提供年月
+//   ("令和 8年 6月　0000375402　秋葉 法昌 様" のような行) で補完する。
+//   どちらも読めなければ要確認として skip する。
 //
 // ── 重複防止 ────────────────────────────────────────────────────────────
 //   (user_id, report_type, report_month) で既存があれば skip する
@@ -75,8 +80,8 @@ const CARE_PLAN3_HOUR_KEYS = ["h00", "h02", "h04", "h06", "h08", "h10", "h12", "
 function parseBundle(pdfPath) {
   const { texts, words } = extractPages(pdfPath);
   const out = {
-    weekly: null, riyouhyouIdentity: null, riyouhyouGrid: null,
-    betsuhyouItems: null, betsuhyouWarn: [], betsuhyouMonth: null, betsuhyouName: null,
+    weekly: null, riyouhyouIdentity: null, riyouhyouGrid: null, riyouhyouMonth: null,
+    betsuhyouItems: null, betsuhyouWarn: [], betsuhyouPublicExpense: [], betsuhyouMonth: null, betsuhyouName: null,
     betsuhyouLimitAmount: null, pages: [],
   };
   for (let i = 0; i < texts.length; i++) {
@@ -86,11 +91,16 @@ function parseBundle(pdfPath) {
     if (kind === "riyouhyou") {
       out.riyouhyouIdentity = pickIdentity(words[i]);
       out.riyouhyouGrid = extractGrid(words[i]);
+      // ★ 対象月の唯一の正しいソース (2026-09-14 H指摘)。週間計画のヘッダ月は
+      // 「計画作成月」であって提供月ではないため使わない。
+      const mm = /令和[\s　]*(\d+)[\s　]*年[\s　]*(\d+)[\s　]*月分/.exec(texts[i]);
+      if (mm) out.riyouhyouMonth = `${2018 + Number(mm[1])}-${String(Number(mm[2])).padStart(2, "0")}`;
     }
     if (kind === "betsuhyou") {
-      const { items, warn } = extractBetsuhyouRows(words[i]);
+      const { items, warn, publicExpenseByProvider } = extractBetsuhyouRows(words[i]);
       out.betsuhyouItems = items;
       out.betsuhyouWarn = warn;
+      out.betsuhyouPublicExpense = publicExpenseByProvider ?? [];
       // 「区分支給限度基準額(単位)」の直後に出る数字 (要介護度から機械的に決まる値。
       // _riyouhyou_pdf.mjs の LIMIT_TO_CARE_LEVEL と同じ値だが、印字を直接読むほうが
       // 要介護度の読み取り誤りに影響されず確実)
@@ -152,6 +162,11 @@ function buildDetailPayload(prev, b, month) {
     insurer_number: prev?.insurer_number || b.riyouhyouIdentity?.insurer || "",
     short_stay_days: prev?.short_stay_days ?? { prev: 0, current: 0, total: 0 },
     limit_management: prev?.limit_management ?? [],
+    // ⚠ EditFormUsageDetail の items[] スキーマに公費専用の列が無いため、
+    // items[].user_copay は既に「公費適用後の実際の利用者負担」に是正済み
+    // (extractBetsuhyouRows 側)。この欄は根拠を残すための参考情報で、
+    // 画面はこのキーを読まない (2026-09-14 H指摘への対応)。
+    public_expense_by_provider: b.betsuhyouPublicExpense?.length ? b.betsuhyouPublicExpense : (prev?.public_expense_by_provider ?? []),
     _import_source: { kind: MARKER, month },
   };
 }
@@ -219,16 +234,23 @@ async function main() {
     console.log(`  → ${dbName || b.riyouhyouIdentity.name} (client_id=${clientId})`);
     ok++;
 
-    // ── 対象月: 週間計画の欄が空なら別表ページの提供年月で埋める ──────────
-    let targetMonth = b.weekly?.targetMonth ?? null;
+    // ── 対象月: 利用票(第6表)の提供年月を正とする (2026-09-14 H指摘で訂正) ──
+    //   週間計画のヘッダ月は「計画作成月」であって提供月ではないため使わない
+    //   (新井秀雄で実証: 週間計画ヘッダは4月分だが実際の提供年月は7月)。
+    let targetMonth = b.riyouhyouMonth ?? null;
+    let monthSource = "利用票";
     if (!targetMonth && b.betsuhyouMonth) {
       targetMonth = b.betsuhyouMonth;
-      console.log(`  ℹ 週間計画の「令和 年 月分」が空欄のため、別表ページの提供年月で補完: ${targetMonth}`);
+      monthSource = "別表 (利用票の年月が読めなかったため補完)";
     }
     if (!targetMonth) {
-      console.log("  ✗ 対象月が週間計画・別表のどちらからも読めない → skip (要確認)");
+      console.log("  ✗ 対象月が利用票・別表のどちらからも読めない → skip (要確認)");
       skipped++;
       continue;
+    }
+    console.log(`  対象月: ${targetMonth} (出どころ: ${monthSource})`);
+    if (b.weekly?.targetMonth && b.weekly.targetMonth !== targetMonth) {
+      console.log(`  ⚠ 週間計画ヘッダの月 (${b.weekly.targetMonth}) と利用票の提供年月 (${targetMonth}) が食い違う。週間計画ヘッダは計画作成月の可能性があるため対象月には使わない`);
     }
 
     // ── 第3表 (care-plan-3) ──────────────────────────────────────────
@@ -282,9 +304,15 @@ async function main() {
         const tag = it._money_source === "direct" ? "" : it._money_source === "group-total" ? " (合計行から按分)" : " ⚠既定値のまま(要確認)";
         console.log(`    ${it.service_code}  ${it.service_content}  ${it.provider_name}(${it.provider_number || "番号不明"})  単位${it.units}×${it.count}回=${it.service_units}  単価${it.unit_price} 給付率${it.benefit_rate}% 総額${it.total_cost} 保険請求${it.insurance_claim} 負担${it.user_copay}${tag}`);
       }
+      if (b.betsuhyouPublicExpense?.length) {
+        console.log("  公費適用 (items[].user_copay は下記に是正済。参考情報として content.public_expense_by_provider にも保存):");
+        for (const pe of b.betsuhyouPublicExpense) console.log(`    ${pe.provider_name_prefix}: 公費額${pe.kohi_claim} 本人負担${pe.honnin_futan}`);
+      }
       if (b.betsuhyouWarn.length) {
         console.log("  ⚠ 自己検算の注意:");
         for (const w of b.betsuhyouWarn) console.log(`    ⚠ ${w}`);
+      } else {
+        console.log("  ✓ 自己検算: 印字の合計行と items[] の合計が完全一致 (円単位)");
       }
 
       const { data: existingDetail } = await sb

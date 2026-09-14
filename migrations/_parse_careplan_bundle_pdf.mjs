@@ -345,24 +345,32 @@ export function extractBetsuhyouRows(words) {
     if (money.unitPrice == null || money.benefitRate == null) {
       warn.push(`「◯◯合計」行 (y=${subtotalY}) の単価/給付率が読めない (事業所番号 ${providerNum ?? "不明"}) — 対象 ${pendingGroup.length} 行を規定値のまま出す`);
       for (const r of pendingGroup) items.push(finalizeItem(r, null));
-    } else {
-      // ⚠ 合計行の総額/保険請求/負担額は**グループ全体の値**であって各行の値ではない。
-      //   finalizeItem に totalCost 等をそのまま渡すと「直接印字された値」と区別が
-      //   付かず全行が同じ金額になってしまう (実測で発覚)。単価/給付率だけ渡して
-      //   各行の service_units から finalizeItem 自身に計算させる。
-      const rateOnly = { unitPrice: money.unitPrice, benefitRate: money.benefitRate };
-      let sumComputed = 0;
-      for (const r of pendingGroup) {
-        items.push(finalizeItem(r, rateOnly));
-        if (r.service_units != null) sumComputed += Math.floor(r.service_units * money.unitPrice);
-      }
-      if (money.totalCost != null) {
-        const diff = Math.abs(sumComputed - money.totalCost);
-        if (diff > Math.max(1, pendingGroup.length)) {
-          warn.push(`「◯◯合計」行 (y=${subtotalY}, 事業所番号 ${providerNum ?? "不明"}) の費用総額 ${money.totalCost} と、行ごとの計算値の合計 ${sumComputed} の差が ${diff}円 (丸め許容 ${pendingGroup.length}円 を超過) — 要確認`);
-        }
-      }
+      pendingGroup = [];
+      return;
     }
+    // ⚠ 合計行の総額/保険請求/負担額は**グループ全体の値**であって各行の値ではない。
+    //   finalizeItem に totalCost 等をそのまま渡すと「直接印字された値」と区別が
+    //   付かず全行が同じ金額になってしまう (実測で発覚)。単価/給付率だけ渡して
+    //   各行の service_units から finalizeItem 自身に計算させる。
+    const rateOnly = { unitPrice: money.unitPrice, benefitRate: money.benefitRate };
+    const lineItems = pendingGroup.map((r) => finalizeItem(r, rateOnly));
+    // ★ 2026-09-14 H指摘: 「丸め誤差の範囲内で近い」ではなく、印字された合計行と
+    //   ★完全一致★させる (最後の行で差額を吸収する)。floor を行ごとに取ると
+    //   合計行 (集計後に floor) とは 1円単位でずれることがあるため。
+    const last = lineItems[lineItems.length - 1];
+    if (money.totalCost != null) {
+      const sumCost = lineItems.reduce((s, it) => s + it.total_cost, 0);
+      last.total_cost += money.totalCost - sumCost;
+    }
+    if (money.insuranceClaim != null) {
+      const sumClaim = lineItems.reduce((s, it) => s + it.insurance_claim, 0);
+      last.insurance_claim += money.insuranceClaim - sumClaim;
+    } else {
+      // 保険請求額が合計行に無い (実データ6本では常にある) ときは
+      // 給付率から計算した値のままにする
+    }
+    for (const it of lineItems) it.user_copay = it.total_cost - it.insurance_claim;
+    for (const it of lineItems) items.push(it);
     pendingGroup = [];
   };
 
@@ -389,7 +397,77 @@ export function extractBetsuhyouRows(words) {
     warn.push(`最後まで「◯◯合計」行が見つからなかった行が ${pendingGroup.length} 件残った (事業所番号 ${pendingGroup[0].provider_number ?? "不明"})`);
     for (const r of pendingGroup) items.push(finalizeItem(r, null));
   }
-  return { items, warn };
+
+  // ── 公費適用 (2026-09-14 H指摘で追加) ──────────────────────────────────
+  //   法別番号を持つ利用者は「公費適用事業所／公費額／本人負担」の別表が
+  //   ページ下部に別途印字される (実測: 生活保護単独の新井秀雄のみ。他5本は
+  //   セクションごと印字されない=対象外の人には出ない)。事業所番号までは
+  //   印字されず、事業所名の先頭一致で items の事業所番号グループに対応付ける。
+  //   本人負担を「合計行と同じ最終行で差額吸収」方式で items[].user_copay に
+  //   反映する (介護保険の給付率だけでは公費適用者の利用者負担がわからず、
+  //   全額が利用者負担に見えてしまうため)。
+  const kohi = extractKohiTable(words);
+  const publicExpenseByProvider = [];
+  if (kohi) {
+    for (const row of kohi.rows) {
+      const matched = items.filter((it) => it.provider_name && it.provider_name.includes(row.providerNamePrefix));
+      if (!matched.length) {
+        warn.push(`公費適用事業所「${row.providerNamePrefix}」に対応する items 行が見つからない (公費額 ${row.kohiClaim})`);
+        continue;
+      }
+      // 各行の user_copay を「総額に比例配分、最終行で差額吸収」で置き換える
+      let remaining = row.honninFutan;
+      const totalCostSum = matched.reduce((s, it) => s + it.total_cost, 0);
+      for (let i = 0; i < matched.length; i++) {
+        if (i === matched.length - 1) { matched[i].user_copay = remaining; continue; }
+        const share = totalCostSum !== 0 ? Math.round(row.honninFutan * (matched[i].total_cost / totalCostSum)) : 0;
+        matched[i].user_copay = share;
+        remaining -= share;
+      }
+      publicExpenseByProvider.push({
+        provider_name_prefix: row.providerNamePrefix,
+        kohi_claim: row.kohiClaim,
+        honnin_futan: row.honninFutan,
+      });
+    }
+    if (kohi.total && kohi.total.kohiClaim != null) {
+      const sumKohi = publicExpenseByProvider.reduce((s, r) => s + r.kohi_claim, 0);
+      if (sumKohi !== kohi.total.kohiClaim) {
+        warn.push(`公費額合計の印字値 ${kohi.total.kohiClaim} と行ごとの合計 ${sumKohi} が一致しない — 要確認`);
+      }
+    }
+  }
+
+  return { items, warn, publicExpenseByProvider };
+}
+
+/**
+ * 「公費適用事業所／公費額／本人負担」表 (公費併用者にだけ印字される) を読む。
+ * 印字が無い (対象外の人) ときは null を返す。
+ */
+function extractKohiTable(words) {
+  const header = words.find((w) => w.t === "公費適用事業所");
+  if (!header) return null;
+  const totalLabel = words.find((w) => w.t === "公費額合計");
+  const rowYs = [...new Set(
+    words
+      .filter((w) => w.x > 395 && w.x < 500 && w.y > header.y + 5 && (!totalLabel || w.y < totalLabel.y - 2))
+      .map((w) => Math.round(w.y * 2) / 2),
+  )].sort((a, b) => a - b);
+  const rows = [];
+  for (const y of rowYs) {
+    const nameWord = words.find((w) => Math.abs(w.y - y) <= 2 && w.x > 395 && w.x < 500);
+    if (!nameWord) continue;
+    const kohiClaim = numAt(words, y, 495, 545, 2);
+    const honninFutan = numAt(words, y, 545, 580, 2);
+    if (kohiClaim == null) continue;
+    const m = /^(.*?)\((\d+)\)$/.exec(nameWord.t);
+    rows.push({ providerNamePrefix: m ? m[1] : nameWord.t, kohiClaim, honninFutan: honninFutan ?? 0 });
+  }
+  const total = totalLabel
+    ? { kohiClaim: numAt(words, totalLabel.y, 495, 545, 3), honninFutan: numAt(words, totalLabel.y, 545, 580, 3) }
+    : null;
+  return { rows, total };
 }
 
 /** raw行 + 金額(直接 or 合計行由来) → EditFormUsageDetail の items[] 1行分 */
