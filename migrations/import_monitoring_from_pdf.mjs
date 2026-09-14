@@ -49,6 +49,7 @@
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync, existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectCurrentPlanWithFallback } from "../src/lib/careplan-selection.ts";
@@ -96,11 +97,60 @@ async function fetchAll(table, select, tweak) {
   return out;
 }
 
-// ── ★ PDF解析はまだ無い。パーサができたらここだけ差し替える ─────────────────
+// ── PDF → JSON (_parse_monitoring_pdf.py) を呼び、people[] 形に変換する ──────
+//   2026-09-14: パーサが実PDF19本で確立できたので実装。以降の処理 (引き当て・
+//   重複判定・care_plan_id解決) は --load と完全共通のまま。
+//
+// ⚠ reassessment_needed は「あり」の実例を市川いとで確認できたが (楕円座標が
+//   「なし」と明確に別位置)、H指示によりDB書込は当面 null のまま
+//   (DRY RUN 出力にだけ抽出値を出す)。実行時は reassessment_needed_extracted
+//   に生値を保持し、sheet.reassessment_needed は常に null で組む。
+function parseWareki(s) {
+  // "R8/6/29" 形式 (モニタリングparserの確認期日欄)
+  const m = /^R(\d+)\/(\d+)\/(\d+)$/.exec((s ?? "").trim());
+  if (!m) return null;
+  return `${2018 + Number(m[1])}-${String(Number(m[2])).padStart(2, "0")}-${String(Number(m[3])).padStart(2, "0")}`;
+}
+
 function parsePdfs() {
-  console.error("✗ --pdf はまだ未実装です (_parse_monitoring_pdf.py が無い)。");
-  console.error("  実物のPDFをリモートで見てから作ります。今は --load <json> を使ってください。");
-  process.exit(1);
+  const raw = execFileSync("python", ["migrations/_parse_monitoring_pdf.py", ...PDFS], {
+    encoding: "utf8",
+    maxBuffer: 1 << 28,
+    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
+  });
+  const parsed = JSON.parse(raw);
+  return parsed.map((p) => ({
+    name: p.name,
+    monitoring_date: p.monitoring_date,
+    assessor_name: p.assessor_name,
+    form_type: "要介護", // このparserは要介護様式のみ対応 (予防は別対応)
+    status: "completed",
+    summary: p.summary || null,
+    plan_change: p.plan_change || null,
+    reassessment_needed_extracted: p.reassessment_needed ?? null, // 表示専用。DB書込には使わない
+    items: (p.items ?? []).map((it, i) => ({
+      item_number: i + 1,
+      issue: it.kadai || null,
+      short_term_goal: it.short_term_goal || null,
+      service_content: it.service_content || null,
+      execution_status: it.implementation_status || null,
+      confirm_method: it.confirmation_method || null,
+      confirm_date: parseWareki(it.confirmation_date),
+      user_evaluation: it.user_evaluation || null,
+      user_comment: it.user_comment || null,
+      family_evaluation: it.family_evaluation || null,
+      family_comment: it.family_comment || null,
+      // needs_fulfillment_comment 用の列がまだ無いため、非空のときだけ本体に括弧書きで残す
+      // (捨てると情報が消えるが、専用列を足すかは要H判断)
+      needs_fulfillment: it.needs_fulfillment_comment
+        ? `${it.needs_fulfillment || ""}（${it.needs_fulfillment_comment}）`
+        : (it.needs_fulfillment || null),
+      next_action: it.response_comment
+        ? `${it.response || ""}（${it.response_comment}）`
+        : (it.response || null),
+    })),
+    source_file: p.source_file,
+  }));
 }
 
 function loadJson(p) {
@@ -111,14 +161,13 @@ function loadJson(p) {
 }
 
 async function main() {
-  if (PDFS.length) parsePdfs();
-  if (!LOAD_PATH) {
-    console.error("使い方: --load <json> [--office <名前>] [--execute]");
+  if (!PDFS.length && !LOAD_PATH) {
+    console.error("使い方: --pdf <path...> | --load <json>  [--office <名前>] [--execute]");
     process.exit(1);
   }
   console.log(`=== モニタリングシート 取込 ${EXECUTE ? "【本番】" : "【DRY RUN】"} ===\n`);
 
-  const people = loadJson(LOAD_PATH);
+  const people = PDFS.length ? parsePdfs() : loadJson(LOAD_PATH);
   console.log(`  入力 ${people.length} 名`);
 
   // ── 予防様式は未対応。混ざっていたら除外して一覧に出す ────────────────────
@@ -179,10 +228,21 @@ async function main() {
       for (const r of rows) existingKeys.add(`${r.user_id}|${r.monitoring_date}`);
     }
   }
-  const dup = ok.filter((p) => existingKeys.has(`${p.clientId}|${p.monitoring_date}`));
-  const fresh = ok.filter((p) => !existingKeys.has(`${p.clientId}|${p.monitoring_date}`));
+  // ⚠ 2026-09-14 判明 (負のコントロール): 同じ実行内で同じ(client,日付)が
+  //   複数回渡されるケース (同じPDFを誤って2回 --pdf に渡す等) は、DBの
+  //   既存行だけを見るexistingKeysでは検知できず、両方とも fresh 扱いになって
+  //   二重insertされてしまう。実行内で既に採用した(client,日付)も
+  //   existingKeys同様に扱う (2件目以降をdup扱いにする)。
+  const dup = [];
+  const fresh = [];
+  for (const p of ok) {
+    const k = `${p.clientId}|${p.monitoring_date}`;
+    if (existingKeys.has(k)) { dup.push(p); continue; }
+    existingKeys.add(k);
+    fresh.push(p);
+  }
   if (dup.length) {
-    console.log(`\n  -- 既に同じ日付のシートがあるためスキップ ${dup.length} 名 --`);
+    console.log(`\n  -- 既に同じ日付のシートがある(またはこの実行内で重複)ためスキップ ${dup.length} 名 --`);
     for (const p of dup) console.log(`     ${p.name} (${p.monitoring_date})`);
   }
 
@@ -202,20 +262,24 @@ async function main() {
       }
     }
   }
+  /** @returns {{id: string|null, kind: "covering"|"fallback"|"none"}} */
   function resolveCarePlanId(uid, day) {
     const list = plansByUser.get(uid) ?? [];
-    if (!list.length) return null;
+    if (!list.length) return { id: null, kind: "none" };
     const covering = list.find((p) =>
       (!p.start_date || p.start_date <= day) && (!p.end_date || p.end_date >= day));
-    if (covering) return covering.id;
+    if (covering) return { id: covering.id, kind: "covering" };
     const sorted = list.slice().sort((a, b) => String(b.start_date ?? "").localeCompare(String(a.start_date ?? "")));
-    return selectCurrentPlanWithFallback(sorted)?.id ?? null;
+    const fb = selectCurrentPlanWithFallback(sorted)?.id ?? null;
+    return { id: fb, kind: fb ? "fallback" : "none" };
   }
 
   let noPlan = 0;
+  const planKindCounts = { covering: 0, fallback: 0, none: 0 };
   const inserts = [];
   for (const p of fresh) {
-    const carePlanId = resolveCarePlanId(p.clientId, p.monitoring_date);
+    const { id: carePlanId, kind: planKind } = resolveCarePlanId(p.clientId, p.monitoring_date);
+    planKindCounts[planKind]++;
     if (!carePlanId) noPlan++;
     inserts.push({
       sheet: {
@@ -226,7 +290,14 @@ async function main() {
         status: p.status || "completed",
         form_type: "要介護",
         care_plan_id: carePlanId,
+        summary: p.summary || null,
+        plan_change: p.plan_change || null,
+        // ⚠ H指示: 「あり」実例(市川いと)は確認できたが、DB書込は当面 null 固定。
+        //   抽出値は reassessment_needed_extracted としてDRY RUN表示にのみ使う。
+        reassessment_needed: null,
+        reassessment_planned_date: null,
       },
+      reassessment_needed_extracted: p.reassessment_needed_extracted ?? null,
       items: (p.items ?? []).map((it) => ({
         tenant_id: TENANT,
         item_number: it.item_number,
@@ -243,6 +314,18 @@ async function main() {
         adl_change: it.adl_change || null,
         plan_revision_needed: revisionNeededToDb(it.plan_revision_needed ?? ""),
         revision_reason: it.revision_reason || null,
+        // ── 新設列 (2026-09-14 add_monitoring_honobono_columns.sql) ──────
+        issue: it.issue || null,
+        service_content: it.service_content || null,
+        user_comment: it.user_comment || null,
+        family_comment: it.family_comment || null,
+        user_evaluation: it.user_evaluation || null,
+        family_evaluation: it.family_evaluation || null,
+        needs_fulfillment: it.needs_fulfillment || null,
+        execution_status: it.execution_status || null,
+        confirm_method: it.confirm_method || null,
+        confirm_date: it.confirm_date || null,
+        next_action: it.next_action || null,
       })),
       name: p.name,
     });
@@ -250,10 +333,37 @@ async function main() {
 
   console.log(`\n  取込対象 ${inserts.length} 名 (項目 ${inserts.reduce((s, i) => s + i.items.length, 0)} 件)`);
   if (noPlan) console.log(`  ⚠ care_plan_id が付けられない (計画書が1件も無い) ${noPlan} 名 — null のまま入る (画面の計画期間タブでは出ない)`);
+  console.log(`  care_plan_id 解決内訳: 対象日をカバー ${planKindCounts.covering} / フォールバック ${planKindCounts.fallback} / 解決不可 ${planKindCounts.none}`);
   for (const i of inserts.slice(0, 10)) {
     console.log(`     ${i.name}  [${i.sheet.monitoring_date}]  care_plan_id=${i.sheet.care_plan_id ?? "(無し)"}  項目${i.items.length}件`);
   }
   if (inserts.length > 10) console.log(`     … 他 ${inserts.length - 10} 名`);
+
+  // ── item数の分布 (7行以上の人) ──────────────────────────────────────────
+  const itemCounts = inserts.map((i) => ({ name: i.name, n: i.items.length }));
+  const sevenPlus = itemCounts.filter((x) => x.n >= 7);
+  console.log(`\n  項目数分布: ${itemCounts.map((x) => x.n).sort((a, b) => a - b).join(",")}`);
+  console.log(`  7行以上 ${sevenPlus.length} 名: ${sevenPlus.map((x) => `${x.name}(${x.n})`).join(" / ") || "(無し)"}`);
+
+  // ── 語彙一覧 (満足度・ニーズ充足度・対応・実行確認・確認方法) ────────────
+  const vocab = { user_evaluation: new Map(), family_evaluation: new Map(), needs_fulfillment: new Map(), next_action: new Map(), execution_status: new Map(), confirm_method: new Map() };
+  for (const i of inserts) {
+    for (const it of i.items) {
+      for (const f of Object.keys(vocab)) {
+        const v = it[f];
+        if (v) vocab[f].set(v, (vocab[f].get(v) ?? 0) + 1);
+      }
+    }
+  }
+  console.log("\n  語彙一覧:");
+  for (const [f, m] of Object.entries(vocab)) {
+    const top = [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+    console.log(`    ${f}: ${top.map(([v, c]) => `${v}(${c})`).join(" / ")}`);
+  }
+
+  // ── 「あり」実例の有無 (再アセスメントの必要。DB書込には使わない) ───────────
+  const ariList = inserts.filter((i) => i.reassessment_needed_extracted === "あり");
+  console.log(`\n  再アセスメントの必要=あり (抽出値・DBには書かない): ${ariList.length} 件 ${ariList.map((i) => i.name).join(" / ")}`);
 
   if (!EXECUTE) { console.log("\n※ DRY RUN のため INSERT していません。--execute で反映します。"); return; }
 
