@@ -38,16 +38,73 @@
 //     y だけで時間帯を決める**方式にした (これも本セッションで確立した
 //     「ラベル行と本文1行目が同じ行に見える」系の罠と同根)。
 //
-// ── 別表(第7表)の数値列 — ★ 未確定・要確認 ────────────────────────────────
-//   事業所名・事業所番号・サービス内容・サービスコードの4列は位置が明確で
-//   自信を持って取れる。★ 単位数・割引後単位数・回数・サービス単位／金額・
-//   費用総額・給付率・保険/事業費請求額 等の数値列は、ヘッダーが2〜3行に
-//   折り返されて隣接列と間隔が詰まっており、1サンプル(淺井珠惠、割引なし・
-//   全行回数=1)だけでは列境界を確実に決められなかった (合計行との自己検算が
-//   一致しなかった)。★ このモジュールでは数値列の抽出を実装していない
-//   (務めて推測しない)。行の合計行(「◯◯合計」)を目印にした自己検算ができる
-//   別サンプル(割引適用 or 回数>1の行を含むもの)が要る。
+// ── 別表(第7表)の数値列 (2026-09-14、H から渡された残り5本の実PDFで解決) ──
+//   6本 (淺井珠惠・秋葉法昌・有川秀人・新井秀雄・阿部博・浅野修司) の実測で
+//   列境界と「行ごとの金額の出方」が確定した。
+//
+//   ★ 重要な発見: 単位数・回数・サービス単位／金額 は **全行**に印字されるが、
+//   単価・費用総額・給付率・保険/事業費請求額・利用者負担 は **行によって
+//   出方が2通り**ある:
+//     ① 単独で金額が乗る行 (加算行の多く。処遇改善加算はサービス単位／金額すら
+//        出ないことがある = 定率計算のため)
+//     ② 複数行が「◯◯合計」行に集約され、金額はその合計行にしか出ない
+//        (基本サービス＋一部の加算。例: 淺井珠惠の 通所介護Ⅰ３１(基本) と
+//        個別機能訓練加算Ⅰ２ → 通所介護合計 1行に集約)
+//   ①か②かは実測でも規則性が見い出せなかった (加算の種類では決まらない:
+//   同じ「サービス提供体制加算」でも①のことも②に含まれることもある)。
+//   よって **金額の直接印字が無い行は、同じ事業所番号の直後の「◯◯合計」行
+//   から 単価/給付率 を借りて自行の sサービス単位／金額 に適用**する
+//   (単価・給付率は同一事業所・同一カテゴリ内の全行で共通と実測で確認済み)。
+//   計算式は EditFormUsageDetail (reports-content.tsx) の updateItem() と
+//   **完全に同じ式**を使う (総額=floor(単位×単価)、保険請求=floor(総額×率/100)、
+//   利用者負担=総額-保険請求)。★ 自己検算: 集約グループの各行をこの式で
+//   計算した総額の合計は、印字された合計行の費用総額と ±(行数-1)円以内で
+//   一致する (floor を行ごとに取るか合計後に取るかの丸め差。実測で確認)。
+//   一致しなければ warn に積んで呼出側が確認できるようにする。
+//
+//   ★ 区分支給限度基準を超える単位数・種類支給限度基準を超える単位数は
+//   実データ6本すべてで 0 (限度超過なし) だったため未検証。印字された
+//   「基準内単位数」の括弧値が sサービス単位／金額と食い違う行があれば
+//   warn に積む (limit超過に未対応の合図)。
+//
+//   ★ 通所リハ送迎減算のような **負の単位数** (-47×2回=-94) も実在する。
+//   数値の正規表現は符号つきにしてある。
 // ============================================================================
+const NUM_RE = /^\(?(-?\d+)\)?$/;
+const DEC_RE = /^(\d+\.\d+)$/;
+
+/** y±tol・x∈[xMin,xMax) にある数値語を1つ拾う (最も近い y を優先)。丸括弧は外す */
+function numAt(words, y, xMin, xMax, tol) {
+  const cand = words.filter((w) => Math.abs(w.y - y) <= tol && w.x >= xMin && w.x < xMax && NUM_RE.test(w.t));
+  if (!cand.length) return null;
+  cand.sort((a, b) => Math.abs(a.y - y) - Math.abs(b.y - y));
+  return Number(NUM_RE.exec(cand[0].t)[1]);
+}
+/** 単価 (小数点つき) を拾う */
+function decAt(words, y, xMin, xMax, tol) {
+  const cand = words.filter((w) => Math.abs(w.y - y) <= tol && w.x >= xMin && w.x < xMax && DEC_RE.test(w.t));
+  if (!cand.length) return null;
+  cand.sort((a, b) => Math.abs(a.y - y) - Math.abs(b.y - y));
+  return Number(cand[0].t);
+}
+
+/** その y の行が「◯◯合計」行かどうか (x 108〜185 の内容帯に「合計」を含む語があるか、
+ * 2行に折り返す場合もあるので y±10 で見る) */
+function isSubtotalRow(words, y) {
+  return words.some((w) => Math.abs(w.y - y) <= 10 && w.x >= 108 && w.x < 190 && w.t.includes("合計"));
+}
+
+/** 1行ぶんの金額列を y から読む。無ければ null 埋めで返す (呼出側が判定に使う) */
+function readMoneyAt(words, y, tol = 3) {
+  return {
+    unitPrice: decAt(words, y, 605, 622, tol),
+    totalCost: numAt(words, y, 623, 663, tol),
+    benefitRate: numAt(words, y, 668, 683, tol),
+    insuranceClaim: numAt(words, y, 683, 716, tol),
+    userCopay: numAt(words, y, 750, 786, tol),
+    withinLimitBracket: numAt(words, y, 583, 601, tol),
+  };
+}
 
 const DAY_LABELS = ["月", "火", "水", "木", "金", "土", "日"];
 const DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -216,14 +273,15 @@ export function extractWeeklySchedule(words) {
 }
 
 /**
- * 別表(第7表)ページから行明細を取り出す。
- * ★ 事業所名・事業所番号・サービス内容・サービスコードのみ (自信あり)。
- * ★ 単位数等の数値列は未実装 (要確認、モジュール冒頭コメント参照)。
+ * 別表(第7表)ページから行明細を取り出す。EditFormUsageDetail の items[] 形に
+ * 直接使える形で返す (事業所名/番号/内容/コードに加え、単位数・回数・金額まで)。
+ * @returns {{items: object[], warn: string[]}}
  */
 export function extractBetsuhyouRows(words) {
   // サービスコードは6桁の数字で、x が概ね190〜210に出る (実測)
-  const codeWords = words.filter((w) => /^\d{6}$/.test(w.t) && w.x >= 185 && w.x <= 215);
-  const rows = [];
+  const codeWords = words.filter((w) => /^\d{6}$/.test(w.t) && w.x >= 185 && w.x <= 215)
+    .sort((a, b) => a.y - b.y);
+  const raw = [];
   for (const cw of codeWords) {
     // ⚠ 1行明細は実際には**2〜3の物理行**にまたがる (実測)。事業所名が長いと
     //   3行に折り返す (例: 「フランスベッドメ/ディカル千葉営業/所」で
@@ -251,13 +309,112 @@ export function extractBetsuhyouRows(words) {
     const standaloneNumber = words.find((w) => nearY(w) && w.x >= 41 && w.x <= 110 && /^\d{10}$/.test(w.t));
     const providerNumber = suffixMatch ? suffixMatch[1] : (standaloneNumber ? standaloneNumber.t : null);
     const providerName = suffixMatch ? providerRaw.slice(0, suffixMatch.index) : providerRaw;
-    rows.push({
+
+    // 単位数・回数・サービス単位／金額は全行に出る (実測6本で確認)
+    const units = numAt(words, cw.y, 295, 322, 3);
+    const count = numAt(words, cw.y, 360, 385, 3);
+    const serviceUnits = numAt(words, cw.y, 393, 412, 3) ?? numAt(words, cw.y, 414, 442, 3)
+      ?? (units != null && count != null ? units * count : null);
+    // 金額がこの行自身に直接出ているか (①のパターン)。出ていなければ null のまま返し、
+    // 呼出側 (groupBetsuhyouItems) が直後の「◯◯合計」行から借りる (②のパターン)。
+    const money = readMoneyAt(words, cw.y, 3);
+
+    raw.push({
+      y: cw.y,
       service_code: cw.t,
       service_content: content || null,
       provider_name: providerName || null,
       provider_number: providerNumber,
-      // 数値列は要確認のため未設定 (呼出側で null 埋めのまま提示する)
+      units, count, service_units: serviceUnits,
+      ...money,
     });
   }
-  return rows;
+
+  // 「◯◯合計」行 (コード無し) を集めて、直前の同一事業所番号の無金額行に配る
+  const subtotalYs = [...new Set(
+    words.filter((w) => w.x >= 108 && w.x < 190 && w.t.includes("合計")).map((w) => Math.round(w.y * 2) / 2),
+  )].sort((a, b) => a - b);
+
+  const warn = [];
+  const items = [];
+  let pendingGroup = []; // 金額がまだ無い行 (①でない行) を溜めておく
+  const flushGroup = (subtotalY) => {
+    if (!pendingGroup.length) return;
+    const providerNum = pendingGroup[0].provider_number;
+    const money = readMoneyAt(words, subtotalY, 8);
+    if (money.unitPrice == null || money.benefitRate == null) {
+      warn.push(`「◯◯合計」行 (y=${subtotalY}) の単価/給付率が読めない (事業所番号 ${providerNum ?? "不明"}) — 対象 ${pendingGroup.length} 行を規定値のまま出す`);
+      for (const r of pendingGroup) items.push(finalizeItem(r, null));
+    } else {
+      // ⚠ 合計行の総額/保険請求/負担額は**グループ全体の値**であって各行の値ではない。
+      //   finalizeItem に totalCost 等をそのまま渡すと「直接印字された値」と区別が
+      //   付かず全行が同じ金額になってしまう (実測で発覚)。単価/給付率だけ渡して
+      //   各行の service_units から finalizeItem 自身に計算させる。
+      const rateOnly = { unitPrice: money.unitPrice, benefitRate: money.benefitRate };
+      let sumComputed = 0;
+      for (const r of pendingGroup) {
+        items.push(finalizeItem(r, rateOnly));
+        if (r.service_units != null) sumComputed += Math.floor(r.service_units * money.unitPrice);
+      }
+      if (money.totalCost != null) {
+        const diff = Math.abs(sumComputed - money.totalCost);
+        if (diff > Math.max(1, pendingGroup.length)) {
+          warn.push(`「◯◯合計」行 (y=${subtotalY}, 事業所番号 ${providerNum ?? "不明"}) の費用総額 ${money.totalCost} と、行ごとの計算値の合計 ${sumComputed} の差が ${diff}円 (丸め許容 ${pendingGroup.length}円 を超過) — 要確認`);
+        }
+      }
+    }
+    pendingGroup = [];
+  };
+
+  for (const r of raw) {
+    if (r.totalCost != null && r.benefitRate != null) {
+      // ① 単独で金額が出ている行 — そのまま確定
+      items.push(finalizeItem(r, { unitPrice: r.unitPrice, totalCost: r.totalCost, benefitRate: r.benefitRate, insuranceClaim: r.insuranceClaim, userCopay: r.userCopay }));
+      continue;
+    }
+    // ② 金額なし — 直後の「◯◯合計」行を待つ。合計行が単独の金額付き行の直後に
+    //   挟まっていることもあるので、次の subtotalY が現在の y より後ろにあるものを使う
+    pendingGroup.push(r);
+    // ⚠ 窓を 30px にしてあるのは意図的: 単一スロット離れた合計行 (最大 27px 実測、
+    //   2行折返しラベル込み) は拾いつつ、2行以上のグループの**先頭行**からは
+    //   届かない距離にする (2行グループの最小間隔は実測 32.8px)。ここを広げすぎると
+    //   グループの先頭行だけで早期に flush してしまい、後続行が別グループとして
+    //   誤って同じ合計行に群がる事故になる。
+    const nextSubtotalY = subtotalYs.find((sy) => sy > r.y && sy < r.y + 30);
+    if (nextSubtotalY != null && isSubtotalRow(words, nextSubtotalY)) {
+      flushGroup(nextSubtotalY);
+    }
+  }
+  if (pendingGroup.length) {
+    warn.push(`最後まで「◯◯合計」行が見つからなかった行が ${pendingGroup.length} 件残った (事業所番号 ${pendingGroup[0].provider_number ?? "不明"})`);
+    for (const r of pendingGroup) items.push(finalizeItem(r, null));
+  }
+  return { items, warn };
+}
+
+/** raw行 + 金額(直接 or 合計行由来) → EditFormUsageDetail の items[] 1行分 */
+function finalizeItem(r, money) {
+  const units = r.units ?? 0;
+  const count = r.count ?? 0;
+  const serviceUnits = r.service_units ?? (units * count);
+  const unitPrice = money?.unitPrice ?? 10.0;
+  const benefitRate = money?.benefitRate ?? 90;
+  // 金額を直接読めた行はそれを優先し、合計行由来のときは呼出側と同じ式で計算する
+  const hasDirect = money?.totalCost != null;
+  const withinLimitUnits = serviceUnits; // ⚠ 限度超過は実データ6本に無く未対応 (モジュール冒頭コメント参照)
+  const totalCost = hasDirect ? money.totalCost : Math.floor(withinLimitUnits * unitPrice);
+  const insuranceClaim = hasDirect && money.insuranceClaim != null ? money.insuranceClaim : Math.floor(totalCost * benefitRate / 100);
+  const userCopay = hasDirect && money.userCopay != null ? money.userCopay : totalCost - insuranceClaim;
+  return {
+    provider_name: r.provider_name ?? "",
+    provider_number: r.provider_number ?? "",
+    service_content: r.service_content ?? "",
+    service_code: r.service_code ?? "",
+    units, discount_units: units, count,
+    service_units: serviceUnits,
+    over_type_units: 0, over_limit_units: 0, within_limit_units: withinLimitUnits,
+    unit_price: unitPrice, total_cost: totalCost, benefit_rate: benefitRate, insurance_claim: insuranceClaim,
+    fixed_copay: 0, user_copay: userCopay, user_full_pay: 0,
+    _money_source: money ? (hasDirect ? "direct" : "group-total") : "default",
+  };
 }
