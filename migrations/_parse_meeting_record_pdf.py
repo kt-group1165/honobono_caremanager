@@ -166,48 +166,76 @@ def parse_page0(rows):
     return out
 
 
-def parse_page1(rows):
-    """2ページ目: 本文 (「結論　別紙1」というページ自己ラベルの下にある実体)。
+def parse_appendix_page(rows):
+    """3ページ目以降の別紙ページ1枚を読む。
 
-    ⚠ 「結論」という語が2回出る: ①ページ上部の自己ラベル「結論　別紙1」
-    (どのページかを示すだけ、本文ではない) ②本文が始まる行 (「結論」＋本文の
-    1行目が同じ行にクラスタされている・実測で確認)。①をスキップして②から
-    trailing-text方式で拾う。
+    ⚠ 2026-09-14実測 (秋葉法昌 8/19分、3ページ構成) で判明: 別紙は
+    **1件とは限らず、検討内容用と結論用が別々のページに分かれることがある**。
+    各ページ先頭に「検討内容　別紙1」または「結論　別紙1」という自己ラベルが
+    付き、★どちらの欄の別紙かはこのラベルで判別できる (中身では判別できない)。
+    以前は「別紙は必ず結論の別紙」と決め打ちしていたが誤りだった。
+
+    「検討内容」「結論」という語が本文中に**2回**出る: ①ページ上部の自己ラベル
+    (「別紙1」も同じ行) ②本文が始まる行 (ラベル＋本文の1行目が同じ行に
+    クラスタされている・実測で確認)。①をスキップして②から trailing-text
+    方式で拾う。
+
+    @returns (target, text) target は "discussion_content" | "conclusion" | None
     """
     def is_page_number(row):
         return bool(re.fullmatch(r"\d+/\d+", row_text(row).strip().replace(" ", "")))
 
-    keturon_rows = [i for i, row in enumerate(rows) if "結論" in [w["text"] for w in row]]
-    # 自己ラベル(「別紙1」も同じ行にある)を除いた、本文側の「結論」を使う
-    body_idx = next((i for i in keturon_rows if "別紙1" not in [w["text"] for w in rows[i]]), None)
+    def find_body(label):
+        label_rows = [i for i, row in enumerate(rows) if label in [w["text"] for w in row]]
+        return next((i for i in label_rows if "別紙1" not in [w["text"] for w in rows[i]]), None)
+
+    self_label_row = next((row for row in rows if "別紙1" in [w["text"] for w in row]), None)
+    self_label_texts = [w["text"] for w in self_label_row] if self_label_row else []
+
+    if "検討内容" in self_label_texts:
+        target = "discussion_content"
+        label = "検討内容"
+    elif "結論" in self_label_texts:
+        target = "conclusion"
+        label = "結論"
+    else:
+        return None, ""  # 未知の自己ラベル。中身では判別しない (推測しない)
+
+    body_idx = find_body(label)
     if body_idx is None:
-        return ""
-    return extract_section(rows[body_idx:], "結論", is_page_number) or ""
+        return target, ""
+    return target, extract_section(rows[body_idx:], label, is_page_number) or ""
 
 
 def parse_one(path):
     with pdfplumber.open(path) as pdf:
         rows0 = cluster_rows(pdf.pages[0].extract_words())
         header = parse_page0(rows0)
-        appendix1 = None
-        if len(pdf.pages) > 1:
-            rows1 = cluster_rows(pdf.pages[1].extract_words())
-            appendix1 = parse_page1(rows1)
+        appendices = {"discussion_content": None, "conclusion": None}
+        unknown_appendix_pages = 0
+        for page in pdf.pages[1:]:
+            rows = cluster_rows(page.extract_words())
+            target, text = parse_appendix_page(rows)
+            if target is None:
+                unknown_appendix_pages += 1
+                continue
+            appendices[target] = ((appendices[target] or "") + "\n" + text).strip() if appendices[target] else text
 
-    # ⚠ 2ページ目は「結論　別紙1」という自己ラベルが付いている (実測1件で確認)。
-    #   「検討内容」欄は「別紙参照」とだけ印字され、別紙が検討内容自身の別紙なのか
-    #   結論の別紙なのかはページの自己ラベルからは判断できない。★推測でどちらかに
-    #   決め打ちせず、2ページ目の自己ラベルどおり「結論」の別紙として扱う
-    #   (discussion_contentは「別紙参照」という原文のまま出す)。
+    # 本文欄が「別紙参照」のときは、対応する自己ラベルの別紙ページの中身を連結する。
+    # 別紙が無い/自己ラベルが読めないときは「別紙参照」という原文のまま残す
+    # (中身を無理に埋めない)。
     discussion_content = header.pop("discussion_content_page0")
+    if appendices["discussion_content"]:
+        discussion_content = ((discussion_content or "") + "\n" + appendices["discussion_content"]).strip()
     conclusion = header.pop("conclusion_page0") or ""
-    if appendix1:
-        conclusion = (conclusion + "\n" + appendix1).strip()
+    if appendices["conclusion"]:
+        conclusion = (conclusion + "\n" + appendices["conclusion"]).strip()
 
     return {
         **header,
         "discussion_content": discussion_content,
         "conclusion": conclusion or None,
+        "unknown_appendix_pages": unknown_appendix_pages,
         "source_file": path,
     }
 
