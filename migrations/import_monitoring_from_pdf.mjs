@@ -53,6 +53,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { selectCurrentPlanWithFallback } from "../src/lib/careplan-selection.ts";
 import { revisionNeededToDb } from "../src/lib/monitoring-plan-revision.ts";
+import { normName } from "./_name_normalize.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
 const argAfter = (name) => {
@@ -81,7 +82,6 @@ for (const l of readFileSync(path.join(ROOT, ".env.local"), "utf8").split(/\r?\n
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY,
   { auth: { persistSession: false } });
 
-const normName = (s) => (s ?? "").normalize("NFKC").replace(/[\s　]/g, "");
 
 async function fetchAll(table, select, tweak) {
   const out = [];
