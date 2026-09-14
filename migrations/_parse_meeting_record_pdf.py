@@ -66,13 +66,30 @@ def find_dates(rows):
     return dates
 
 
-def value_after_label(rows, label, max_tokens=6):
-    """ラベルと同じ行の右側にある値を返す (要介護度/利用者名と同じ形の項目用)"""
+# ⚠ 「照会」形式 (実際には会議を開催せず、各事業所へ照会文書を送るだけ) の
+#   記録では 開催場所/開催時間 が印字上**空欄**になり、値が無いまま次のラベルが
+#   同じ行にクラスタされる (実測: 開催場所開催回数 が1行に同居)。既知ラベルの
+#   集合を stop 語として渡し、値が無い(=次のトークンが即ラベル)ときは
+#   None を返す (次のラベル文字列を値として誤って拾わない)。
+KNOWN_LABELS = {"開催場所", "開催時間", "開催回数", "所属（職種）", "氏名", "検討内容", "結論"}
+
+
+def value_after_label(rows, label, max_tokens=6, stops=KNOWN_LABELS):
+    """ラベルと同じ行の右側にある値を返す (要介護度/利用者名と同じ形の項目用)。
+    stops に含まれる語 (=他のラベル) に到達したら打ち切る (照会形式で空欄の
+    ときに次のラベルを値として拾わないため)。
+    """
     for row in rows:
         texts = [w["text"] for w in row]
         if label in texts:
             idx = texts.index(label)
-            return "".join(texts[idx + 1: idx + 1 + max_tokens]).strip()
+            parts = []
+            for t in texts[idx + 1: idx + 1 + max_tokens]:
+                if t in stops:
+                    break
+                parts.append(t)
+            s = "".join(parts).strip()
+            return s or None
     return None
 
 
