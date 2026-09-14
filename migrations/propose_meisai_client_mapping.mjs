@@ -278,13 +278,26 @@ async function main() {
     //    (MEISAI の番号が DB の user_number と違うだけのことが多い。
     //     氏名には「(同行)」「(身)」「(有)」のような区分の注記が付く)
     const numberHitsNobody = sameNum.length === 0;
-    if (!numberHitsOther && !numberHitsNobody) continue;   // 番号で正しく引ける → 対応表は要らない
 
     const inArea = areaClients(m.area);
-    const cands = clients.filter((c) => sameName(c.name, m.name) && inArea.has(c.id));
     const push = (c, kind) => proposals.push({ area: m.area, num: m.num, name: m.name, rows: m.rows,
       cid: c.id, cname: c.name, cnum: c.user_number, kind, notInArea: !inArea.has(c.id),
       wrong: sameNum.map((x) => x.name).join("/") });
+
+    // ⚠ 2026-09-14 是正 (H/J): 番号が clients.user_number に直接一致し氏名も合う場合、
+    //   従来はここで「対応表は要らない」と判定して★黙って continue していた。
+    //   しかし実際の取込 (import_meisai_visit_records.mjs) は対応表(JSON)しか見ず、
+    //   user_number へのフォールバックが無いため、ここで捨てると★永久に対応表へ入る
+    //   手段が無くなる (市原 鈴木浩隆・四街道 6名の実績ブロックで発覚。うち四街道6名は
+    //   一度対応表にあったのに commit 1b2e9a0a で誤って削除され、この分岐のせいで
+    //   二度と提案されずにいた)。samePersonByNumber で1人に絞れているので安全に提案する。
+    if (!numberHitsOther && !numberHitsNobody) {
+      const matched = sameNum.find((c) => samePersonByNumber(c.name, m.name)) ?? sameNum[0];
+      push(matched, "番号がuser_numberに直接一致 (対応表に未登録)");
+      continue;
+    }
+
+    const cands = clients.filter((c) => sameName(c.name, m.name) && inArea.has(c.id));
 
     // ① 氏名だけで決まる (従来の道)
     if (cands.length === 1 && !/[（(].*[)）]/.test(cands[0].name)) {
@@ -333,7 +346,8 @@ async function main() {
   console.log(`提案 ${proposals.length} 件 / 同名が複数で決められない ${ambiguous.length} / 該当者が見つからない ${noMatch.length}`);
   proposals.forEach((p) => console.log(
     `   ${p.area.padEnd(8)} 番号${String(p.num).padEnd(11)}「${p.name}」${String(p.rows).padStart(3)}行` +
-    `  → ${p.cname} (user_number ${p.cnum})   ※番号は${p.kind === "別人に当たっていた" ? `別人「${p.wrong}」に当たっていた` : "当方の誰にも当たらなかった"}`));
+    `  → ${p.cname} (user_number ${p.cnum})   ※番号は${p.kind === "別人に当たっていた" ? `別人「${p.wrong}」に当たっていた`
+      : p.kind.startsWith("番号がuser_numberに直接一致") ? "user_numberに直接一致 (氏名も合致。対応表に未登録なだけ)" : "当方の誰にも当たらなかった"}`));
   if (ambiguous.length) { console.log("  決められない:"); ambiguous.forEach((a) => console.log("     " + a)); }
   if (needsReview.length) {
     console.log(`  ⚠ 当方側の氏名に括弧注記があるので自動では足さない ${needsReview.length} 件 — 同じ人か人が確かめること:`);
