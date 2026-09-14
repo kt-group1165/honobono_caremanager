@@ -15,6 +15,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { selectCurrentPlanWithFallback, hasMonitoringInMonth, isExpired } from "@/lib/careplan-selection";
 import { dbToRevisionNeeded, revisionNeededToDb } from "@/lib/monitoring-plan-revision";
+import { rowCountFor, buildSavePayload } from "@/lib/monitoring-rows";
 import { ja } from "date-fns/locale";
 import { BunreiPicker } from "@/components/bunrei/bunrei-picker";
 
@@ -244,9 +245,17 @@ function emptyItem(num: number): MonitoringItem {
   };
 }
 
+/**
+ * ⚠ 2026-09-14 是正: 以前は item_number 1〜FIXED_ROWS(6) の範囲でしか行を
+ *   拾わず、7件目以降を静かに落としていた (ほのぼののモニタリング記録表は
+ *   課題の数だけ行があり、6を超える実データを確認済み)。
+ *   rowCountFor で「最低FIXED_ROWS件・item_numberの最大値がそれを超えれば
+ *   そこまで」に拡張し、1..N を全部拾う。
+ */
 function buildFixedRows(source: MonitoringItem[]): MonitoringItem[] {
   const rows: MonitoringItem[] = [];
-  for (let i = 1; i <= FIXED_ROWS; i++) {
+  const count = rowCountFor(source, FIXED_ROWS);
+  for (let i = 1; i <= count; i++) {
     const found = source.find((it) => it.item_number === i);
     rows.push(found ?? emptyItem(i));
   }
@@ -747,14 +756,26 @@ export function MonitoringContent({
         setEditingSheetId(sheetId);
       }
 
-      const { error: delError } = await supabase
+      // ⚠ 2026-09-14 是正: 以前は「先に全delete → 画面の6行をinsert」だったため、
+      //   (a) 7行目以降を持つ既存データが常に消える (旧items.map()はFIXED_ROWS
+      //       固定の画面stateをそのまま書いていた)
+      //   (b) insertが失敗すると★旧データが跡形もなく消える (delete済みのため)
+      //   という2つの問題があった。
+      //   ① 保存対象は buildSavePayload で「全項目が空の行を除いた画面の全行」
+      //      にする (6行に切り詰めない)。
+      //   ② 削除対象の古いidを先に集めておき、★新しい行のinsertが成功した後に
+      //      だけ古い行を削除する (insert失敗時は旧データがそのまま残る =
+      //      消失しない。insert後の削除が万一失敗しても新旧が重複するだけで
+      //      消失はしない。真の原子性にはRPC化が要るが、まずは
+      //      「失敗しても消えない」順序に変えるだけの最小修正)。
+      const { data: oldItemRows, error: oldItemsErr } = await supabase
         .from("kaigo_monitoring_items")
-        .delete()
+        .select("id")
         .eq("monitoring_sheet_id", sheetId);
-      if (delError) throw delError;
+      if (oldItemsErr) throw oldItemsErr;
+      const oldItemIds = (oldItemRows ?? []).map((r: { id: string }) => r.id);
 
-      // Save all 6 rows
-      const rows = items.map((item) => ({
+      const rows = buildSavePayload(items).map((item) => ({
         monitoring_sheet_id: sheetId,
         item_number: item.item_number,
         short_term_goal: item.short_term_goal || null,
@@ -772,10 +793,20 @@ export function MonitoringContent({
         revision_reason: item.revision_reason || null,
       }));
 
-      const { error: insError } = await supabase
-        .from("kaigo_monitoring_items")
-        .insert(rows);
-      if (insError) throw insError;
+      if (rows.length) {
+        const { error: insError } = await supabase
+          .from("kaigo_monitoring_items")
+          .insert(rows);
+        if (insError) throw insError;
+      }
+
+      if (oldItemIds.length) {
+        const { error: delError } = await supabase
+          .from("kaigo_monitoring_items")
+          .delete()
+          .in("id", oldItemIds);
+        if (delError) throw delError;
+      }
 
       toast.success("モニタリングシートを保存しました");
     } catch (err: unknown) {

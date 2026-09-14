@@ -12,7 +12,8 @@
 -- ── 取込方針 (SQL適用後、import_monitoring_from_pdf.mjs から書く列) ────────
 --   既存のCHECK付き列 (user_satisfaction/family_satisfaction/achievement/
 --   adl_change/plan_revision_needed) には★取込では入れない (null のまま)。
---   新設列にPDFの原文をそのまま入れる。
+--   ★user_satisfaction/family_satisfactionのCHECKは変えない (画面の選択肢と
+--   対応しているため)。新設列にPDFの原文をそのまま入れる。
 --
 -- ⚠ Supabase SQL Editor に貼る場合は BEGIN;〜COMMIT; を1ブロックでRun。
 -- ============================================================================
@@ -22,8 +23,9 @@ BEGIN;
 ALTER TABLE kaigo_monitoring_items
   ADD COLUMN IF NOT EXISTS issue TEXT,                      -- 生活全般の解決すべき課題
   ADD COLUMN IF NOT EXISTS service_content TEXT,            -- サービス内容 (①②を分割しない原文)
-  ADD COLUMN IF NOT EXISTS user_opinion TEXT,                -- 利用者本人の意見・要望 (自由文)
-  ADD COLUMN IF NOT EXISTS family_opinion TEXT,              -- 家族の意見・要望 (自由文)
+  ADD COLUMN IF NOT EXISTS user_comment TEXT,                -- 利用者本人の意見・要望 (自由文)。
+                                                              --   satisfaction_comment(既存・user/family共有)は使わず対にする
+  ADD COLUMN IF NOT EXISTS family_comment TEXT,              -- 家族の意見・要望 (自由文)
   ADD COLUMN IF NOT EXISTS user_evaluation TEXT,             -- 満足度(本人)。CHECK無し。原文のまま
                                                               --   ("満足している"/"ある程度満足している"/"その他" 等)
   ADD COLUMN IF NOT EXISTS family_evaluation TEXT,           -- 満足度(家族)。同上
@@ -49,7 +51,7 @@ COMMIT;
 -- BEGIN;
 -- ALTER TABLE kaigo_monitoring_items
 --   DROP COLUMN IF EXISTS issue, DROP COLUMN IF EXISTS service_content,
---   DROP COLUMN IF EXISTS user_opinion, DROP COLUMN IF EXISTS family_opinion,
+--   DROP COLUMN IF EXISTS user_comment, DROP COLUMN IF EXISTS family_comment,
 --   DROP COLUMN IF EXISTS user_evaluation, DROP COLUMN IF EXISTS family_evaluation,
 --   DROP COLUMN IF EXISTS needs_fulfillment, DROP COLUMN IF EXISTS execution_status,
 --   DROP COLUMN IF EXISTS confirm_method, DROP COLUMN IF EXISTS confirm_date,
