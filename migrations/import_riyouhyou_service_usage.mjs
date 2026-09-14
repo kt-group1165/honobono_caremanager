@@ -39,12 +39,13 @@
 //     以前は 9 行固定で 10 行目以降が黙って消えていた (2026-08-31 に是正済)
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findRiyouhyouPdfs, parseRiyouhyouPages, normRiyouName, LIMIT_TO_CARE_LEVEL } from "./_riyouhyou_pdf.mjs";
 import { extractGrid, pickIdentity, toBoolean31, toCount31 } from "./_riyouhyou_grid.mjs";
+import { extractPages } from "./_pdf_words.mjs";
+import { fetchAll as fetchAllShared, resolveClients as resolveClientsShared } from "./_client_resolve.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
 const FORCE = process.argv.includes("--force");
@@ -84,45 +85,13 @@ const CARE_LEVEL_TO_LIMIT = Object.fromEntries(
   Object.entries(LIMIT_TO_CARE_LEVEL).map(([k, v]) => [v, Number(k)]),
 );
 
-/** PDF のテキスト・語 (座標つき) を PyMuPDF で取り出す */
-function extractPages(pdfPath) {
-  const py = [
-    "import fitz, json, sys",
-    "d = fitz.open(sys.argv[1])",
-    "texts, words = [], []",
-    "for i in range(d.page_count):",
-    "    p = d[i]",
-    "    texts.append(p.get_text())",
-    // ⚠ 語の座標は **回転を適用してから** 返す。
-    //   CubePDF の「ページの向き = 自動」で出すと /Rotate 90 の縦用紙になり
-    //   (mediabox 595x842)、get_text("words") が回転前の座標を返す。そのままだと
-    //   pickInsuranceNumbers の「ラベル y の近くで 6桁/10桁の行」が当たらず、
-    //   **保険者番号・被保険者番号が全員 null → 引き当て 0 名**になる (2026-09-01 実測)。
-    //   rotation 0 の PDF では rotation_matrix は単位行列なので既存の取込に影響しない。
-    "    m = p.rotation_matrix",
-    '    words.append([{"x": (fitz.Point(w[0], w[1]) * m).x, "y": (fitz.Point(w[0], w[1]) * m).y, "t": w[4]} for w in p.get_text("words")])',
-    'print(json.dumps({"texts": texts, "words": words}, ensure_ascii=False))',
-  ].join("\n");
-  // ⚠ Windows の python は既定 cp932 出力。UTF-8 を明示しないと氏名が壊れる
-  const raw = execFileSync("python", ["-c", py, pdfPath], {
-    encoding: "utf8",
-    maxBuffer: 1 << 26,
-    env: { ...process.env, PYTHONIOENCODING: "utf-8" },
-  });
-  return JSON.parse(raw);
-}
-
+// PDF 語抽出 (extractPages) と PostgREST 1000 行上限対応 (fetchAll) は
+// _pdf_words.mjs / _client_resolve.mjs に切り出し済み (2026-09-14)。
+// 呼出側のシグネチャ (extractPages(pdfPath) / fetchAll(build)、build は
+// sb をクロージャで捕まえた 0 引数関数) は変えていない。
 /** PostgREST の 1000 行上限を超えて全件取る */
 async function fetchAll(build) {
-  const out = [];
-  const STEP = 1000;
-  for (let from = 0; ; from += STEP) {
-    const { data, error } = await build().range(from, from + STEP - 1);
-    if (error) throw new Error(error.message);
-    out.push(...(data ?? []));
-    if (!data || data.length < STEP) break;
-  }
-  return out;
+  return fetchAllShared(sb, build);
 }
 
 const fmtReiwa = (iso) => {
@@ -215,73 +184,14 @@ function readArea(dir) {
 }
 
 // ── 2. 利用者を引き当てる ──────────────────────────────────────────────────
+// 実装は _client_resolve.mjs に切り出し済み (2026-09-14)。normalizeName に
+// normRiyouName を渡すことで、氏名フォールバックの挙動を変えていない。
 async function resolveClients(people) {
-  const insureds = [...new Set([...people.values()].map((p) => p.insured))];
-  const CH = 200;
-
-  const recs = [];
-  for (let i = 0; i < insureds.length; i += CH) {
-    const chunk = insureds.slice(i, i + CH);
-    recs.push(...await fetchAll(() => sb
-      .from("client_insurance_records")
-      .select("client_id, insurer_number, insured_number")
-      .in("insured_number", chunk)));
-  }
-  const byPair = new Map();
-  for (const r of recs) {
-    if (!r.insurer_number || !r.insured_number) continue;
-    const k = `${r.insurer_number}|${r.insured_number}`;
-    if (!byPair.has(k)) byPair.set(k, new Set());
-    byPair.get(k).add(r.client_id);
-  }
-
-  // clients 側にも番号があるので保険で見る
-  const cli = [];
-  for (let i = 0; i < insureds.length; i += CH) {
-    const chunk = insureds.slice(i, i + CH);
-    cli.push(...await fetchAll(() => sb
-      .from("clients")
-      .select("id, name, insurer_number, insured_number, deleted_at")
-      .in("insured_number", chunk)));
-  }
-  for (const c of cli) {
-    if (c.deleted_at) continue;
-    const k = `${c.insurer_number}|${c.insured_number}`;
-    if (!byPair.has(k)) byPair.set(k, new Set());
-    byPair.get(k).add(c.id);
-  }
-
-  // 氏名は全 client_id ぶん要る (認定側でしか当たらない人もいる)
-  const ids = [...new Set([...byPair.values()].flatMap((s) => [...s]))];
-  const nameById = new Map();
-  for (let i = 0; i < ids.length; i += CH) {
-    const chunk = ids.slice(i, i + CH);
-    const rows = await fetchAll(() => sb.from("clients").select("id, name, deleted_at").in("id", chunk));
-    for (const c of rows) nameById.set(c.id, { name: c.name, deleted: !!c.deleted_at });
-  }
-
-  // ── 被保番がプレースホルダの人だけ、氏名で引き当てる ──────────────────
-  //   ほのぼのには 被保番 "0000000000" のまま登録されている利用者が居る
-  //   (木更津 佐久間 歌子)。番号では絶対に当たらないので氏名で引くしかない。
-  //
-  //   ⚠ 氏名一致は本来いちばん弱い手がかりなので、条件を厳しくする:
-  //     ・PDF 側の被保番が **同じ数字の 10 桁** のときだけ
-  //     ・当方も **番号を持っていない** client に限る (番号がある人は別人)
-  //     ・氏名で **ちょうど 1 名**に決まるときだけ。2 名以上なら諦める
-  const needName = [...people.values()].filter(
-    (p) => /^(\d)\1{9}$/.test(p.insured ?? "") && !byPair.get(`${p.insurer}|${p.insured}`)?.size);
-  if (needName.length) {
-    const numberless = await fetchAll(() => sb.from("clients")
-      .select("id, name, insured_number, deleted_at").is("insured_number", null));
-    for (const p of needName) {
-      const hit = numberless.filter((c) => !c.deleted_at && normRiyouName(c.name) === p.nameKey);
-      if (hit.length !== 1) continue;
-      byPair.set(`${p.insurer}|${p.insured}`, new Set([hit[0].id]));
-      nameById.set(hit[0].id, { name: hit[0].name, deleted: false });
-      console.log(`   ℹ 被保番が ${p.insured} (プレースホルダ) のため氏名で引き当て: ${hit[0].name}`);
-    }
-  }
-  return { byPair, nameById };
+  return resolveClientsShared(sb, people, {
+    normalizeName: normRiyouName,
+    onNameMatch: (p, name) =>
+      console.log(`   ℹ 被保番が ${p.insured} (プレースホルダ) のため氏名で引き当て: ${name}`),
+  });
 }
 
 /** 対象月に有効な認定 (帳票ヘッダー用) */
