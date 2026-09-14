@@ -9,14 +9,18 @@
 //
 // ── ★重要な訂正 (2026-09-14) ─────────────────────────────────────────────
 //   当初「既存70件(手入力)のservice_meeting_notesテーブルに合わせる」前提で
-//   調査していたが、★/meeting-minutes画面はservice_meeting_notesを一切
-//   読んでいない(src/配下でgrepしても参照0件、migrations/merge_duplicate_
-//   clients.mjsだけが触っている=データ衛生ツールの対象止まり)。
-//   ★画面が実際に読むのは kaigo_report_documents
-//   (report_type='meeting-minutes'、content jsonbにMeetingContent型)
-//   であり、こちらは現在0行 (src/lib/meeting-minutes/queries.ts・types.ts参照)。
-//   ★この取込scriptはservice_meeting_notesではなく★kaigo_report_documentsを
-//   対象にする (画面に実際に出る場所へ入れる)。
+//   調査していたが、kaigo-app の src/ だけをgrepして「参照0件=未使用」と
+//   誤判定していた (order-appにはsrc/が無いため、app横断grepでこの罠を踏む。
+//   memory: feedback_grep_scope_missing_src_dir.md)。
+//   ★service_meeting_notesは★order-app (福祉用具) の表で、
+//   app/m/meeting/page.tsx・app/api/meeting-submit/route.ts・
+//   lib/meetingNotes.ts が読み書きしている、福祉用具担当者がスマホで入れる
+//   「担当者会議メモ」。ケアマネの第4表(サービス担当者会議の要点)とは別物で、
+//   実際に使われているデータ。★一切触らない。
+//   ★ケアマネの第4表 (このPDFの取込先) が実際に読むのは kaigo-app 側の
+//   kaigo_report_documents (report_type='meeting-minutes'、content jsonbに
+//   MeetingContent型) であり、こちらは現在0行 (src/lib/meeting-minutes/
+//   queries.ts・types.ts参照)。この取込scriptはこちらを対象にする。
 //
 // ── 入力JSONの仮スキーマ (_parse_meeting_record_pdf.py の出力そのまま) ──────
 //   { office, print_date, created_date, client_name, creator_name,
@@ -97,7 +101,7 @@ async function main() {
   }
   console.log(`=== 会議録(サービス担当者会議の要点) 取込 ${EXECUTE ? "【本番】" : "【DRY RUN】"} ===\n`);
   console.log(`  ★ 保存先は kaigo_report_documents (report_type='${REPORT_TYPE}')`);
-  console.log(`    (service_meeting_notesではない。画面 /meeting-minutes が読むのはこちら)\n`);
+  console.log(`    (service_meeting_notesはorder-app福祉用具の別物・触らない。/meeting-minutesが読むのはこちら)\n`);
 
   const records = loadJson(LOAD_PATH);
   console.log(`  入力 ${records.length} 件`);
