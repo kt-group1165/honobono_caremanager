@@ -34,10 +34,27 @@
 //   どちらも読めなければ要確認として skip する。
 //
 // ── 重複防止 ────────────────────────────────────────────────────────────
-//   (user_id, report_type, report_month) で既存があれば skip する
-//   (--force で上書き。import_riyouhyou_service_usage.mjs 相当の「人が入力済み
-//   なら触らない」判定は、この2帳票にはまだ実データが無いため未実装。
-//   運用開始後に必要なら同じ hasAnyMark 相当を足す)。
+//   service-usage-detail: (user_id, report_type, report_month) で既存があれば
+//   skip する (--force で上書き)。
+//   care-plan-3: (user_id, report_type, certification_id) で既存があれば
+//   skip する (--force は使わない。下記の cert 紐付け参照)。
+//
+// ── care-plan-3 は cert-linked な帳票 (2026-09-14 H指摘で追加) ───────────
+//   src/app/(authenticated)/reports/[type]/page.tsx の isCertLinked に
+//   "care-plan-3" が入っている。画面はその利用者の**最新の認定**の
+//   certification_id で docs を絞り込み (initialCertifications[0].id で
+//   `.filter(d => d.certification_id === initialCertId)`)、certification_id
+//   が null の行は**表示されない** (SESSION_START「cert-linked な帳票は
+//   certification_id を必ず入れる」の型。第1表で 11 件・アセスメントで 113 件、
+//   同じ理由で画面に出なかった前例がある)。
+//   ★ report_month はこの画面が一切参照しない (docsPromise が report_type だけで
+//   絞り込み、EditFormCarePlan3 も content.report_month を読まない)。既存の
+//   care-plan-3 実データ7件も全部 report_month=null なので、それに合わせて
+//   null のまま出す (2026-09-14 コードで確認)。
+//
+//   紐付け規則は fix_assessment_cert_link.mjs と同一 (対象月に有効な認定→
+//   無ければ最新。異なる保険者番号の認定が複数ある利用者はスキップ)。
+//   認定を1件も持たない利用者には書かない。
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
@@ -127,6 +144,86 @@ function parseBundle(pdfPath) {
   return out;
 }
 
+// ── 認定 (certification_id) の紐付け — fix_assessment_cert_link.mjs と同一規則 ──
+/** PostgREST の 1000 行上限を超えて全件取る */
+async function fetchAllRows(build) {
+  const out = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await build().range(from, from + 999);
+    if (error) throw new Error(error.message);
+    out.push(...data);
+    if (data.length < 1000) break;
+  }
+  return out;
+}
+
+/** clientIds の認定を取得し、fix_assessment_cert_link.mjs と同じ
+ * crossInsurerUsers (保険者番号自体が複数→常にスキップ) /
+ * sameInsurerMultiInsured (保険者は同一・被保番だけ複数→条件付き) を判定する */
+async function loadCertContext(clientIds) {
+  const certs = await fetchAllRows(() => sb
+    .from("client_insurance_records")
+    .select("id, client_id, insurer_number, insured_number, care_level, certification_start_date, certification_end_date")
+    .in("client_id", clientIds)
+    .order("id"));
+  const certsByUser = new Map();
+  for (const c of certs) {
+    if (!certsByUser.has(c.client_id)) certsByUser.set(c.client_id, []);
+    certsByUser.get(c.client_id).push(c);
+  }
+  const crossInsurerUsers = new Set();
+  const sameInsurerMultiInsured = new Set();
+  for (const [uid, list] of certsByUser) {
+    const insurers = new Set(list.map((c) => c.insurer_number ?? ""));
+    const pairs = new Set(list.map((c) => `${c.insurer_number ?? ""}|${c.insured_number ?? ""}`));
+    if (pairs.size <= 1) continue;
+    if (insurers.size > 1) crossInsurerUsers.add(uid);
+    else sameInsurerMultiInsured.add(uid);
+  }
+  return { certsByUser, crossInsurerUsers, sameInsurerMultiInsured };
+}
+
+/** 対象月 (YYYY-MM) に有効な認定。無ければ一番新しい認定 (fix_assessment_cert_link.mjs の
+ * pickCert() と同一規則。実施日の代わりに「対象月の月末」を基準日にする) */
+function pickCertForMonth(list, targetMonth) {
+  if (!list?.length) return null;
+  const monthEnd = new Date(Number(targetMonth.slice(0, 4)), Number(targetMonth.slice(5, 7)), 0);
+  const monthEndStr = `${targetMonth}-${String(monthEnd.getDate()).padStart(2, "0")}`;
+  const monthStartStr = `${targetMonth}-01`;
+  const valid = list.filter((c) =>
+    (!c.certification_start_date || c.certification_start_date <= monthEndStr) &&
+    (!c.certification_end_date || c.certification_end_date >= monthStartStr));
+  const pool = valid.length ? valid : list;
+  const sorted = pool.slice().sort((x, y) =>
+    String(y.certification_start_date ?? "").localeCompare(String(x.certification_start_date ?? "")));
+  return { cert: sorted[0], covered: valid.length > 0 };
+}
+
+/**
+ * clientId・対象月から書き込むべき certification_id を決める。
+ * @returns {{cert: object, covered: boolean} | {skipReason: string}}
+ */
+function resolveCertification(ctx, clientId, targetMonth) {
+  if (ctx.crossInsurerUsers.has(clientId)) {
+    return { skipReason: "異なる保険者番号の認定が複数ある (別人混入の疑い) — fix_assessment_cert_link.mjs と同じ理由でスキップ" };
+  }
+  const list = ctx.certsByUser.get(clientId) ?? [];
+  if (!list.length) return { skipReason: "認定を1件も持たない" };
+  if (ctx.sameInsurerMultiInsured.has(clientId)) {
+    const monthEnd = new Date(Number(targetMonth.slice(0, 4)), Number(targetMonth.slice(5, 7)), 0);
+    const monthEndStr = `${targetMonth}-${String(monthEnd.getDate()).padStart(2, "0")}`;
+    const monthStartStr = `${targetMonth}-01`;
+    const covering = list.filter((c) =>
+      (!c.certification_start_date || c.certification_start_date <= monthEndStr) &&
+      (!c.certification_end_date || c.certification_end_date >= monthStartStr));
+    if (covering.length !== 1) return { skipReason: `保険者は同一・被保番だけ複数で、対象月を含む認定が${covering.length}件 (一意に決まらない)` };
+    return { cert: covering[0], covered: true };
+  }
+  const picked = pickCertForMonth(list, targetMonth);
+  if (!picked) return { skipReason: "認定を1件も持たない" };
+  return picked;
+}
+
 /** ⚠ キー名は EditFormCarePlan3 (reports-content.tsx) が読む名前と完全に一致させること。
  * 旧版はここが daily_routine/irregular_services になっていて、画面 (daily_activities/
  * other_services を読む) には反映されない不具合があった (2026-09-14 に発見・是正)。
@@ -211,6 +308,40 @@ async function main() {
     }
   }
 
+  // ── 認定紐付けに要る clientId を先に一通り確定させておく (cert は後でまとめて取得) ──
+  const resolvedClientId = new Map(); // b.path -> clientId
+  for (const b of parsed) {
+    if (noIdentity.includes(b)) continue;
+    const p = people.get(b.path);
+    const ids = byPair.get(`${p.insurer}|${p.insured}`);
+    if (ids && ids.size === 1) resolvedClientId.set(b.path, [...ids][0]);
+  }
+  const certCtx = await loadCertContext([...new Set(resolvedClientId.values())]);
+
+  // ── 負のコントロール (2026-09-14 H指摘): certification_id を外すと
+  //   画面と同じ絞り込みで 0 件になることを実クエリで示す ────────────────
+  //   page.tsx L135-139: initialCertId = 最新認定のid、
+  //   initialDocs = allDocs.filter(d => d.certification_id === initialCertId)
+  //   既存の care-plan-3 実データ (certification_id が入っている7件) を使い、
+  //   ①「その行が持つ cert_id」で絞ると 1件ヒットする (=画面に出る)
+  //   ②「certification_id IS NULL」で絞ると 0件になる (=画面から消える) ことを示す
+  {
+    const { data: existingReal } = await sb
+      .from("kaigo_report_documents")
+      .select("id, user_id, certification_id")
+      .eq("report_type", "care-plan-3")
+      .not("certification_id", "is", null);
+    console.log(`=== 負のコントロール: certification_id を外すと画面から消えることの確認 (既存 care-plan-3 実データ ${existingReal?.length ?? 0} 件で検証) ===`);
+    for (const row of existingReal ?? []) {
+      const { count: withCert } = await sb.from("kaigo_report_documents").select("id", { count: "exact", head: true })
+        .eq("report_type", "care-plan-3").eq("user_id", row.user_id).eq("certification_id", row.certification_id);
+      const { count: withNullCert } = await sb.from("kaigo_report_documents").select("id", { count: "exact", head: true })
+        .eq("report_type", "care-plan-3").eq("user_id", row.user_id).is("certification_id", null);
+      console.log(`  user_id=${row.user_id.slice(0, 8)}…  cert_id指定で絞る → ${withCert}件(画面に出る) / cert_id=NULLで絞る → ${withNullCert}件(画面から消える)`);
+    }
+    console.log("→ certification_id を入れないと、上の「NULLで絞る」列と同じ 0件 表示になることが確認できる。今回の6名の INSERT には必ず certification_id を入れる。\n");
+  }
+
   let ok = 0, unresolved = noIdentity.length, nameMismatch = 0, care3Written = 0, detailWritten = 0, skipped = 0;
   for (const b of parsed) {
     if (noIdentity.includes(b)) continue;
@@ -253,7 +384,7 @@ async function main() {
       console.log(`  ⚠ 週間計画ヘッダの月 (${b.weekly.targetMonth}) と利用票の提供年月 (${targetMonth}) が食い違う。週間計画ヘッダは計画作成月の可能性があるため対象月には使わない`);
     }
 
-    // ── 第3表 (care-plan-3) ──────────────────────────────────────────
+    // ── 第3表 (care-plan-3) — cert-linked。certification_id を必ず入れる ──
     if (!b.weekly?.schedule) {
       console.log(`  ✗ 週間計画ページの解析に失敗 (warn: ${JSON.stringify(b.weekly?.warn ?? ["ページ自体が見つからない"])})`);
     } else {
@@ -262,31 +393,34 @@ async function main() {
       for (const [hk, days] of filled) console.log(`    ${hk}: ${JSON.stringify(days)}`);
       if (b.weekly.irregularServices) console.log(`    週単位以外のサービス: ${b.weekly.irregularServices}`);
 
-      const { data: existingCp3 } = await sb
-        .from("kaigo_report_documents")
-        .select("id, content")
-        .eq("user_id", clientId)
-        .eq("report_type", "care-plan-3")
-        .eq("report_month", targetMonth)
-        .maybeSingle();
-      if (existingCp3 && !FORCE) {
-        console.log(`  skip (既存 care-plan-3 ${targetMonth} あり。--force で上書き)`);
+      const certResult = resolveCertification(certCtx, clientId, targetMonth);
+      if (certResult.skipReason) {
+        console.log(`  ✗ 第3表: 認定紐付け不能 (${certResult.skipReason}) → 書かない`);
         skipped++;
       } else {
-        const content = buildSchedulePayload(FORCE ? existingCp3?.content : null, b.weekly);
-        if (!EXECUTE) {
-          console.log(`  ${existingCp3 ? "UPDATE" : "INSERT"} 予定 (care-plan-3, ${targetMonth})`);
-          care3Written++;
+        const { cert, covered } = certResult;
+        console.log(`  第3表: 採用する認定 ${cert.care_level} (${cert.certification_start_date}〜${cert.certification_end_date ?? ""})${covered ? "" : "  ※対象月を含む認定が無く最新で代替"}`);
+
+        const { data: existingCp3 } = await sb
+          .from("kaigo_report_documents")
+          .select("id, content")
+          .eq("user_id", clientId)
+          .eq("report_type", "care-plan-3")
+          .eq("certification_id", cert.id)
+          .maybeSingle();
+        if (existingCp3) {
+          console.log("  skip (この認定に紐づく care-plan-3 が既にある。--force は使わない仕様)");
+          skipped++;
         } else {
-          const title = `週間サービス計画表（第3表）　${targetMonth.replace("-", "年")}月分`;
-          if (existingCp3) {
-            const { error } = await sb.from("kaigo_report_documents").update({ content, updated_at: new Date().toISOString() }).eq("id", existingCp3.id);
-            if (error) console.error(`  ✗ UPDATE失敗: ${error.message}`);
-            else { console.log("  UPDATE 完了"); care3Written++; }
+          const content = buildSchedulePayload(null, b.weekly);
+          if (!EXECUTE) {
+            console.log("  INSERT 予定 (care-plan-3, report_month=null, certification_id 設定)");
+            care3Written++;
           } else {
+            const title = "週間サービス計画表（第3表）";
             const { error } = await sb.from("kaigo_report_documents").insert({
-              user_id: clientId, report_type: "care-plan-3", title, report_month: targetMonth,
-              content, status: "draft", tenant_id: "kt-group",
+              user_id: clientId, report_type: "care-plan-3", title, report_month: null,
+              certification_id: cert.id, content, status: "draft", tenant_id: "kt-group",
             });
             if (error) console.error(`  ✗ INSERT失敗: ${error.message}`);
             else { console.log("  INSERT 完了"); care3Written++; }
