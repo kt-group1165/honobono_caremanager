@@ -1,0 +1,70 @@
+{
+  "people": [
+    {
+      "name": "高萩 典子",
+      "monitoring_date": "2026-08-15",
+      "assessor_name": "ほのぼの 管理者",
+      "form_type": "要介護",
+      "status": "completed",
+      "items": [
+        {
+          "item_number": 1,
+          "short_term_goal": "自宅で安全に入浴できる",
+          "goal_period_start": "2026-06-01",
+          "goal_period_end": "2026-11-30",
+          "service_type": "訪問介護",
+          "provider_name": "Ｈａｎａヘルパーステーション高品",
+          "implementation_status": "計画どおり実施できている",
+          "user_satisfaction": "満足",
+          "family_satisfaction": "満足",
+          "satisfaction_comment": "特になし",
+          "achievement": "ほぼ達成",
+          "adl_change": "不変",
+          "plan_revision_needed": "なし",
+          "revision_reason": ""
+        }
+      ]
+    },
+    {
+      "name": "大山 幸子",
+      "monitoring_date": "2026-08-20",
+      "assessor_name": "ほのぼの 管理者",
+      "form_type": "要介護",
+      "status": "completed",
+      "items": [
+        {
+          "item_number": 1,
+          "short_term_goal": "服薬管理ができる",
+          "goal_period_start": "2026-07-01",
+          "goal_period_end": "2026-12-31",
+          "service_type": "訪問介護",
+          "provider_name": "Ｈａｎａヘルパーステーション高品",
+          "implementation_status": "見守りにより実施できている",
+          "user_satisfaction": "満足",
+          "family_satisfaction": "",
+          "satisfaction_comment": "",
+          "achievement": "達成した",
+          "adl_change": "良い変化",
+          "plan_revision_needed": "あり",
+          "revision_reason": "状態改善のため次回プラン修正を検討"
+        }
+      ]
+    },
+    {
+      "name": "松田 幸子",
+      "monitoring_date": "2026-08-18",
+      "assessor_name": "ほのぼの 管理者",
+      "form_type": "要介護",
+      "status": "completed",
+      "items": []
+    },
+    {
+      "name": "架空 花子",
+      "monitoring_date": "2026-08-19",
+      "assessor_name": "ほのぼの 管理者",
+      "form_type": "要介護",
+      "status": "completed",
+      "items": []
+    }
+  ]
+}
