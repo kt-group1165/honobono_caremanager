@@ -3,6 +3,7 @@
   "version": "2.7.0",
   "private": true,
   "scripts": {
+    "check:monitoring-plan-revision": "tsx scripts/monitoring-plan-revision-verify.mts",
     "check:bath-yobo-code": "tsx scripts/bath-yobo-code-check.mts",
     "check:unused-why": "tsx scripts/unused-tables-why.mts",
     "check:cert-overlap": "tsx scripts/check-cert-overlap.mts",

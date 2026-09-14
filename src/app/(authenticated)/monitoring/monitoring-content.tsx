@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { selectCurrentPlanWithFallback, hasMonitoringInMonth, isExpired } from "@/lib/careplan-selection";
+import { dbToRevisionNeeded, revisionNeededToDb } from "@/lib/monitoring-plan-revision";
 import { ja } from "date-fns/locale";
 import { BunreiPicker } from "@/components/bunrei/bunrei-picker";
 
@@ -654,7 +655,7 @@ export function MonitoringContent({
       satisfaction_comment: r.satisfaction_comment ?? "",
       achievement: r.achievement ?? "",
       adl_change: r.adl_change ?? "",
-      plan_revision_needed: r.plan_revision_needed ?? "",
+      plan_revision_needed: dbToRevisionNeeded(r.plan_revision_needed),
       revision_reason: r.revision_reason ?? "",
     }));
 
@@ -767,7 +768,7 @@ export function MonitoringContent({
         satisfaction_comment: item.satisfaction_comment || null,
         achievement: item.achievement || null,
         adl_change: item.adl_change || null,
-        plan_revision_needed: item.plan_revision_needed || null,
+        plan_revision_needed: revisionNeededToDb(item.plan_revision_needed),
         revision_reason: item.revision_reason || null,
       }));
 
