@@ -31,6 +31,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { findMeisaiFiles } from "./_meisai_files.mjs";
 import { normClientName as normClientNameShared } from "./_meisai_name.mjs";
+import { fetchExistingMarkedRows, planCarryover, printCarryoverSummary } from "./_system_carryover.mjs";
 // 重訪の段の積み上げは _juho_ladder.mjs に一本化 (検証スクリプトと同じ実装を使う)
 import { zoneOf, juhoConvsForDay } from "./_juho_ladder.mjs";
 import { nearbyAllocations } from "../src/lib/shogai-seikyu/_nearby-allocations.mjs";
@@ -1599,6 +1600,7 @@ async function main() {
           system: "障害",
           status: "completed", office_id: office.id, tenant_id: TENANT_ID,
           notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG} ${MARK_SESSION_SUB} code=${r.code}]`,
+          _code: r.code, // ⚠ DB列ではない。system引き継ぎのキー作りにだけ使い、INSERT前に必ず剥がす
         });
         recordOnlyRows++;
       }
@@ -1643,6 +1645,7 @@ async function main() {
         office_id: office.id,
         tenant_id: TENANT_ID,
         notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG}${ci > 0 ? ` ${MARK_ADDON}` : ""} code=${c.base}]`,
+        _code: c.base, // ⚠ DB列ではない。system引き継ぎのキー作りにだけ使い、INSERT前に必ず剥がす
       });
     }
 
@@ -1666,6 +1669,7 @@ async function main() {
           office_id: office.id,
           tenant_id: TENANT_ID,
           notes: `[MEISAI障害取込 ${TARGET_MONTH} ${MAP_TAG} ${MARK_SESSION_SUB} code=${rc.convs[0].base}]`,
+          _code: rc.convs[0].base, // ⚠ DB列ではない。system引き継ぎのキー作りにだけ使い、INSERT前に必ず剥がす
         });
         juhoSpanRows++;
       }
@@ -1698,10 +1702,54 @@ async function main() {
   console.log(`  ブロック(利用者未解決): ${blockedNoClient}`);
   console.log(`  ブロック(6桁コード未解決): ${blocked6}`);
   console.log(`  ブロック(算定時間不正): ${blockedNoDur}`);
-  if (deduped[0]) console.log("\nINSERT payload サンプル:\n", JSON.stringify(deduped[0], null, 2));
   console.log("");
 
+  // system・service_type 引き継ぎ (2026-09-14 是正・H/J、介護取込 daff5931 と共通module化)
+  //
+  //   この取込も冪等のため既存の障害取込行を DELETE してから INSERT し直すが、
+  //   削除条件は office_id+月+notesマーカーのみで system/service_type は見ない。
+  //   fix_shogai_rows_billed_as_kaigo.mjs 等で後から system='介護'・service_type=介護名
+  //   に是正された行 (高品 田村ムラエ7行が実例) は、notesが元の
+  //   '[MEISAI障害取込...]' のままなので削除対象に入り、再INSERT時は system:"障害" と
+  //   障害マスタ名を無条件で書くため★是正が黙って巻き戻る。
+  //   ⚠ system だけでなく service_type も引き継がないと「system=介護なのに
+  //     service_typeが障害マスタの名前のまま」という不整合な行になる。
+  const [y0s, m0s] = TARGET_MONTH.split("-").map(Number);
+  const MONTH_LAST0 = `${TARGET_MONTH}-${String(new Date(y0s, m0s, 0).getDate()).padStart(2, "0")}`;
+  const SKIP_CARRYOVER = process.env.SKIP_SYSTEM_CARRYOVER === "1";
+  if (SKIP_CARRYOVER && EXECUTE) {
+    console.error("✗ SKIP_SYSTEM_CARRYOVER=1 は --execute と併用できません (診断専用)");
+    process.exit(1);
+  }
+  const existingRows = await fetchExistingMarkedRows(sb, {
+    officeId: office.id, notesPrefix: "[MEISAI障害取込", monthFirst: MONTH_FIRST, monthLast: MONTH_LAST0,
+    extraColumns: ["system", "service_type"],
+  });
+  const { existingCorrected, collisions, missing, carriedCount } = planCarryover({
+    existingRows, newPayloads: deduped, carryFields: ["system", "service_type"],
+    referenceField: "system", referenceValue: "障害", skip: SKIP_CARRYOVER,
+  });
+  printCarryoverSummary({
+    existingRows, existingCorrected, carriedCount, missing, collisions,
+    carryFields: ["system", "service_type"], skip: SKIP_CARRYOVER,
+  });
+
+  // 最終 INSERT payload (_code は system 引き継ぎのキー計算専用。DB列に無いので剥がす)
+  const insertReady = deduped.map((p) => ({
+    user_id: p.user_id, staff_id: p.staff_id, visit_date: p.visit_date, start_time: p.start_time,
+    end_time: p.end_time, service_type: p.service_type, system: p.system, status: p.status,
+    office_id: p.office_id, tenant_id: p.tenant_id, notes: p.notes,
+  }));
+  if (insertReady[0]) console.log("INSERT payload サンプル:\n", JSON.stringify(insertReady[0], null, 2), "\n");
+
   if (!EXECUTE) { console.log("※ DRY RUN のため INSERT していません。--execute で本番投入。"); return; }
+
+  // ★ B: 引き継げない (消える/衝突する) 行があるときは exit 2 で止める。
+  if (missing.length || collisions.length) {
+    console.error(`✗ 引き継げない是正済み行が ${missing.length + collisions.length} 件あります。--execute を中止します。`);
+    console.error("  上の「消える行の内訳」「衝突の内訳」を確認し、対処してから再実行してください。");
+    process.exit(2);
+  }
 
   // ── ★ 削除の前に FK を検証する ────────────────────────────────────────
   //   このスクリプトは「削除 → INSERT」の順なので、INSERT が落ちると
@@ -1710,8 +1758,8 @@ async function main() {
   //   の client_id が重複統合で消えていて (414000166 村上泉)、FK 違反で 0 件 INSERT。
   //   → 参照先が実在することを **削除前に**確かめる。
   {
-    const userIds = [...new Set(deduped.map((r) => r.user_id).filter(Boolean))];
-    const staffIds = [...new Set(deduped.map((r) => r.staff_id).filter(Boolean))];
+    const userIds = [...new Set(insertReady.map((r) => r.user_id).filter(Boolean))];
+    const staffIds = [...new Set(insertReady.map((r) => r.staff_id).filter(Boolean))];
     const checkExists = async (table, ids) => {
       const found = new Set();
       for (let i = 0; i < ids.length; i += 200) {
@@ -1745,20 +1793,18 @@ async function main() {
   // 冪等: 既存の障害取込行を削除。
   // ⚠ **必ず対象月に絞る**。月スコープを忘れると翌月を取り込んだ瞬間に前月が全消しになる
   //   (2026-08-07 に介護側で実際に起きた)。
-  const [dy, dm] = TARGET_MONTH.split("-").map(Number);
-  const MONTH_LAST = `${TARGET_MONTH}-${String(new Date(dy, dm, 0).getDate()).padStart(2, "0")}`;
   const { error: delErr } = await sb.from("kaigo_visit_schedule").delete()
     .eq("office_id", office.id).like("notes", "[MEISAI障害取込%")
-    .gte("visit_date", MONTH_FIRST).lte("visit_date", MONTH_LAST);
+    .gte("visit_date", MONTH_FIRST).lte("visit_date", MONTH_LAST0);
   if (delErr) { console.error(`✗ 既存削除失敗: ${delErr.message}`); process.exit(1); }
   console.log("既存 障害取込行 削除完了");
 
   const CH = 500; let done = 0;
-  for (let i = 0; i < deduped.length; i += CH) {
-    const chunk = deduped.slice(i, i + CH);
+  for (let i = 0; i < insertReady.length; i += CH) {
+    const chunk = insertReady.slice(i, i + CH);
     const { error } = await sb.from("kaigo_visit_schedule").insert(chunk);
     if (error) { console.error(`✗ INSERT失敗 (${done}件済): ${error.message}`); process.exit(1); }
-    done += chunk.length; console.log(`  ${done}/${deduped.length}`);
+    done += chunk.length; console.log(`  ${done}/${insertReady.length}`);
   }
   console.log(`✓ 完了: ${done}行 INSERT`);
 }
