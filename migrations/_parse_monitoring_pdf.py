@@ -276,6 +276,12 @@ def extract_summary(words, curves):
             reassess_top = row[0]["top"]
             break
 
+    # ⚠ 2026-09-14実測 (新井秀雄8/18分) で判明: 総括(左列)と計画の変更等(右列)は
+    #   ラベルが x=207.4/537.7 でも、★本文の開始xは 62.6/381.4 で
+    #   ラベルの位置とは大きくずれる。旧しきい値 x0<500 だと右列(381.4)まで
+    #   左列に混入し、両列が行ごとに交互に連結されて読めない文字列になっていた
+    #   (計画の変更等が空欄の1サンプルだけで検証していたため見つからなかった)。
+    #   本文開始xの中間 (62.6と381.4の間) である 300 をしきい値にする。
     left_lines, right_lines = [], []
     for row in rows:
         if row[0]["top"] <= soukatsu_top:
@@ -283,7 +289,7 @@ def extract_summary(words, curves):
         if reassess_top is not None and row[0]["top"] >= reassess_top - 2:
             break
         for w in row:
-            (left_lines if w["x0"] < 500 else right_lines).append(w["text"])
+            (left_lines if w["x0"] < 300 else right_lines).append(w["text"])
     summary = "".join(left_lines) or None
     plan_change = "".join(right_lines) or None
 
