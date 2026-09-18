@@ -98,6 +98,8 @@ type AttendanceRow = {
   note: string | null;
   /** 出張距離 (km)。NULL/0 は出張なし */
   business_km: number | null;
+  /** 通勤距離 (km)。訪問介護・訪問入浴のみ (給与計算の通勤費に使う)。2026-09-18 */
+  commute_km?: number | null;
   /** 振替元日付 (YYYY-MM-DD)。NULL = 振替ではない通常の出勤 */
   substitute_for_date: string | null;
 };
@@ -115,6 +117,8 @@ type RowState = {
   note: string;
   /** 出張距離 (km)、空 = NULL。文字列で保持して step=0.1 の入力を素直に通す */
   business_km: string;
+  /** 通勤距離 (km)、空 = NULL。訪問介護・訪問入浴のみ表示 */
+  commute_km: string;
   /** 振替元日付 ("YYYY-MM-DD" or "")。空 = 振替ではない通常の出勤 */
   substitute_for_date: string;
   dirty: boolean;
@@ -122,6 +126,20 @@ type RowState = {
 };
 
 const TENANT_ID = "kt-group";
+
+/** km (DB の NUMERIC) → 入力欄の文字列。NULL/不正は "" */
+function kmToStr(v: number | string | null | undefined): string {
+  if (v === null || v === undefined || v === "") return "";
+  const n = typeof v === "string" ? parseFloat(v) : v;
+  return Number.isFinite(n) ? String(n) : "";
+}
+/** 入力欄の文字列 → km (小数 1 桁に丸める)。空・負・不正は NULL */
+function strToKm(v: string): number | null {
+  const t = v.trim();
+  if (!t) return null;
+  const n = parseFloat(t);
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 10) / 10 : null;
+}
 const WEEK_DAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"];
 const DOW_COLOR: Record<number, string> = {
   0: "text-red-600",
@@ -450,6 +468,7 @@ export function KyotakuAttendanceContent() {
       paid_leave_type: null,
       note: "",
       business_km: "",
+      commute_km: "",
       substitute_for_date: "",
       dirty: false,
       existing_id: null,
@@ -485,6 +504,7 @@ export function KyotakuAttendanceContent() {
         paid_leave_type: paidLeaveType,
         note: ex.note ?? "",
         business_km: businessKmStr,
+        commute_km: kmToStr((ex as { commute_km?: number | string | null }).commute_km),
         substitute_for_date: ex.substitute_for_date ?? "",
         dirty: false,
         existing_id: ex.id ?? null,
@@ -639,6 +659,11 @@ export function KyotakuAttendanceContent() {
       ),
     [combinedRecords, selectedOfficeWeekStart, month, companyHolidayDates],
   );
+  /** 月合計 通勤距離 (km、小数 1 桁)。訪問介護・訪問入浴のみ */
+  const totalCommuteKm = useMemo(
+    () => Math.round(rows.reduce((s, r) => s + (strToKm(r.commute_km) ?? 0), 0) * 10) / 10,
+    [rows],
+  );
   /** 月合計 出張距離 (km、小数 1 桁) */
   const totalBusinessKm = useMemo(() => {
     let sum = 0;
@@ -751,6 +776,8 @@ export function KyotakuAttendanceContent() {
           paid_leave_type: r.paid_leave_type,
           note: r.note.trim() ? r.note : null,
           business_km: businessKm,
+          // 通勤km は訪問介護・訪問入浴だけ送る (居宅は使わない)
+          ...(isKyotaku ? {} : { commute_km: strToKm(r.commute_km) }),
           substitute_for_date: r.substitute_for_date || null,
         };
       });
@@ -1371,6 +1398,7 @@ export function KyotakuAttendanceContent() {
                     <TableHead className="w-14 text-center">有給</TableHead>
                     <TableHead className="w-20 text-right" title="所定労働時間 - 実労働 (土日祝/全有給は 0、半有給日は所定 4h で判定)">欠勤</TableHead>
                     <TableHead className="w-24 text-right">出張距離(km)</TableHead>
+                    {!isKyotaku && <TableHead className="w-24 text-right" title="給与計算の通勤費に使います">通勤距離(km)</TableHead>}
                     <TableHead>備考</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -1583,6 +1611,20 @@ export function KyotakuAttendanceContent() {
                             className="h-8 text-right"
                           />
                         </TableCell>
+                        {!isKyotaku && (
+                          <TableCell className="text-right">
+                            <Input
+                              type="number"
+                              min={0}
+                              step={0.1}
+                              value={row.commute_km}
+                              onChange={(e) =>
+                                updateRow(idx, { commute_km: e.target.value })
+                              }
+                              className="h-8 text-right"
+                            />
+                          </TableCell>
+                        )}
                         <TableCell>
                           <Input
                             type="text"
@@ -1649,6 +1691,14 @@ export function KyotakuAttendanceContent() {
                     {totalBusinessKm.toFixed(1)} km
                   </span>
                 </span>
+                {!isKyotaku && (
+                  <span>
+                    通勤距離{" "}
+                    <span className="font-semibold tabular-nums">
+                      {totalCommuteKm.toFixed(1)} km
+                    </span>
+                  </span>
+                )}
               </div>
             </div>
           )}
