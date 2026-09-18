@@ -35,17 +35,30 @@ function listSeedScripts(dir: string): string[] {
     .sort();
 }
 
+// ⚠ 2026-09-18 実測 (H報告「2回続けてFAIL」を追跡): seed_sample_shogai_l.mjs は
+//   壊れていなかった。DRY RUN でも kaigo_service_codes を system='障害' で絞って
+//   **全件 (208,035 行)** を 1000 件ずつページングして取得しており (重訪の段を
+//   本番と同じ _juho_ladder.mjs で再現するため、名前パターンで絞らずマスタを
+//   一通り読む設計)、単独実行でも ~22 秒かかる (他15本は 1 秒未満〜数秒)。
+//   旧タイムアウト 30 秒だと 6 セッション同時稼働時の DB 側の遅延を吸収できず、
+//   execFileSync が SIGTERM で強制終了 → 「起動しない」に見えていた
+//   (実際に H の手元では単独実行だと最後まで正常終了していた、と符合する)。
+//   ★ 直したのは検査側 (タイムアウトの余裕)。負のコントロールは影響を受けない
+//   (わざと壊した script は timeout を上げても即座に例外で落ちるだけ)。
+const TIMEOUT_MS = 90_000;
+
 function dryRunOk(absPath: string): { ok: boolean; detail: string } {
   try {
     execFileSync("node", [absPath], {
-      cwd: path.dirname(absPath), encoding: "utf8", timeout: 30_000,
+      cwd: path.dirname(absPath), encoding: "utf8", timeout: TIMEOUT_MS,
       stdio: ["ignore", "pipe", "pipe"], // 子プロセスの出力を親の画面に漏らさない
     });
     return { ok: true, detail: "" };
   } catch (e) {
-    const err = e as { stderr?: string; stdout?: string; message: string };
+    const err = e as { stderr?: string; stdout?: string; message: string; signal?: string };
     const tail = (err.stderr ?? err.stdout ?? err.message ?? "").toString().trim().split(/\r?\n/).slice(-5).join(" / ");
-    return { ok: false, detail: tail };
+    const timedOut = err.signal === "SIGTERM" && !tail;
+    return { ok: false, detail: timedOut ? `${TIMEOUT_MS / 1000}秒でタイムアウト (DB側の遅延の可能性。スクリプト自体は壊れていないかもしれない)` : tail };
   }
 }
 
