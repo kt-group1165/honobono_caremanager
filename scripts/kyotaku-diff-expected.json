@@ -19,14 +19,14 @@
       "s": {
         "newRows": 252,
         "honoRows": 253,
-        "match": 250,
-        "diff": 3
+        "match": 251,
+        "diff": 2
       },
       "k": {
         "newRows": 252,
         "honoRows": 253,
-        "match": 245,
-        "diff": 8
+        "match": 246,
+        "diff": 7
       }
     },
     {
@@ -121,8 +121,8 @@
       "k": {
         "newRows": 137,
         "honoRows": 137,
-        "match": 135,
-        "diff": 2
+        "match": 137,
+        "diff": 0
       }
     },
     {
