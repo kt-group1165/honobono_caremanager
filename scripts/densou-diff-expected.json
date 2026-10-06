@@ -345,19 +345,19 @@
         "fingerprint": {
           "honoRows": 1738,
           "honoHash": "653e73e2:-",
-          "newRows": 1707,
-          "newHash": "abc659fc"
+          "newRows": 1771,
+          "newHash": "e9dc5923"
         },
         "j121": {
-          "match": 55,
-          "mismatch": 6,
+          "match": 57,
+          "mismatch": 4,
           "total": 61,
           "onlyHono": 1,
           "onlyNew": 1
         },
         "j611": {
-          "match": 52,
-          "mismatch": 8,
+          "match": 56,
+          "mismatch": 4,
           "total": 60,
           "onlyHono": 0,
           "onlyNew": 1
@@ -450,7 +450,7 @@
           "honoRows": 1687,
           "honoHash": "ecc2608b:-",
           "newRows": 1704,
-          "newHash": "9a3f64d2"
+          "newHash": "d7219f5e"
         },
         "j121": {
           "match": 53,
@@ -475,8 +475,8 @@
         "fingerprint": {
           "honoRows": 812,
           "honoHash": "1bb83ff3:-",
-          "newRows": 796,
-          "newHash": "867b418c"
+          "newRows": 808,
+          "newHash": "3e41125b"
         },
         "j121": {
           "match": 27,
@@ -631,8 +631,8 @@
         "fingerprint": {
           "honoRows": 665,
           "honoHash": "06030ec8:-",
-          "newRows": 633,
-          "newHash": "fb1c2a1a"
+          "newRows": 660,
+          "newHash": "808a8278"
         },
         "j121": {
           "match": 33,
@@ -642,8 +642,8 @@
           "onlyNew": 0
         },
         "j611": {
-          "match": 32,
-          "mismatch": 2,
+          "match": 33,
+          "mismatch": 1,
           "total": 34,
           "onlyHono": 0,
           "onlyNew": 0
@@ -657,12 +657,12 @@
         "fingerprint": {
           "honoRows": 971,
           "honoHash": "68e54c36:014e9594",
-          "newRows": 951,
-          "newHash": "378133c2"
+          "newRows": 949,
+          "newHash": "6744b0e2"
         },
         "j121": {
-          "match": 32,
-          "mismatch": 1,
+          "match": 33,
+          "mismatch": 0,
           "total": 33,
           "onlyHono": 0,
           "onlyNew": 0
