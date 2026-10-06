@@ -6,13 +6,21 @@
 //   service_kind_code + provider_number を使うので必須ではない)。
 //   突合キー = 被保番+保険者 (_kyotaku_office_map_<TAG>.json)。
 //   OFFICE_ID=<uuid> TAG=<略称> KY=<KYファイルパス> \
-//     node migrations/import_kyotaku_benefit_from_ky.mjs [--execute]
+//     node migrations/import_kyotaku_benefit_from_ky.mjs [--execute] [--only-ky-users]
+//
+//   ⚠ 既定は **対応表 (_kyotaku_office_map_<TAG>.json) の全員の対象月を消してから** KY の行を入れる
+//     (= その月の正本 KY を丸ごと流す用途)。翌月送信の修正版 KY (作成区分2・月遅れ) のように
+//     一部の人しか載っていない KY を既定のまま流すと、**載っていない人の対象月が消える**
+//     (2026-10-06 船橋で 520 行消えた)。
+//   --only-ky-users : 消す範囲を **この KY に載っている人だけ**にする (修正版・月遅れの差し替え用)。
+//     未突合の人がいたら 1 行も書かずに止める。
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 const EXECUTE = process.argv.includes("--execute");
+const ONLY_KY_USERS = process.argv.includes("--only-ky-users");
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 const OFFICE_ID = process.env.OFFICE_ID, TAG = process.env.TAG, KY = process.env.KY;
 if (!OFFICE_ID || !TAG || !KY) { console.error("OFFICE_ID / TAG / KY が必要"); process.exit(1); }
@@ -71,11 +79,27 @@ async function main() {
   }
   console.log(`突合 ${rows.length}行 / ${new Set(rows.map(r => r.user_id)).size}名 / 未突合 ${unmatched.size}`);
   if (unmatched.size) console.log("  未突合:", [...unmatched].slice(0, 10));
-  if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で投入 (対象月既存を先に削除)。"); return; }
 
-  const ids = [...new Set(Object.values(map))];
+  // 消す範囲。既定 = 対応表の全員 / --only-ky-users = この KY に載っている人だけ
+  const ids = ONLY_KY_USERS ? [...new Set(rows.map((r) => r.user_id))] : [...new Set(Object.values(map))];
+  let willDelete = 0;
+  for (let i = 0; i < ids.length; i += 200) {
+    const { count, error } = await sb.from("kaigo_benefit_management").select("id", { count: "exact", head: true })
+      .eq("billing_month", BILLING_MONTH).in("user_id", ids.slice(i, i + 200));
+    if (error) { console.error("削除対象の件数取得失敗:", error.message); process.exit(1); }
+    willDelete += count || 0;
+  }
+  console.log(`消す範囲: ${ONLY_KY_USERS ? "この KY に載っている人" : "対応表の全員"} ${ids.length} 名 / 対象月の既存 ${willDelete} 行を消して ${rows.length} 行を入れる`);
+  if (ONLY_KY_USERS && unmatched.size) { console.error("✗ --only-ky-users で未突合の人がいるため止めます (対応表に足してから再実行)"); process.exit(2); }
+  if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で投入。"); return; }
+
   let del = 0;
-  for (let i = 0; i < ids.length; i += 200) { const { count } = await sb.from("kaigo_benefit_management").delete({ count: "exact" }).eq("billing_month", BILLING_MONTH).in("user_id", ids.slice(i, i + 200)); del += count || 0; }
+  for (let i = 0; i < ids.length; i += 200) {
+    const { count, error } = await sb.from("kaigo_benefit_management").delete({ count: "exact" }).eq("billing_month", BILLING_MONTH).in("user_id", ids.slice(i, i + 200));
+    if (error) { console.error("削除失敗:", error.message); process.exit(1); }
+    del += count || 0;
+  }
+  if (del !== willDelete) { console.error(`✗ 削除件数 ${del} が事前の件数 ${willDelete} と違う`); process.exit(1); }
   let ins = 0, dropShiteiKubun = false;
   for (let i = 0; i < rows.length; i += 200) {
     let chunk = rows.slice(i, i + 200);
