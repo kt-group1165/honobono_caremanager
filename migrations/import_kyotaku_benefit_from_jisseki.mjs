@@ -41,7 +41,7 @@ const OFFICE_BN = process.env.OFFICE_BN, OFFICE_ID = process.env.OFFICE_ID, TAG 
 const KY = process.env.KY;
 if (!OFFICE_BN || !OFFICE_ID || !TAG) { console.error("OFFICE_BN / OFFICE_ID / TAG が必要"); process.exit(1); }
 const BILLING_MONTH = "2026-06", YM = "202606";
-const CSV = path.join(KAIGO, "サービス実績データ/全居宅/202606/全居宅事業所別請求額.CSV");
+const CSV = path.join(KAIGO, "サービス実績データ/全居宅/202606/訪問介護/介護/全居宅事業所別請求額.CSV");
 
 function loadEnv() { const t = readFileSync(path.join(KAIGO, ".env.local"), "utf8"); const e = {}; for (const l of t.split(/\r?\n/)) { const m = /^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if (m) e[m[1]] = m[2].replace(/^["']|["']$/g, ""); } return e; }
 const env = loadEnv();
