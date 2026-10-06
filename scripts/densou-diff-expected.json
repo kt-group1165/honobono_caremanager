@@ -98,7 +98,7 @@
         "newRows": 352,
         "honoRows": 356,
         "honoHash": "46150c51",
-        "newHash": "5ddc347e"
+        "newHash": "19fc635d"
       },
       "person": {
         "match": 79,
@@ -110,8 +110,8 @@
       "group": {
         "newGroups": 239,
         "honoGroups": 242,
-        "match": 237,
-        "diff": 5
+        "match": 238,
+        "diff": 4
       }
     },
     {
@@ -683,12 +683,12 @@
         "fingerprint": {
           "honoRows": 985,
           "honoHash": "1206ca4e:-",
-          "newRows": 996,
-          "newHash": "f234b4b5"
+          "newRows": 997,
+          "newHash": "902f1aa0"
         },
         "j121": {
-          "match": 28,
-          "mismatch": 3,
+          "match": 29,
+          "mismatch": 2,
           "total": 31,
           "onlyHono": 0,
           "onlyNew": 1
