@@ -423,19 +423,19 @@
         "fingerprint": {
           "honoRows": 787,
           "honoHash": "b8b3b16c:-",
-          "newRows": 770,
-          "newHash": "1178bc24"
+          "newRows": 788,
+          "newHash": "dc05f930"
         },
         "j121": {
-          "match": 27,
-          "mismatch": 2,
+          "match": 28,
+          "mismatch": 1,
           "total": 29,
           "onlyHono": 0,
           "onlyNew": 0
         },
         "j611": {
-          "match": 26,
-          "mismatch": 3,
+          "match": 29,
+          "mismatch": 0,
           "total": 29,
           "onlyHono": 0,
           "onlyNew": 0
