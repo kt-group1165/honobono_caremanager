@@ -37,6 +37,7 @@ import {
 } from "@/lib/shogai-seikyu/juho-tier";
 import { isAddonRecord, isBillableRecord } from "@/lib/shogai-seikyu/record-markers";
 import { SERVICE_TYPE_CODES, SERVICE_TYPE_LABELS } from "@/lib/shogai-seikyu/service-type-code";
+import { billedMinutesFromName, planShikyuryoCut, type CapRow } from "@/lib/shogai-seikyu/shikyuryo-cap";
 
 export interface ShogaiSeikyuDetail {
   /** サービス種別 (居宅介護 等) */
@@ -114,12 +115,41 @@ export interface ShogaiSeikyuRow {
   shikyuryoOver: string[];
 }
 
+/** 支給量を丸ごと超えたため請求から外した訪問の 1 行 (aggregate.ts 3.95) */
+export interface ShogaiShikyuryoExcluded {
+  client_id: string;
+  date: string; // YYYY-MM-DD
+  /** "HH:MM"。シフト由来でない実績は null */
+  start_time: string | null;
+  service_type: string;
+}
+
 export interface ShogaiSeikyuResult {
   rows: ShogaiSeikyuRow[];
   month: string; // YYYY-MM
   recordCount: number;
   /** 集計時の注意事項 (月途中の市町村変更 等)。集計値には影響しない */
   warnings: string[];
+  /** 支給量を超えたため請求から外した訪問。実績記録票 (J611) も excludeShikyuryoOverVisits で同じ訪問を外す */
+  shikyuryoExcluded: ShogaiShikyuryoExcluded[];
+}
+
+/**
+ * 実績記録票 (J611) 用の月内提供実績から、集計で支給量超過として外した訪問を除く。
+ * 請求 (J121) と記録票の回数を揃えるため (ほのぼのも記録票から外している)。
+ * 突合キーは (利用者, 日, 開始 HH:MM)。
+ */
+export function excludeShikyuryoOverVisits<V extends { date: string; startTime: string | null }>(
+  visitsByClient: Map<string, V[]>,
+  excluded: ShogaiShikyuryoExcluded[],
+): Map<string, V[]> {
+  if (!excluded.length) return visitsByClient;
+  const keys = new Set(excluded.map((e) => `${e.client_id}|${e.date}|${(e.start_time ?? "").slice(0, 5)}`));
+  const out = new Map<string, V[]>();
+  for (const [cid, visits] of visitsByClient) {
+    out.set(cid, visits.filter((v) => !keys.has(`${cid}|${v.date}|${(v.startTime ?? "").slice(0, 5)}`)));
+  }
+  return out;
 }
 
 export async function aggregateMonthlyShogaiSeikyu(
@@ -161,6 +191,8 @@ export async function aggregateMonthlyShogaiSeikyu(
     service_date?: string | null;
     /** 提供時間 (分)。支給量超過警告の実績時間集計に使用。null は 0 扱い */
     duration_minutes?: number | null;
+    /** 開始時刻 (シフト由来のみ)。支給量超過分を外すときの日内の順序と、実績記録票側との突合キー */
+    start_time?: string | null;
     /**
      * 増(加算)コードの行か。**請求 (単位数) には要るが実際の訪問ではない。**
      *   加算行は同一訪問と同じ start/end を持つので、支給量の実績時間に足すと
@@ -399,6 +431,7 @@ export async function aggregateMonthlyShogaiSeikyu(
           unit_count: units,
           service_date: s.visit_date,
           duration_minutes: dur,
+          start_time: s.start_time ?? null,
           is_addon: isAddonRecord(s.notes),
         });
       }
@@ -466,7 +499,7 @@ export async function aggregateMonthlyShogaiSeikyu(
 
   if (records.length === 0) {
     // schedWarnings は捨てない (全行が解決できなかったときこそ知らせたい)
-    return { rows: [], month: monthStr, recordCount: 0, warnings: [...schedWarnings, ...juhoWarnings] };
+    return { rows: [], month: monthStr, recordCount: 0, warnings: [...schedWarnings, ...juhoWarnings], shikyuryoExcluded: [] };
   }
 
   // 2) 利用者情報
@@ -983,6 +1016,114 @@ export async function aggregateMonthlyShogaiSeikyu(
     }
   }
 
+  // 実績レコード → 支給量内訳バケットキー (居宅は category から細分)。3.95) と 6) で共用
+  const shikyuBucketOf = (r: Rec): string | null => {
+    const tc = r.service_code?.slice(0, 2) ?? SERVICE_TYPE_CODES[r.service_type] ?? null;
+    const name = `${r.service_type} ${r.service_category ?? ""}`;
+    if (tc === "11") {
+      if (/乗降/.test(name)) return "jouko";
+      if (/通院/.test(name)) return /身体/.test(name) ? "tsuuin_shintai" : "tsuuin";
+      if (/家事|生活/.test(name)) return "kaji";
+      return "shintai"; // 身体介護中心 (既定)
+    }
+    if (tc === "12") return "juudo_houmon"; // 重訪は区分別に突合不可 → 合算バケット
+    if (tc === "13") return "koudou";
+    // 同行援護は 2 体系ある。14 = 旧 7 桁 (1411011 同行援護 身体介護あり 30分未満)、
+    //   15 = 現行 6 桁 (155xxx 同援…)。**15 が漏れていて 2026-06 の 136 行 / 27 名が
+    //   黙って支給量判定の対象外になっていた** (2026-09-03 実測)。
+    //   ⚠ 14 も残す。マスタに 2026-06 有効な 14 が 92 コード実在する。
+    //   ⚠ 種類15 のマスタ名に「身体」は 0/491 なので実質 doukou に寄るが、
+    //     将来 身体あり の名称が来ても拾えるよう 14 と同じ判定を通す。
+    if (tc === "14" || tc === "15") return /身体/.test(name) ? "doukou_shintai" : "doukou";
+    return null; // 短期入所・生活介護等は訪問系でないため対象外
+  };
+  /** ・２人 の行 = 2 人目のヘルパー分。支給量は 1 人換算で見る (下の 3.95 の実測参照) */
+  const isSecondHelper = (r: Rec): boolean => /2人/.test(r.service_type.normalize("NFKC"));
+
+  // 3.95) 支給量を丸ごと超えた訪問を請求から外す (2026-10-06)
+  //   支給量は市町村が決めた公費の上限。超えた分を請求すると審査で返戻/減額になる。
+  //   どの訪問を外すかは純関数 shikyuryo-cap.ts の planShikyuryoCut (実測の根拠もそちら)。
+  //   → 対象月に有効な受給者証の支給量 (時間) に対し、日付・開始時刻順に 1 人換算で積み、
+  //     **訪問の開始時点で既に支給量に達している訪問**を ・２人 の行・増の行ごと外す。
+  //   ⚠ 訪問の途中で支給量に達する場合は外さずに警告だけ出す。
+  //   ⚠ 重訪 (区分別で突合できない)・乗降 (回数)・対象月に有効な証が無い利用者は対象外。
+  //   外した訪問は shikyuryoExcluded で返す。実績記録票 (J611) も同じ訪問を外すこと
+  //   (excludeShikyuryoOverVisits)。
+  const SHIKYU_TIME_KEYS = new Set([
+    "shintai", "kaji", "tsuuin", "tsuuin_shintai", "doukou", "doukou_shintai", "koudou",
+  ]);
+  /** サービス名の算定時間 (分)。引けなければ実績分 */
+  const billedMinutesOf = (r: Rec): number => billedMinutesFromName(r.service_type) ?? r.duration_minutes ?? 0;
+  const shikyuryoExcluded: ShogaiShikyuryoExcluded[] = [];
+  const shikyuryoCutWarnings: string[] = [];
+  {
+    const SHIKYU_LABEL: Record<string, string> = {
+      shintai: "身体介護", kaji: "家事援助", tsuuin: "通院介助", tsuuin_shintai: "通院介助 (身体あり)",
+      doukou: "同行援護", doukou_shintai: "同行援護 (身体あり)", koudou: "行動援護",
+    };
+    // client|bucket → 訪問 (date|start) → 行
+    const visitsByCb = new Map<string, Map<string, Rec[]>>();
+    for (const r of records) {
+      const b = shikyuBucketOf(r);
+      if (!b || !SHIKYU_TIME_KEYS.has(b)) continue;
+      const cb = `${r.client_id}|${b}`;
+      let m = visitsByCb.get(cb);
+      if (!m) { m = new Map(); visitsByCb.set(cb, m); }
+      const vk = `${r.service_date ?? ""}|${(r.start_time ?? "").slice(0, 5)}`;
+      const list = m.get(vk);
+      if (list) list.push(r); else m.set(vk, [r]);
+    }
+    const drop = new Set<Rec>();
+    for (const [cb, visits] of visitsByCb) {
+      const [cid, bucket] = cb.split("|");
+      const cert = certByClient.get(cid);
+      if (!cert || !certValidInMonth(cert)) continue;
+      const v = cert.shikyuryo_details?.[bucket];
+      if (!v) continue;
+      const cap = (v.hours ?? 0) * 60 + (v.minutes ?? 0);
+      if (cap <= 0) continue;
+      const capRows = new Map<string, CapRow[]>(
+        [...visits].map(([vk, rows]) => [
+          vk,
+          rows.map((r) => ({ billedMinutes: billedMinutesOf(r), secondHelper: isSecondHelper(r) })),
+        ]),
+      );
+      const plan = planShikyuryoCut(capRows, cap);
+      const label = (vk: string) => {
+        const [d, st] = vk.split("|");
+        return `${d.slice(5)}${st ? ` ${st}` : ""}`;
+      };
+      const cut: string[] = [];
+      for (const vk of plan.cut) {
+        const [date, start] = vk.split("|");
+        for (const r of visits.get(vk)!) {
+          drop.add(r);
+          shikyuryoExcluded.push({ client_id: cid, date, start_time: start || null, service_type: r.service_type });
+        }
+        const mins = capRows.get(vk)!.filter((x) => !x.secondHelper).reduce((a, x) => a + x.billedMinutes, 0);
+        cut.push(`${label(vk)} ${mins / 60}h`);
+      }
+      const straddle = plan.straddle.map(label);
+      const nm = clientById.get(cid)?.name ?? "(利用者不明)";
+      const fmt = (min: number) => `${Math.floor(min / 60)}時間${min % 60 ? `${min % 60}分` : ""}`;
+      if (cut.length) {
+        shikyuryoCutWarnings.push(
+          `${nm}さん: ${SHIKYU_LABEL[bucket]}が支給量${fmt(cap)}を超えた ${cut.length} 回 (${cut.join(" / ")}) を請求から外しました` +
+            ` — 公費では請求できません。自費にするか事業所負担にするかを確認してください`,
+        );
+      }
+      if (straddle.length) {
+        shikyuryoCutWarnings.push(
+          `${nm}さん: ${SHIKYU_LABEL[bucket]}が ${straddle.join(" / ")} の訪問の途中で支給量${fmt(cap)}に達しています` +
+            ` — 超えた時間ぶんの扱いは自動では決めていません (全額請求のまま)。請求内容を確認してください`,
+        );
+      }
+    }
+    if (drop.size) {
+      for (let i = records.length - 1; i >= 0; i--) if (drop.has(records[i])) records.splice(i, 1);
+    }
+  }
+
   // 4) 利用者 × (service_type + code) 集計
   const byUser = new Map<string, Map<string, ShogaiSeikyuDetail>>();
   for (const r of records) {
@@ -1189,6 +1330,8 @@ export async function aggregateMonthlyShogaiSeikyu(
   warnings.push(...schedWarnings);
   // 1.6) 重訪の段が決まらず請求から外した分。金額が変わるので必ず人が見ること
   warnings.push(...juhoWarnings);
+  // 3.95) 支給量を超えて請求から外した訪問。金額が変わるので必ず人が見ること
+  warnings.push(...shikyuryoCutWarnings);
   for (const [cid, n] of juhoUnresolved) {
     const nm = clientById.get(cid)?.name ?? "(利用者不明)";
     warnings.push(
@@ -1250,27 +1393,8 @@ export async function aggregateMonthlyShogaiSeikyu(
   //    ないものは合算判定 or 対象外)。列未設定/未適用(42703) の利用者は shikyuryo_details が
   //    無いため警告なし。
   {
-    // 実績レコード → 支給量内訳バケットキーへのマッピング (居宅は category から細分)
-    const bucketOf = (r: Rec): string | null => {
-      const tc = r.service_code?.slice(0, 2) ?? SERVICE_TYPE_CODES[r.service_type] ?? null;
-      const name = `${r.service_type} ${r.service_category ?? ""}`;
-      if (tc === "11") {
-        if (/乗降/.test(name)) return "jouko";
-        if (/通院/.test(name)) return /身体/.test(name) ? "tsuuin_shintai" : "tsuuin";
-        if (/家事|生活/.test(name)) return "kaji";
-        return "shintai"; // 身体介護中心 (既定)
-      }
-      if (tc === "12") return "juudo_houmon"; // 重訪は区分別に突合不可 → 合算バケット
-      if (tc === "13") return "koudou";
-      // 同行援護は 2 体系ある。14 = 旧 7 桁 (1411011 同行援護 身体介護あり 30分未満)、
-      //   15 = 現行 6 桁 (155xxx 同援…)。**15 が漏れていて 2026-06 の 136 行 / 27 名が
-      //   黙って支給量判定の対象外になっていた** (2026-09-03 実測)。
-      //   ⚠ 14 も残す。マスタに 2026-06 有効な 14 が 92 コード実在する。
-      //   ⚠ 種類15 のマスタ名に「身体」は 0/491 なので実質 doukou に寄るが、
-      //     将来 身体あり の名称が来ても拾えるよう 14 と同じ判定を通す。
-      if (tc === "14" || tc === "15") return /身体/.test(name) ? "doukou_shintai" : "doukou";
-      return null; // 短期入所・生活介護等は訪問系でないため対象外
-    };
+    // バケットの決め方は 3.95) と共用 (shikyuBucketOf)
+    const bucketOf = shikyuBucketOf;
     interface ActualAgg {
       minutes: number;
       count: number;
@@ -1283,6 +1407,9 @@ export async function aggregateMonthlyShogaiSeikyu(
       if (r.is_addon) continue;
       const bucket = bucketOf(r);
       if (!bucket) continue;
+      // ・２人 (2 人目) は支給量に数えない。ほのぼのは 1 人換算で見ている (3.95 の実測)
+      //   ⚠ 重訪は未検証なので従来どおり (2 人分を数える)
+      if (bucket !== "juudo_houmon" && isSecondHelper(r)) continue;
       let m = actualsByUser.get(r.client_id);
       if (!m) {
         m = new Map();
@@ -1377,7 +1504,7 @@ export async function aggregateMonthlyShogaiSeikyu(
     }
   }
 
-  return { rows, month: monthStr, recordCount: records.length, warnings };
+  return { rows, month: monthStr, recordCount: records.length, warnings, shikyuryoExcluded };
 }
 
 // ─── 国保連 CSV (介護給付費・訓練等給付費等明細書 J121 相当の簡易形式) ─────────

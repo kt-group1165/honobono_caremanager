@@ -98,6 +98,7 @@ const CHECKS: Check[] = [
   { name: "bath-yobo-code", script: "check:bath-yobo-code", why: "★ 訪問入浴: 要支援に介護給付コードが付かないか (0件維持)" },
   { name: "kyotaku-matrix", script: "check:kyotaku-matrix", why: "居宅介護支援の単位数 (加算・減算・逓減)" },
   { name: "idou-summary", script: "check:idou-summary", why: "移動支援の負担額・上限" },
+  { name: "shikyuryo-cap", script: "check:shikyuryo-cap", why: "★ 障害 支給量を超えた訪問を請求から外す判定 (ほのぼの準拠・1人換算)" },
   { name: "riyou-final", script: "check:riyou-final", why: "利用者請求書の最終額 (軽減・実費・繰越)" },
   { name: "sougou-shoguu", script: "check:sougou-shoguu", why: "総合事業の処遇改善 (自治体独自率)" },
   { name: "shoguu-4impl", script: "check:shoguu-4impl", why: "★ 処遇改善の % 計算が 4 制度の実装で一致するか" },

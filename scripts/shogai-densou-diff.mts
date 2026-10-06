@@ -30,6 +30,7 @@ import {
 } from "@/lib/shogai-seikyu/juho-tier";
 import {
   aggregateMonthlyShogaiSeikyu,
+  excludeShikyuryoOverVisits,
   type ShogaiSeikyuRow,
 } from "@/lib/shogai-seikyu/aggregate";
 import {
@@ -615,7 +616,11 @@ async function main() {
   const rows: ShogaiSeikyuRow[] = agg.rows;
 
   // visits
-  const visitsByClient = await loadMonthVisits(supabase, OFFICE_ID, YEAR, MONTH);
+  // 支給量超過で請求から外した訪問は記録票からも外す (画面と同じ)
+  const visitsByClient = excludeShikyuryoOverVisits(
+    await loadMonthVisits(supabase, OFFICE_ID, YEAR, MONTH),
+    agg.shikyuryoExcluded,
+  );
 
   // 契約支給量
   const ids = rows.map((r) => r.user_id);

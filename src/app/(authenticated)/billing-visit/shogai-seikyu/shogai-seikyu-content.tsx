@@ -40,7 +40,9 @@ import { useSeikyuContext } from "../_shared/seikyu-context";
 import {
   aggregateMonthlyShogaiSeikyu,
   buildShogaiSeikyuCsv,
+  excludeShikyuryoOverVisits,
   type ShogaiSeikyuRow,
+  type ShogaiShikyuryoExcluded,
 } from "@/lib/shogai-seikyu/aggregate";
 import {
   loadReSeikyuShogai,
@@ -228,6 +230,8 @@ export function ShogaiSeikyuContent({
   const [error, setError] = useState<string | null>(null);
   // 集計時の注意事項 (月途中の市町村変更 等)。集計値には影響しない
   const [warnings, setWarnings] = useState<string[]>([]);
+  /** 支給量超過で請求から外した訪問。実績記録票 (J611) からも同じ訪問を外す */
+  const [shikyuExcluded, setShikyuExcluded] = useState<ShogaiShikyuryoExcluded[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   // ── 上限管理の月次ワークフロー一覧 (対象者と未処理をまとめて確認するモーダル) ──
   //   対象 = 受給者証の上限管理区分が「なし」以外。未処理 = 管理結果 (kanri_result) 未登録
@@ -320,6 +324,7 @@ export function ShogaiSeikyuContent({
       setRows(result.rows);
       setRecordCount(result.recordCount);
       setWarnings(result.warnings);
+      setShikyuExcluded(result.shikyuryoExcluded);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -1117,8 +1122,12 @@ export function ShogaiSeikyuContent({
       if (!visitsByClient.has(r.client)) visitsByClient.set(r.client, []);
       visitsByClient.get(r.client)!.push(r.visit);
     }
-    return visitsByClient;
-  }, [supabase, currentOffice, year, month]);
+    // 支給量超過で請求から外した訪問は記録票からも外す (請求と回数を揃える)。
+    //   ⚠ 外した一覧は表示中の月の集計ぶんだけ。再請求の元提供月には効かない
+    return y === year && m === month
+      ? excludeShikyuryoOverVisits(visitsByClient, shikyuExcluded)
+      : visitsByClient;
+  }, [supabase, currentOffice, year, month, shikyuExcluded]);
 
   // ─── サービス提供実績記録票 (様式1 居宅介護) — 対象者 1 名 = 1 枚 ────────────
   const printJisseki = async () => {

@@ -220,7 +220,7 @@ async function aggregateOffice(
         `[honbu] 障害集計に失敗 (${o.name} は介護/総合のみで続行):`,
         e,
       );
-      return { rows: [] as ShogaiSeikyuRow[], month: "", recordCount: 0, warnings: [] };
+      return { rows: [] as ShogaiSeikyuRow[], month: "", recordCount: 0, warnings: [], shikyuryoExcluded: [] };
     }),
   ]);
   return {
