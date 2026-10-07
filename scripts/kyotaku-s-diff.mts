@@ -147,14 +147,27 @@ async function main() {
   console.log(`ほのぼの KK (${kkPaths.length} 本): ${kkPaths.map((q) => q.split(/[\/]/).slice(-2).join("/")).join(" , ")}`);
   // 明細 (8124) は全ファイルから集める。請求書 (7111) は提出バッチ単位なので
   // 当方の「月1本」とは形が違う → 複数バッチのときは byte 比較せず参考値だけ出す。
+  // ★ 同じ人の 8124 が **複数の送信月** に出ることがある (返戻 → 出し直し / 区分変更後の再請求)。
+  //   2026-10-06 実測: 姉ム H351000485 は 7/10 (KK260703) と 8/10 (KK260802) に同じ内容で 2 回、
+  //   船橋 林八重子 は 7/10 要介護3 → 8/10 要介護4 で出し直し。両方足すと行が倍になって必ず差に出る。
+  //   → **送信月 (ファイル名 KKyymm) が新しい回の行だけ**を正とする。同じ送信月内の分割ファイルは足す。
+  const sendYm = (p: string) => (/KK(\d{4})/i.exec(p.split(/[\\/]/).pop() ?? "") ?? [])[1] ?? "";
   const H = new Map<string, string[]>();
+  const hFrom = new Map<string, string>(); // key → 採用した送信月
+  let superseded = 0;
   for (const q of kkPaths) {
+    const ym = sendYm(q);
     for (const [k, v] of norm(q, YM)) {
       if (k.startsWith("7111") && kkPaths.length > 1) continue;
+      const prev = hFrom.get(k);
+      if (prev !== undefined && prev > ym) continue; // もっと新しい送信回の行を採用済み
+      if (prev !== undefined && prev < ym) { H.set(k, []); superseded++; } // 古い送信回の行は捨てる
       if (!H.has(k)) H.set(k, []);
+      hFrom.set(k, ym);
       H.get(k)!.push(...v);
     }
   }
+  if (superseded) console.log(`  (同じ人が複数の送信月に出ていた ${superseded} 件は 新しい送信月の行だけを使う)`);
   for (const v of H.values()) v.sort();
   if (kkPaths.length > 1) {
     for (const k of [...N.keys()]) if (k.startsWith("7111")) N.delete(k);

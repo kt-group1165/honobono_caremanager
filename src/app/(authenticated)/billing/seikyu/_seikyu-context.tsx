@@ -569,6 +569,19 @@ export async function fetchKyotakuClaimRows(
     const claimInsurer = (c.insurer_number ?? "").trim();
     const certInsurer = (cert?.insurer_number ?? "").trim();
     const useClaimInsurer = claimInsurer !== "" && claimInsurer !== certInsurer;
+    // 転居月の旧保険者分レセプトは、要介護度・認定期間・限度額も **そのレセプトの保険者の認定**から出す。
+    //   2026-10-06 実測: 大網 加藤綾子 の 141143 分に 新保険者 (122390) の認定期間 20260630〜20261231 が
+    //   出ていた (ほのぼのは 141143 の認定 20241201〜20271130)。保険者名だけ直して認定は月末のままだった。
+    //   月内に有効な認定から (保険者, 被保番) が一致するものを使い、無ければ従来どおり月末の認定。
+    const claimInsured = (c.insured_number ?? "").trim();
+    const claimCert = useClaimInsurer
+      ? (certsInMonthRes.get(c.user_id) ?? []).find(
+          (x) =>
+            (x.insurer_number ?? "").trim() === claimInsurer &&
+            (!claimInsured || (x.insured_number ?? "").trim() === claimInsured),
+        ) ?? null
+      : null;
+    const certFields = claimCert ?? cert;
     const kohi = kohiRes.byClient.get(c.user_id) ?? null;
     const { lines, totalUnits } = buildClaimLines(c, monthKey);
     // 公費単独 (みなし2号) = 被保険者番号が H 始まり
@@ -582,17 +595,17 @@ export async function fetchKyotakuClaimRows(
       phone: c.clients?.phone ?? null,
       insurer_number: claimInsurer || cert?.insurer_number || null,
       insurer_name: useClaimInsurer
-        ? (insurerNameByNumber.get(claimInsurer) ?? null)   // 名前が引けなければ空。誤った名前は出さない
+        ? (claimCert?.insurer_name ?? insurerNameByNumber.get(claimInsurer) ?? null)   // 名前が引けなければ空。誤った名前は出さない
         : (cert?.insurer_name ?? null),
       insured_number: (c.insured_number ?? "").trim() || cert?.insured_number || null,
-      care_level: cert?.care_level ?? null,
-      certStart: cert?.certification_start_date ?? null,
-      certEnd: cert?.certification_end_date ?? null,
-      limitPeriodStart: cert?.limit_period_start ?? null,
-      limitPeriodEnd: cert?.limit_period_end ?? null,
+      care_level: certFields?.care_level ?? null,
+      certStart: certFields?.certification_start_date ?? null,
+      certEnd: certFields?.certification_end_date ?? null,
+      limitPeriodStart: certFields?.limit_period_start ?? null,
+      limitPeriodEnd: certFields?.limit_period_end ?? null,
       requestDate: planReqByUser.get(c.user_id) ?? null,
       careManagerNumber: careMgrByUser.get(c.user_id) ?? null,
-      limitUnits: cert?.service_limit_amount ?? 0,
+      limitUnits: certFields?.service_limit_amount ?? 0,
       claimId: c.id,
       claimStatus: c.status,
       // 給付管理をしない月 (死亡等) は基本コードが無い。空文字で表す (lines も空になる)
