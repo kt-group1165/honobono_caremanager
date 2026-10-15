@@ -263,7 +263,9 @@ export function buildKokuhoDensou(
     const insurer = insurerRaw ? insurerRaw.padStart(8, "0") : "";
     const insured = (r.insured_number ?? "").trim();
     // 保険者・被保険者番号が空の行は冒頭で除外済み (ここには来ない)
-    const careLevelCode = CARE_LEVEL_CODE[(r.care_level ?? "").trim()] ?? "";
+    // ★ 2026-10-15 (B-2t③): 全角 (要介護２) でも引けるよう NFKC で寄せる (order-app build.ts と同じ)。
+    //   trim のみだと全角は項15 が空欄になる。認定側は 2026-09 時点で全角 0 件だが、取込経路が増えても壊れないように。
+    const careLevelCode = CARE_LEVEL_CODE[(r.care_level ?? "").normalize("NFKC").replace(/\s/g, "")] ?? "";
     if (!careLevelCode) warnings.push(`${r.user_name}: 要介護度 ("${r.care_level ?? "未設定"}") をコードに変換できません`);
     if (!r.birthDate) warnings.push(`${r.user_name}: 生年月日が未登録です`);
     if (!r.careOfficeNumber) warnings.push(`${r.user_name}: 担当居宅介護支援事業所 (事業所番号) が未登録です`);
