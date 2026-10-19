@@ -137,8 +137,10 @@ if (conflicts.length) {
 }
 if (!EXECUTE) { console.log("\n(DRY RUN。書き込むには --execute)"); process.exit(0); }
 
-const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13);
-const backup = path.join(ROOT, "migrations", `_backup_cert_care_manager_from_kk_${stamp}.json`);
+// ★ 秒と対象月まで入れる (2026-10-19 に 7 月→6 月と続けて回したら 同じ分の名前になり 7 月の退避が上書きされた)
+const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
+const backup = path.join(ROOT, "migrations", `_backup_cert_care_manager_from_kk_${YM}_${stamp}.json`);
+if (existsSync(backup)) { console.error(`✗ 退避ファイルが既にある: ${backup}`); process.exit(1); }
 writeFileSync(backup, JSON.stringify(updates.map((u) => u.cert)));
 console.log(`\n退避 ${updates.length} 行 → ${backup}`);
 let ok = 0;
