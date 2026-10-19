@@ -4,6 +4,7 @@ import {
   type ClaimRow,
   type ClaimsOfficeInfo,
 } from "./claims-shared";
+import { selectInChunks } from "@/lib/in-chunks";
 
 export interface ClaimsLoadResult {
   initialClaims: ClaimRow[];
@@ -14,49 +15,69 @@ export interface ClaimsLoadResult {
 /**
  * レセプト画面 (/billing/claims) の server-side データ読込。
  * 給付管理 (/billing/benefits) との統合タブでも再利用する。
+ *
+ * officeClientIds = 自事業所 (client_office_assignments) の利用者。null (事業所未確定) なら空を返す
+ * (client 側 fetchClaims も currentOffice が無いときは空)。
+ * ⚠ 2026-10-19 まで事業所で絞らず billing_month だけで読んでいた。全事業所 2,805 件が 1000 行で
+ *   打ち切られ、その user_id 1000 件を 1 回の `.in()` に渡して認定の取得が 400 Bad Request → error を
+ *   見ていなかったので 認定が全員空のまま初期表示されていた。
  */
 export async function loadClaimsData(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any -- supabase server client の型は呼出側で確定済
   supabase: SupabaseClient<any, any, any>,
   billingMonth: string,
+  officeClientIds: readonly string[] | null,
 ): Promise<ClaimsLoadResult> {
-  const [officeRes, claimsRes] = await Promise.all([
+  const [officeRes, initialClaims] = await Promise.all([
     supabase
       .from("offices")
       .select("tokutei_kassan_type, medical_cooperation_kassan, area_category, unit_price, provider_number:business_number")
       .eq("app_type", "kaigo-app")
       .limit(1)
       .maybeSingle(),
-    supabase
-      .from("kaigo_care_support_claims")
-      .select("*, clients(name, name_kana:furigana, gender, phone, mobile_phone:mobile)")
-      .eq("billing_month", billingMonth)
-      .order("created_at", { ascending: true }),
+    // 1 利用者 1 か月のレセプトは 転居月でも数件なので 150 人の chunk で 1000 行には届かない
+    selectInChunks<ClaimRow & { created_at?: string | null }>(officeClientIds ?? [], (chunk) =>
+      supabase
+        .from("kaigo_care_support_claims")
+        .select("*, clients(name, name_kana:furigana, gender, phone, mobile_phone:mobile)")
+        .eq("billing_month", billingMonth)
+        .in("user_id", chunk)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true }),
+    ),
   ]);
+  // chunk をまたぐと順序が崩れるので client 側 fetchClaims と同じ 作成日時→id 順に並べ直す
+  initialClaims.sort((a, b) => {
+    const ca = a.created_at ?? "";
+    const cb = b.created_at ?? "";
+    if (ca !== cb) return ca < cb ? -1 : 1;
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  });
 
   const initialOfficeInfo = (officeRes.data ?? null) as ClaimsOfficeInfo;
-  const initialClaims = ((claimsRes.data ?? []) as ClaimRow[]);
 
   const userIds = [...new Set(initialClaims.map((r) => r.user_id))];
   let initialCertEntries: [string, CertMapEntry][] = [];
   if (userIds.length > 0) {
-    // PostgREST default 1000 行制限対策で page-loop で全件取得
+    // 150 人 chunk ごとに PostgREST の 1000 行制限まで page-loop で回しきる
     type CertRow = { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null; certification_start_date: string | null; certification_end_date: string | null };
     const PAGE = 1000;
-    const certs: CertRow[] = [];
-    let fromC = 0;
-    while (true) {
-      const { data } = await supabase
-        .from("client_insurance_records")
-        .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
-        .in("client_id", userIds)
-        .order("certification_start_date", { ascending: false, nullsFirst: false })
-        .range(fromC, fromC + PAGE - 1);
-      if (!data || data.length === 0) break;
-      certs.push(...(data as CertRow[]));
-      if (data.length < PAGE) break;
-      fromC += PAGE;
-    }
+    const certs = await selectInChunks<CertRow>(userIds, async (chunk) => {
+      const rows: CertRow[] = [];
+      for (let fromC = 0; ; fromC += PAGE) {
+        const { data, error } = await supabase
+          .from("client_insurance_records")
+          .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
+          .in("client_id", chunk)
+          .order("certification_start_date", { ascending: false, nullsFirst: false })
+          .order("id", { ascending: true })
+          .range(fromC, fromC + PAGE - 1);
+        if (error) return { data: null, error };
+        rows.push(...((data ?? []) as CertRow[]));
+        if (!data || data.length < PAGE) break;
+      }
+      return { data: rows, error: null };
+    });
     // ── 対象月に有効な認定を選ぶ ────────────────────────────────────────
     // これは **初期表示用**。確定値は client 側の resolveCertForMonth
     // (lib/cert-for-month) が出すので、そちらと同じ選び方に寄せておく。

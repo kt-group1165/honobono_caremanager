@@ -51,6 +51,7 @@ import {
   setYoboShienMarker,
 } from "./claims-shared";
 import { validInMonth } from "@/lib/service-code-valid";
+import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import {
   resolveCertForMonth,
   resolveCertsInMonth,
@@ -1482,11 +1483,16 @@ export function ClaimsContent({
 
     setConfirmingAll(true);
     try {
-      const { error } = await supabase
-        .from("kaigo_care_support_claims")
-        .update({ status: "confirmed", updated_at: new Date().toISOString() })
-        .in("id", draftIds);
-      if (error) throw error;
+      // 1 事業所 1 か月で 283 件 (2026-06 実測) あり、.in() の上限 (~300 件) に近いので区切って更新する。
+      // 途中で失敗したら残りは draft のまま止める (再実行すれば残りだけ確定される)
+      const updatedAt = new Date().toISOString();
+      for (const idChunk of chunkArray(draftIds, ID_IN_CHUNK)) {
+        const { error } = await supabase
+          .from("kaigo_care_support_claims")
+          .update({ status: "confirmed", updated_at: updatedAt })
+          .in("id", idChunk);
+        if (error) throw error;
+      }
       toast.success(`${draftIds.length}件を確定しました`);
       fetchClaims();
     } catch (err: unknown) {

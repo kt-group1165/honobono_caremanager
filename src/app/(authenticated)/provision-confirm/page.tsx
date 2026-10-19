@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { ProvisionConfirmContent, type ProvisionUser } from "./provision-confirm-content";
 import { monthStart, monthEnd } from "@/lib/report-month";
+import { selectInChunks } from "@/lib/in-chunks";
 
 export default async function ProvisionConfirmPage({
   searchParams,
@@ -64,23 +65,31 @@ export default async function ProvisionConfirmPage({
   let initialUsers: ProvisionUser[] = [];
   if (userData.length > 0) {
     const userIds = userData.map((u) => u.id);
-    const { data: docData, error: docError } = await supabase
-      .from("kaigo_report_documents")
-      // ⚠ 列名が DB と違っていた (2026-09-03 是正)。
-      //   period_start / period_end / document_type は **存在しない**。
-      //   実際は report_month (YYYY-MM) と report_type。
-      //   ★ error を捨てていたので 42703 が `?? []` で空配列に化け、
-      //     **3,221 件あるのに全員「帳票なし」**と表示されていた。
-      .select("id, user_id, report_month, status, report_type")
-      .in("user_id", userIds)
-      .in("report_type", ["service-usage", "provision-sheet"])
-      .order("report_month", { ascending: false });
-    // ★ 握りつぶさない (握りつぶしていたのがこの不具合の原因)
-    if (docError) console.error("kaigo_report_documents fetch failed:", docError.message);
-
     type Doc = { id: string; user_id: string; report_month: string | null; status: string | null };
+    // 居宅は 1 事業所 651 名 (2026-10-19 実測) あり、1 回の .in() では 400 になるので区切る。
+    // 1 利用者の帳票は同じ chunk に入るので、chunk 内の report_month 降順で「最新」が取れる
+    let docData: Doc[] = [];
+    try {
+      docData = await selectInChunks<Doc>(userIds, (chunk) =>
+        supabase
+          .from("kaigo_report_documents")
+          // ⚠ 列名が DB と違っていた (2026-09-03 是正)。
+          //   period_start / period_end / document_type は **存在しない**。
+          //   実際は report_month (YYYY-MM) と report_type。
+          //   ★ error を捨てていたので 42703 が `?? []` で空配列に化け、
+          //     **3,221 件あるのに全員「帳票なし」**と表示されていた。
+          .select("id, user_id, report_month, status, report_type")
+          .in("user_id", chunk)
+          .in("report_type", ["service-usage", "provision-sheet"])
+          .order("report_month", { ascending: false }),
+      );
+    } catch (e) {
+      // ★ 握りつぶさない (握りつぶしていたのがこの不具合の原因)
+      console.error("kaigo_report_documents fetch failed:", (e as { message?: string }).message ?? String(e));
+    }
+
     const docByUser: Record<string, Doc> = {};
-    for (const doc of (docData ?? []) as Doc[]) {
+    for (const doc of docData) {
       if (!docByUser[doc.user_id]) {
         docByUser[doc.user_id] = doc;
       }

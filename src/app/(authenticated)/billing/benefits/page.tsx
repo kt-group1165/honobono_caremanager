@@ -128,7 +128,7 @@ export default async function BenefitsPage({
   });
 
   // レセプトタブ用データ (同じ月・同じ居宅介護支援 対象者)
-  const claimsData = await loadClaimsData(supabase, month);
+  const claimsData = await loadClaimsData(supabase, month, officeId ? officeClientIds : null);
 
   return (
     <BenefitClaimsTabs

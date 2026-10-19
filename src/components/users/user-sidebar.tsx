@@ -10,6 +10,7 @@ import { useLocalStorage } from "@/lib/use-local-storage";
 import { confirmNav } from "@/lib/nav-guard";
 import { isYoboLevel } from "@/lib/yobo-kubun";
 import { mapChunksParallel, ID_IN_CHUNK } from "@/lib/chunk-parallel";
+import { selectInChunks } from "@/lib/in-chunks";
 import {
   ServiceCategoryBadge,
   type ServiceCategoryValue,
@@ -472,15 +473,24 @@ function UserSidebarInner(props: UserSidebarProps) {
         }
         const clientIds = Array.from(new Set<string>(assignsAll.map((a) => a.client_id)));
         if (clientIds.length > 0) {
-          const { data: cl } = await supabase
-            .from("clients")
-            .select("id, name, furigana, status, care_level")
-            .in("id", clientIds)
-            .eq("status", "active")
-            .eq("is_facility", false)
-            .is("deleted_at", null)
-            .order("furigana", { ascending: true, nullsFirst: false });
-          nextUsers = (cl || []) as ClientRow[];
+          // 居宅は 1 事業所 651 名 (2026-10-19 実測)。1 回の .in() では 400 になるので区切る
+          try {
+            const cl = await selectInChunks<ClientRow>(clientIds, (chunk) =>
+              supabase
+                .from("clients")
+                .select("id, name, furigana, status, care_level")
+                .in("id", chunk)
+                .eq("status", "active")
+                .eq("is_facility", false)
+                .is("deleted_at", null),
+            );
+            // chunk をまたぐと順序が崩れるので ふりがな順 (空は末尾) に並べ直す
+            nextUsers = cl.sort((a, b) =>
+              !a.furigana ? (b.furigana ? 1 : 0) : !b.furigana ? -1 : a.furigana.localeCompare(b.furigana, "ja"),
+            );
+          } catch (e) {
+            console.error("利用者一覧の取得に失敗:", (e as { message?: string }).message ?? String(e));
+          }
         }
         nextOfficeIds = clientIds;
       }
