@@ -1,13 +1,13 @@
 {
-  "asOf": "2026-09-05",
+  "asOf": "2026-11-09",
   "byType": {
     "care-plan-1": {
-      "comparable": 2954,
-      "mismatch": 122
+      "comparable": 2956,
+      "mismatch": 0
     },
     "service-usage": {
-      "comparable": 3219,
-      "mismatch": 96
+      "comparable": 3220,
+      "mismatch": 1
     },
     "care-plan-3": {
       "comparable": 7,
@@ -29,6 +29,18 @@
     "  帳票 (kaigo_report_documents) に保存されたcare_levelと、現在有効な認定の",
     "  care_levelが食い違う件数。care-plan-1 122件・service-usage 96件が中心",
     "  (第1表・利用票は認定に紐づく機会が多いため)。",
+    "",
+    "■ 2026-11-09 FY-R: 印刷と同じ選び方 (selectCertForReportDoc) で比べるよう是正",
+    "  旧: certification_id も 対象月も見ず「開始日が最新の認定済み」と比較していた。",
+    "  そのため care-plan-1 122 / service-usage 96 の大半は「保存時点では正しかった値」を",
+    "  新しい認定と比べた見かけのズレだった。同日 認定更新 (2026-08〜11 開始) の追加で",
+    "  145 / 120 に増えて FAIL → 是正後 0 / 1 に下がったので基準値を下げた (厳しくなる方向)。",
+    "  ① certification_id があればその認定 ② 無ければ report_month に有効な認定",
+    "  (cert-for-month.ts pickCertRowForMonth = 請求と同じ規則) ③ それも無ければ現在の認定。",
+    "  残る 1 件: 櫻田 數枝 利用票 2026-06 — 保存 要支援2 / 6月に有効な認定は",
+    "  要支援2 (2026-04〜) と 要介護2 (2026-06-01〜) が重なり、開始日が新しい 要介護2 を採る",
+    "  (請求と同じ)。利用票は 8/31 04:58 保存、要介護2 の認定行は同日 15:54 登録 = 認定更新による自然な差。",
+    "  負のコントロール: NEG_CONTROL=1 で わざと月外の認定を選ばせると service-usage 1175 件で FAIL する。",
     "",
     "■ 0を目指さない",
     "  表示・印刷はsrc/lib/report-master-fields.tsで既にマスタ優先に是正済み",

@@ -166,8 +166,18 @@ function toCertForMonth(r: DbRow, isFallback: boolean): CertForMonth {
   };
 }
 
+/** 対象月の選択に使う最小の列 (DbRow 以外の行型 = 帳票の印刷・検査からも同じ規則で選ぶため) */
+export interface CertRowForMonthLike {
+  certification_start_date: string | null;
+  certification_end_date: string | null;
+  effective_date?: string | null;
+  copay_rate?: string | null;
+  care_level?: string | null;
+  service_limit_amount?: number | null;
+}
+
 /** 対象月に有効な認定か (start <= 月末 AND (end IS NULL OR end >= 月初)) */
-const isValidInMonth = (r: DbRow, monthStart: string, monthEnd: string): boolean => {
+const isValidInMonth = (r: CertRowForMonthLike, monthStart: string, monthEnd: string): boolean => {
   if (!r.certification_start_date) return false;
   if (r.certification_start_date > monthEnd) return false;
   if (r.certification_end_date && r.certification_end_date < monthStart) return false;
@@ -357,13 +367,17 @@ function applyBenefitCertsMany(
  *   ⚠ 旧挙動は未定義なので **再現できない**。「是正前は誰がどうだったか」は
  *     旧値から逆算できない。影響を測るときは是正前後の**金額**を突き合わせること。
  */
-const certCompleteness = (r: DbRow): number =>
+const certCompleteness = (r: CertRowForMonthLike): number =>
   (r.copay_rate == null || r.copay_rate === "" ? 0 : 4) + // copay_rate は string 列。空文字も未入力
   (r.care_level == null || r.care_level === "" ? 0 : 2) +
   (r.service_limit_amount == null ? 0 : 1);
 
 /** 同着行のうち最も情報が揃っている 1 件 (同点なら元の並びの先頭 = 安定) */
 export function pickAmongTies(inMonth: DbRow[]): DbRow | undefined {
+  return pickAmongTiesOf(inMonth);
+}
+
+function pickAmongTiesOf<T extends CertRowForMonthLike>(inMonth: T[]): T | undefined {
   const head = inMonth[0];
   if (!head) return undefined;
   let best = head;
@@ -375,6 +389,38 @@ export function pickAmongTies(inMonth: DbRow[]): DbRow | undefined {
     if (s > bestScore) { best = r; bestScore = s; }
   }
   return best;
+}
+
+/** DB の order (certification_start_date DESC NULLS LAST, effective_date DESC NULLS LAST) と同じ並べ替え (安定) */
+const descNullsLast = (a: string | null | undefined, b: string | null | undefined): number => {
+  if (a == null || a === "") return b == null || b === "" ? 0 : 1;
+  if (b == null || b === "") return -1;
+  return a > b ? -1 : a < b ? 1 : 0;
+};
+
+/**
+ * 認定行の配列 (並び順は問わない) から「対象月 (year, month) に有効な 1 件」を選ぶ純関数。
+ * resolveCertForMonth と同じ規則 (有効期間の判定 + 開始日が最新 + 同着は pickAmongTies)。
+ * ★ フォールバックしない: 対象月に有効な認定が無ければ null (どこへ倒すかは呼出側が決める)。
+ *   帳票の印刷 (reports-content.tsx の fetchMasterForDoc) と
+ *   scripts/report-master-drift-check.mts が同じこの関数で選ぶ (2026-11-09 FY-R)。
+ */
+export function pickCertRowForMonth<T extends CertRowForMonthLike>(rows: T[], year: number, month: number): T | null {
+  const { from: monthStart, to: monthEnd } = monthRange(year, month);
+  const sorted = [...rows].sort((a, b) =>
+    descNullsLast(a.certification_start_date, b.certification_start_date) ||
+    descNullsLast(a.effective_date, b.effective_date));
+  return pickAmongTiesOf(sorted.filter((r) => isValidInMonth(r, monthStart, monthEnd))) ?? null;
+}
+
+/** 'YYYY-MM' (または 'YYYY-MM-DD') の帳票対象月 → { year, month }。読めなければ null */
+export function parseYearMonth(ym: string | null | undefined): { year: number; month: number } | null {
+  const m = /^(\d{4})-(\d{1,2})/.exec(String(ym ?? "").trim());
+  if (!m) return null;
+  const year = Number(m[1]);
+  const month = Number(m[2]);
+  if (month < 1 || month > 12) return null;
+  return { year, month };
 }
 
 /** 取得済みの認定行から「対象月の 1 件」を選ぶ (fetch なし) */

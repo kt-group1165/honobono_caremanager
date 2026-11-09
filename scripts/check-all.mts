@@ -89,7 +89,7 @@ const CHECKS: Check[] = [
   { name: "report-master-fields", script: "check:report-master-fields", why: "★ 帳票のマスタ引き直し (要介護度・認定日・保険者等を 印刷時に現在の認定から引く)" },
   // ★ 保存値とマスタのズレ件数 (基準値 218: 第1表122 / 利用票96)。★ 認定更新のたび自然に増えるので
   //   ★ 0 を目指さない。★ 想定外の急増だけを検知する。
-  { name: "report-master-drift", script: "check:report-master-fields-drift", why: "★ 帳票の保存値とマスタのズレ件数 (基準値218。印刷は引き直し済みだが 保存値のズレ自体は残る)" },
+  { name: "report-master-drift", script: "check:report-master-fields-drift", why: "★ 帳票の保存値と 印刷が選ぶ認定 (certification_id → 対象月に有効な認定 → 現在) のズレ件数 (基準値 1。2026-11-09 に印刷と同じ選び方へ是正)" },
   // ★ 2026-09-05 新設。★ 予防46 は レセプトが 0 件なので 実データでは一度も通っていない。
   //   ★ 純関数の合成テスト (DB 書込なし)。★ 事業所番号が入った日に 動くことの担保。
   { name: "yobo-shien-densou", script: "check:yobo-shien-densou", why: "★ 介護予防支援(46) の伝送組み立て (★ レセプト0件のため 合成テストのみ)" },

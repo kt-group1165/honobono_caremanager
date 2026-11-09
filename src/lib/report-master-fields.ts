@@ -28,9 +28,32 @@
  *   直すときは両ファイルを揃えて更新すること。
  */
 
+import { pickCertRowForMonth, parseYearMonth, type CertRowForMonthLike } from "./cert-for-month";
+
 export interface CertMasterLike {
   certification_start_date: string | null;
   certification_status: string | null;
+}
+
+/**
+ * 帳票 1 件に使う認定を選ぶ (印刷 = reports-content.tsx の fetchMasterForDoc と
+ * 検査 = scripts/report-master-drift-check.mts が同じこの関数を使う。2026-11-09 FY-R)。
+ *
+ *   ① certification_id で紐づく認定があればそれ (linked。呼出側が id で引いたもの)
+ *   ② 帳票の対象月 (report_month) に有効な認定 (請求と同じ規則 = cert-for-month.ts の pickCertRowForMonth)
+ *   ③ どちらも無ければ従来どおり「現在の認定」(selectCurrentCertForClient)
+ *
+ *   ②が無かったころは月に関係なく最新の認定を引いていたため、認定更新後に
+ *   過去月の利用票へ その月にはまだ有効でない要介護度が印字されていた。
+ */
+export function selectCertForReportDoc<T extends CertMasterLike & CertRowForMonthLike>(
+  doc: { certification_id: string | null; report_month: string | null },
+  linked: T | null,
+  clientCerts: T[],
+): T | null {
+  if (doc.certification_id && linked) return linked;
+  const ym = parseYearMonth(doc.report_month);
+  return (ym ? pickCertRowForMonth(clientCerts, ym.year, ym.month) : null) ?? selectCurrentCertForClient(clientCerts);
 }
 
 /**

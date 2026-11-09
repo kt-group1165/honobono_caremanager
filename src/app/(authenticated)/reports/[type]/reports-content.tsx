@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { validInMonth } from "@/lib/service-code-valid";
 import { selectCurrentPlanForReports, isExpired, type CarePlanForSelection } from "@/lib/careplan-selection";
 import {
-  selectCurrentCertForClient,
+  selectCertForReportDoc,
   resolveMasterField,
   collectChangedNotices,
   type CertMasterLike,
@@ -307,6 +307,9 @@ type MasterCertRow = CertMasterLike & {
   insurer_name: string | null;
   insured_number: string | null;
   service_limit_amount: number | null;
+  /** 同着の決定用 (pickCertRowForMonth が請求と同じ規則で選ぶため) */
+  effective_date?: string | null;
+  copay_rate?: string | null;
 };
 
 type ClientMasterRow = {
@@ -324,7 +327,7 @@ async function fetchMasterForDoc(
 ): Promise<{ cert: MasterCertRow | null; client: ClientMasterRow | null }> {
   if (!MASTER_OVERRIDE_REPORT_TYPES.includes(doc.report_type)) return { cert: null, client: null };
 
-  const certSelect = "care_level, certification_status, certification_date, certification_start_date, certification_end_date, insurer_number, insurer_name, insured_number, service_limit_amount";
+  const certSelect = "care_level, certification_status, certification_date, certification_start_date, certification_end_date, insurer_number, insurer_name, insured_number, service_limit_amount, effective_date, copay_rate";
   let cert: MasterCertRow | null = null;
   if (doc.certification_id) {
     // ★ このドキュメントが特定の認定に紐づいている場合 (care-plan-1/3/yobo-care-planは
@@ -335,10 +338,14 @@ async function fetchMasterForDoc(
   }
   if (!cert) {
     // ★ certification_id が無い (service-usage/service-usage-detailは現状100%これ) 場合は
-    //   careplan-selection.tsと同じ考え方で「現在の認定」にフォールバックする。
+    //   ① 帳票の対象月 (report_month) に有効な認定 (請求と同じ規則。lib/report-master-fields.ts の
+    //      selectCertForReportDoc → cert-for-month.ts の pickCertRowForMonth)。2026-11-09 FY-R: 月を見ずに最新の認定を引いていたため、
+    //      認定更新後に 過去月の利用票へ その月にはまだ有効でない要介護度が印字されていた。
+    //   ② 対象月が無い/その月に有効な認定が無い → 従来どおり「現在の認定」
+    //      (careplan-selection.ts と同じ考え方)。
     const { data, error } = await supabase.from("client_insurance_records").select(certSelect).eq("client_id", doc.user_id);
     if (error) console.error("[report-master] 認定一覧の取得に失敗:", error.message);
-    else cert = selectCurrentCertForClient((data ?? []) as MasterCertRow[]);
+    else cert = selectCertForReportDoc(doc, null, (data ?? []) as MasterCertRow[]);
   }
 
   const { data: clientData, error: clientError } = await supabase.from("clients").select("birth_date, address, postal_code").eq("id", doc.user_id).maybeSingle();
@@ -5869,7 +5876,7 @@ function DocEditor({ doc, config, clientName, onSave, onStatusToggle, onDirtyCha
     });
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [doc.id, doc.report_type, doc.user_id, doc.certification_id]);
+  }, [doc.id, doc.report_type, doc.user_id, doc.certification_id, doc.report_month]);
 
   const printResolved = useMemo(
     () => masterData

@@ -25,10 +25,15 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
-import { selectCurrentCertForClient } from "@/lib/report-master-fields";
+import { selectCertForReportDoc, selectCurrentCertForClient } from "@/lib/report-master-fields";
+import { parseYearMonth, monthRange } from "@/lib/cert-for-month";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const UPDATE = process.argv.includes("--update");
+// ★ 負のコントロール: certification_id の無い帳票に わざと「対象月に有効でない認定」を選ばせる。
+//   印刷と同じ選び方 (selectCertForReportDoc) が効いていれば、この時だけ件数が増える。
+//   基準値・明細 json は書かない (NEG_CONTROL=1 npx tsx scripts/report-master-drift-check.mts)
+const NEG_CONTROL = process.env.NEG_CONTROL === "1";
 const BASELINE = join(__dirname, "report-master-drift-baseline.json");
 const DETAIL_OUT = join(__dirname, "report-master-drift-service-usage-detail.json");
 
@@ -43,10 +48,10 @@ const REPORT_TYPES = ["care-plan-1", "care-plan-3", "yobo-care-plan", "service-u
 const PAGE = 1000;
 
 async function fetchAllDocs() {
-  const docs: { id: string; user_id: string; report_type: string; content: Record<string, unknown> }[] = [];
+  const docs: { id: string; user_id: string; report_type: string; certification_id: string | null; report_month: string | null; content: Record<string, unknown> }[] = [];
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await sb.from("kaigo_report_documents")
-      .select("id, user_id, report_type, content")
+      .select("id, user_id, report_type, certification_id, report_month, content")
       .in("report_type", REPORT_TYPES)
       .order("id").range(from, from + PAGE - 1);
     if (error) throw new Error(`帳票の取得に失敗: ${error.message}`);
@@ -71,24 +76,51 @@ async function main() {
   const docs = await fetchAllDocs();
   const userIds = Array.from(new Set(docs.map((d) => d.user_id)));
 
-  const certByUser = new Map<string, { care_level: string | null; certification_start_date: string | null; certification_status: string | null }[]>();
+  // ★ 印刷 (reports-content.tsx の fetchMasterForDoc) と同じ列・同じ選び方 (selectCertForReportDoc)
+  type CertRow = {
+    id: string; client_id: string; care_level: string | null;
+    certification_start_date: string | null; certification_end_date: string | null;
+    certification_status: string | null; effective_date: string | null;
+    copay_rate: string | null; service_limit_amount: number | null;
+  };
+  const CERT_COLS = "id, client_id, care_level, certification_start_date, certification_end_date, certification_status, effective_date, copay_rate, service_limit_amount";
+  const certByUser = new Map<string, CertRow[]>();
+  const certById = new Map<string, CertRow>();
   for (let i = 0; i < userIds.length; i += 150) {
     const chunk = userIds.slice(i, i + 150);
-    const { data, error } = await sb.from("client_insurance_records")
-      .select("client_id, care_level, certification_start_date, certification_status")
-      .in("client_id", chunk);
+    const { data, error } = await sb.from("client_insurance_records").select(CERT_COLS).in("client_id", chunk);
     if (error) throw new Error(`認定の取得に失敗: ${error.message}`);
-    for (const c of data as { client_id: string; care_level: string | null; certification_start_date: string | null; certification_status: string | null }[]) {
+    for (const c of data as CertRow[]) {
       if (!certByUser.has(c.client_id)) certByUser.set(c.client_id, []);
       certByUser.get(c.client_id)!.push(c);
+      certById.set(c.id, c);
     }
   }
+  // certification_id が別の利用者の認定を指す例外も、印刷は id で引くので同じく引く
+  const missingLinked = Array.from(new Set(docs.map((d) => d.certification_id).filter((id): id is string => !!id && !certById.has(id))));
+  for (let i = 0; i < missingLinked.length; i += 150) {
+    const { data, error } = await sb.from("client_insurance_records").select(CERT_COLS).in("id", missingLinked.slice(i, i + 150));
+    if (error) throw new Error(`紐づく認定の取得に失敗: ${error.message}`);
+    for (const c of data as CertRow[]) certById.set(c.id, c);
+  }
+
+  /** 負のコントロール用: 対象月に有効でない認定のうち 開始日が最新のもの (無ければ通常どおり) */
+  const pickOutOfMonth = (rows: CertRow[], reportMonth: string | null): CertRow | null => {
+    const ym = parseYearMonth(reportMonth);
+    if (!ym) return null;
+    const { from, to } = monthRange(ym.year, ym.month);
+    const outside = rows.filter((r) => r.certification_start_date && (r.certification_start_date > to || (!!r.certification_end_date && r.certification_end_date < from)));
+    return selectCurrentCertForClient(outside);
+  };
 
   const byType = new Map<string, { comparable: number; mismatch: number }>();
-  const serviceUsageDetail: { doc_id: string; user_id: string; saved_care_level: string; current_care_level: string }[] = [];
+  const serviceUsageDetail: { doc_id: string; user_id: string; report_month: string | null; saved_care_level: string; current_care_level: string }[] = [];
 
   for (const d of docs) {
-    const cert = selectCurrentCertForClient(certByUser.get(d.user_id) ?? []);
+    const rows = certByUser.get(d.user_id) ?? [];
+    const linked = d.certification_id ? certById.get(d.certification_id) ?? null : null;
+    const cert = (NEG_CONTROL && !d.certification_id ? pickOutOfMonth(rows, d.report_month) : null)
+      ?? selectCertForReportDoc(d, linked, rows);
     if (!cert) continue;
     const t = byType.get(d.report_type) ?? { comparable: 0, mismatch: 0 };
     t.comparable++;
@@ -97,14 +129,14 @@ async function main() {
     if (mismatch) {
       t.mismatch++;
       if (d.report_type === "service-usage") {
-        serviceUsageDetail.push({ doc_id: d.id, user_id: d.user_id, saved_care_level: saved!, current_care_level: cert.care_level ?? "" });
+        serviceUsageDetail.push({ doc_id: d.id, user_id: d.user_id, report_month: d.report_month, saved_care_level: saved!, current_care_level: cert.care_level ?? "" });
       }
     }
     byType.set(d.report_type, t);
   }
 
   // ★ 利用票 (外部に渡る帳票) は氏名付きで全件出力 (後から説明できるように)
-  if (serviceUsageDetail.length > 0) {
+  if (serviceUsageDetail.length > 0 && !NEG_CONTROL) {
     const names = await fetchClientNames(Array.from(new Set(serviceUsageDetail.map((r) => r.user_id))));
     const withNames = serviceUsageDetail.map((r) => ({ ...r, client_name: names.get(r.user_id) ?? "(不明)" }));
     writeFileSync(DETAIL_OUT, JSON.stringify({ asOf: new Date().toISOString().slice(0, 10), rows: withNames }, null, 2));
@@ -136,7 +168,9 @@ async function main() {
   console.log(`    期限切れ284名問題とは構造が同じだが、現状の実害は無い)。`);
 
   // ── 基準値比較 ──────────────────────────────────────────────────────────
-  if (UPDATE || !existsSync(BASELINE)) {
+  if (NEG_CONTROL) console.log(`
+★ NEG_CONTROL=1 (わざと月外の認定を選ばせた)。基準値は書かない。FAIL すれば検査は効いている`);
+  if (!NEG_CONTROL && (UPDATE || !existsSync(BASELINE))) {
     writeFileSync(BASELINE, JSON.stringify({
       asOf: new Date().toISOString().slice(0, 10),
       byType: current,
@@ -147,6 +181,18 @@ async function main() {
         "  帳票 (kaigo_report_documents) に保存されたcare_levelと、現在有効な認定の",
         "  care_levelが食い違う件数。care-plan-1 122件・service-usage 96件が中心",
         "  (第1表・利用票は認定に紐づく機会が多いため)。",
+        "",
+        "■ 2026-11-09 FY-R: 印刷と同じ選び方 (selectCertForReportDoc) で比べるよう是正",
+        "  旧: certification_id も 対象月も見ず「開始日が最新の認定済み」と比較していた。",
+        "  そのため care-plan-1 122 / service-usage 96 の大半は「保存時点では正しかった値」を",
+        "  新しい認定と比べた見かけのズレだった。同日 認定更新 (2026-08〜11 開始) の追加で",
+        "  145 / 120 に増えて FAIL → 是正後 0 / 1 に下がったので基準値を下げた (厳しくなる方向)。",
+        "  ① certification_id があればその認定 ② 無ければ report_month に有効な認定",
+        "  (cert-for-month.ts pickCertRowForMonth = 請求と同じ規則) ③ それも無ければ現在の認定。",
+        "  残る 1 件: 櫻田 數枝 利用票 2026-06 — 保存 要支援2 / 6月に有効な認定は",
+        "  要支援2 (2026-04〜) と 要介護2 (2026-06-01〜) が重なり、開始日が新しい 要介護2 を採る",
+        "  (請求と同じ)。利用票は 8/31 04:58 保存、要介護2 の認定行は同日 15:54 登録 = 認定更新による自然な差。",
+        "  負のコントロール: NEG_CONTROL=1 で わざと月外の認定を選ばせると service-usage 1175 件で FAIL する。",
         "",
         "■ 0を目指さない",
         "  表示・印刷はsrc/lib/report-master-fields.tsで既にマスタ優先に是正済み",
