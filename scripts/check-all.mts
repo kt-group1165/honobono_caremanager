@@ -118,6 +118,11 @@ const CHECKS: Check[] = [
     kind: "baseline" }, // 基準値=現状の一致率。認定更新のたび差が動くため0件を目指さない
   { name: "densou-diff", script: "check:densou-diff", why: "★ ほのぼの実出力との突合 (介護保険7拠点 + 障害17拠点)", slow: true,
     kind: "baseline" }, // 同上。分母が違う=データが変わった/一致数が下がった=回帰、で区別する運用
+  // ★ 2026-11-09 新設 (FY-H)。負担割合証 (期間ごと) と認定行の割合の食い違い・負担割合証なしで請求した件数。
+  //   表 client_benefit_certificates が未作成の間は ほのぼの CSV をメモリ上で見込みとして数える (出どころ=csv)。
+  //   表を適用・取込したら出どころが db に変わり比較をやめる (exit 0・合格ではない) → 中身を見て --update。
+  { name: "futan-period", script: "check:futan-period", why: "★ 負担割合証の期間と月ごとの負担割合 (食い違い・証なしで請求。基準値方式)", slow: true,
+    kind: "baseline" }, // 2026-06: 証なし 559 名 / 食い違い 0 (件数は区分ごとなので合計に含めない)
 ];
 
 /** ★ この一覧が見ていないもの。緑でも安心しないための明示 */

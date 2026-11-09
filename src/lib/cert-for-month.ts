@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { mapChunksParallel, ID_IN_CHUNK } from "./chunk-parallel";
 import { isYoboLevel } from "./yobo-kubun";
+import { resolveBenefitForMonth, type BenefitCertRow, type BenefitForMonth } from "./insurance/cert-month";
 
 /**
  * 認定情報 (client_insurance_records) を「対象月に有効な認定」で解決する共有リゾルバ。
@@ -43,6 +44,13 @@ export interface CertForMonth {
   effective_date: string | null;
   /** 対象月に有効な認定が無く「最新 1 件」へフォールバックした */
   isFallback: boolean;
+  /**
+   * その月の負担割合の解決結果 (client_benefit_certificates。2026-11-09 FY-H)。
+   * 表が未適用・読めないときは undefined (copay_rate は認定行の値のまま)。
+   */
+  benefit?: BenefitForMonth;
+  /** 負担割合証で copay_rate を置き換えたとき、置き換える前の認定行の値 (監査用) */
+  copay_rate_cert_row?: string | null;
 }
 
 interface DbRow {
@@ -181,8 +189,148 @@ export async function resolveCertForMonth(
   if (ids.length === 0) return out;
   const { from: monthStart, to: monthEnd } = monthRange(year, month);
 
-  const byClient = await fetchCertRowsByClient(supabase, ids);
-  return pickCertForMonth(byClient, monthStart, monthEnd);
+  const [byClient, benefitByClient] = await Promise.all([
+    fetchCertRowsByClient(supabase, ids),
+    fetchBenefitCertsByClient(supabase, ids),
+  ]);
+  const picked = pickCertForMonth(byClient, monthStart, monthEnd);
+  applyBenefitCerts(picked, byClient, benefitByClient, monthStart, monthEnd);
+  return picked;
+}
+
+// ─── 負担割合証 (client_benefit_certificates) で copay_rate を「その月の負担割合」にする ───
+//
+//   2026-11-09 FY-H (user 合意)。負担割合証は 8/1 に切り替わり、認定期間と揃わないため、
+//   認定行の copay_rate (1 つだけ) では認定期間の途中で割合が変わる人が誤る (48 名 52 行)。
+//   規則は共通の純関数 ./insurance/cert-month.ts (order-app と同じ中身) の resolveBenefitForMonth。
+//
+//   ★ 置き換えるのは「その月に負担割合証がある」(source='certificate') ときだけ。
+//     負担割合証が無い月は copay_rate を認定行の値のまま (= 従来と 1 円も変わらない) にし、
+//     benefit.source='cert_row' と警告を持たせるだけ。
+//     (純関数の cert_row は benefit_rate を優先するが、kaigo は従来 copay_rate だけで請求して
+//      いたので、ここで置き換えると負担割合証の無い人の金額が動いてしまう)
+//   ★ 置き換えるのは 1〜3 割 (給付率 90/80/70) のときだけ。給付率 100 (0 割) や 91 のような
+//     値は kaigo の請求 (copay <= 0 → 既定 1 割) と噛み合わないので置き換えず警告を足す。
+//   ★ 表が未適用・読めないときは従来どおり (console.error を出す)。
+
+/** テスト用: 表の代わりにメモリ上の負担割合証を与える (null で解除)。本番コードからは呼ばない */
+let benefitCertsOverride: Map<string, BenefitCertRow[]> | null = null;
+export function __setBenefitCertsOverrideForTest(m: Map<string, BenefitCertRow[]> | null): void {
+  benefitCertsOverride = m;
+}
+
+let benefitTableMissingLogged = false;
+const isTableMissing = (e: { code?: string; message?: string } | null | undefined) =>
+  !!e && (e.code === "PGRST205" || e.code === "42P01" || /Could not find the table|does not exist/i.test(e.message ?? ""));
+
+type BenefitDbRow = BenefitCertRow & { client_id: string };
+
+/** client ごとの負担割合証等。表が無い・読めないときは null (呼び出し側は従来どおり) */
+async function fetchBenefitCertsByClient(
+  supabase: SupabaseClient,
+  ids: string[],
+): Promise<Map<string, BenefitCertRow[]> | null> {
+  if (benefitCertsOverride) return benefitCertsOverride;
+  try {
+    const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
+      const acc: BenefitDbRow[] = [];
+      let offset = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from("client_benefit_certificates")
+          .select("id, client_id, kind, benefit_rate, valid_from, valid_to, office_id, restriction")
+          .in("client_id", chunk)
+          .order("client_id", { ascending: true })
+          .order("id", { ascending: true })
+          .range(offset, offset + PAGE - 1);
+        if (error) throw error;
+        const rows = (data ?? []) as unknown as BenefitDbRow[];
+        acc.push(...rows);
+        if (rows.length < PAGE) break;
+        offset += PAGE;
+      }
+      return acc;
+    });
+    const m = new Map<string, BenefitCertRow[]>();
+    for (const rows of perChunk) {
+      for (const r of rows) {
+        if (!m.has(r.client_id)) m.set(r.client_id, []);
+        m.get(r.client_id)!.push(r);
+      }
+    }
+    return m;
+  } catch (e) {
+    const err = e as { code?: string; message?: string };
+    if (isTableMissing(err)) {
+      if (!benefitTableMissingLogged) {
+        benefitTableMissingLogged = true;
+        console.error("負担割合証の表 client_benefit_certificates が未作成のため、負担割合は認定行の値のまま計算します (migrations/client_benefit_certificates.sql)");
+      }
+    } else {
+      console.error(`負担割合証 (client_benefit_certificates) を読めなかったため、負担割合は認定行の値のまま計算します: ${err?.message ?? String(e)}`);
+    }
+    return null;
+  }
+}
+
+/** 置き換えてよい負担割合 (割) か */
+const isReplaceableWari = (w: number | null): w is number => w === 1 || w === 2 || w === 3;
+
+/**
+ * 解決済みの CertForMonth に「その月の負担割合」を反映する (in place)。fetch なし = テストから呼べる。
+ */
+export function applyBenefitCertsToCert(
+  cert: CertForMonth,
+  certRows: Array<{
+    certification_start_date: string | null; certification_end_date: string | null; effective_date: string | null;
+    copay_rate: string | null; care_level: string | null; service_limit_amount: number | null;
+  }>,
+  benefitCerts: BenefitCertRow[],
+  monthStart: string,
+  monthEnd: string,
+): void {
+  const b = resolveBenefitForMonth(certRows, benefitCerts, monthStart, monthEnd);
+  cert.benefit = b;
+  if (b.source !== "certificate") return;
+  if (!isReplaceableWari(b.copayWari)) {
+    b.warnings.push(`負担割合証の給付率 ${b.benefitRate ?? "?"}% は 1〜3 割に当たらないため、認定行の負担割合 (${cert.copay_rate ?? "未設定"}) のまま計算しました`);
+    return;
+  }
+  const next = String(b.copayWari);
+  if (cert.copay_rate !== next) {
+    cert.copay_rate_cert_row = cert.copay_rate;
+    cert.copay_rate = next;
+  }
+}
+
+/** benefitByClient が null (表なし・読めない) なら何もしない */
+function applyBenefitCerts(
+  out: Map<string, CertForMonth>,
+  byClient: Map<string, DbRow[]>,
+  benefitByClient: Map<string, BenefitCertRow[]> | null,
+  monthStart: string,
+  monthEnd: string,
+): void {
+  if (!benefitByClient) return;
+  for (const [clientId, cert] of out) {
+    applyBenefitCertsToCert(cert, byClient.get(clientId) ?? [], benefitByClient.get(clientId) ?? [], monthStart, monthEnd);
+  }
+}
+
+function applyBenefitCertsMany(
+  out: Map<string, CertForMonth[]>,
+  byClient: Map<string, DbRow[]>,
+  benefitByClient: Map<string, BenefitCertRow[]> | null,
+  monthStart: string,
+  monthEnd: string,
+): void {
+  if (!benefitByClient) return;
+  for (const [clientId, certs] of out) {
+    // 月内の全認定に同じ「その月の負担割合」を当てる (保険者変更の分割セグメントも同じ割合で出る)
+    for (const c of certs) {
+      applyBenefitCertsToCert(c, byClient.get(clientId) ?? [], benefitByClient.get(clientId) ?? [], monthStart, monthEnd);
+    }
+  }
 }
 
 /**
@@ -267,8 +415,13 @@ export async function resolveCertsInMonth(
   if (ids.length === 0) return out;
   const { from: monthStart, to: monthEnd } = monthRange(year, month);
 
-  const byClient = await fetchCertRowsByClient(supabase, ids);
-  return pickCertsInMonth(byClient, monthStart, monthEnd);
+  const [byClient, benefitByClient] = await Promise.all([
+    fetchCertRowsByClient(supabase, ids),
+    fetchBenefitCertsByClient(supabase, ids),
+  ]);
+  const picked = pickCertsInMonth(byClient, monthStart, monthEnd);
+  applyBenefitCertsMany(picked, byClient, benefitByClient, monthStart, monthEnd);
+  return picked;
 }
 
 /** 取得済みの認定行から「対象月に有効な全件 (start 昇順)」を選ぶ (fetch なし) */
@@ -322,11 +475,15 @@ export async function resolveCertsForMonthBoth(
   const ids = Array.from(new Set(clientIds));
   if (ids.length === 0) return { forMonth: new Map(), inMonth: new Map() };
   const { from: monthStart, to: monthEnd } = monthRange(year, month);
-  const byClient = await fetchCertRowsByClient(supabase, ids);
-  return {
-    forMonth: pickCertForMonth(byClient, monthStart, monthEnd),
-    inMonth: pickCertsInMonth(byClient, monthStart, monthEnd),
-  };
+  const [byClient, benefitByClient] = await Promise.all([
+    fetchCertRowsByClient(supabase, ids),
+    fetchBenefitCertsByClient(supabase, ids),
+  ]);
+  const forMonth = pickCertForMonth(byClient, monthStart, monthEnd);
+  const inMonth = pickCertsInMonth(byClient, monthStart, monthEnd);
+  applyBenefitCerts(forMonth, byClient, benefitByClient, monthStart, monthEnd);
+  applyBenefitCertsMany(inMonth, byClient, benefitByClient, monthStart, monthEnd);
+  return { forMonth, inMonth };
 }
 
 // ─── 月途中の資格変更 検出 (Phase 1: 検出のみ。レセプト行の分割は Phase 2) ──────

@@ -83,6 +83,7 @@
     "check:tokutei": "tsx scripts/tokutei-kassan-verify.mts",
     "check:kokuho-tsuchi": "tsx scripts/kokuho-tsuchi-apply-verify.mts",
     "check:all": "tsx scripts/check-all.mts",
+    "check:futan-period": "tsx scripts/futan-period-check.mts",
     "check:invariant": "tsx scripts/invariant-check.mts",
     "check:addon-lines": "tsx scripts/addon-lines-check.mts",
     "check:month-format": "tsx scripts/month-format-check.mts",

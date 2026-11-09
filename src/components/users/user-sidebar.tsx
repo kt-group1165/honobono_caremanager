@@ -9,6 +9,7 @@ import { useBusinessType } from "@/lib/business-type-context";
 import { useLocalStorage } from "@/lib/use-local-storage";
 import { confirmNav } from "@/lib/nav-guard";
 import { isYoboLevel } from "@/lib/yobo-kubun";
+import { judgeBenefitCertAlert, BENEFIT_CERT_EXPIRY_WARN_DAYS, type BenefitCertRow } from "@/lib/insurance/cert-month";
 import { mapChunksParallel, ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import { selectInChunks } from "@/lib/in-chunks";
 import {
@@ -135,6 +136,11 @@ interface BadgeData {
   /** 提供サービス種別の宣言 (終了していないチェック ON のみ。未来開始も含む) */
   serviceUse: Map<string, ServiceUse>;
   hospitalization: Map<string, HospitalizationPeriod[]>;
+  /**
+   * 負担割合証 (client_benefit_certificates。2026-11-09 FY-H)。
+   * 表が未作成・読めないときは null (= 「割」バッジを出さない。全員「なし」に見えるため)
+   */
+  benefitCerts: Map<string, BenefitCertRow[]> | null;
 }
 
 interface WarnBadge {
@@ -314,6 +320,20 @@ function computeWarnBadges(
       cls: "bg-amber-100 text-amber-800 border-amber-300",
       title: `認定終了間近: ${nearParts.join(" / ")}`,
     });
+  }
+  // 割 = 介護保険の認定が今日有効なのに 負担割合証なし・期限切れ (赤) / 30 日以内に期限で次の証が未登録 (橙)
+  //   (2026-11-09 FY-H。8/1 の更新前にもらいに行けるように。判定は order-app と同じ純関数)
+  //   ⚠ 負担割合証が無い月の請求は 認定行の負担割合で出る (src/lib/cert-for-month.ts)
+  if (data.benefitCerts && k.valid) {
+    const a = judgeBenefitCertAlert(data.benefitCerts.get(clientId) ?? [], today);
+    if (a.level !== "ok") {
+      out.push({
+        short: "割",
+        label: a.label,
+        cls: a.level === "expiring" ? "bg-orange-100 text-orange-800 border-orange-300" : "bg-red-100 text-red-700 border-red-300",
+        title: `${a.label}: ${a.detail}${a.level === "expiring" ? ` (${BENEFIT_CERT_EXPIRY_WARN_DAYS}日前から表示)` : ""}`,
+      });
+    }
   }
   if (isCurrentlyHospitalized(data.hospitalization.get(clientId), today)) {
     out.push({
@@ -643,12 +663,47 @@ function UserSidebarInner(props: UserSidebarProps) {
 
         // 1〜3 は独立した参照データなので並列 fetch (従来は直列 3 往復で
         // バッジ表示までの時間がその分遅れていた)
-        const [{ certs, hasInsurance }, serviceUse, hospitalization] = await Promise.all([
+        // 4) 負担割合証 (client_benefit_certificates)。表が未作成・読めないときは null で続行 (「割」を出さない)
+        const fetchBenefitCerts = async (): Promise<Map<string, BenefitCertRow[]> | null> => {
+          try {
+            const perChunk = await mapChunksParallel(ids, ID_IN_CHUNK, async (chunk) => {
+              const acc: Array<BenefitCertRow & { client_id: string }> = [];
+              let offset = 0;
+              while (true) {
+                const { data, error } = await supabase
+                  .from("client_benefit_certificates")
+                  .select("id, client_id, kind, benefit_rate, valid_from, valid_to, office_id")
+                  .in("client_id", chunk)
+                  .order("client_id", { ascending: true })
+                  .order("id", { ascending: true })
+                  .range(offset, offset + PAGE - 1);
+                if (error) throw error;
+                const rows = (data ?? []) as Array<BenefitCertRow & { client_id: string }>;
+                acc.push(...rows);
+                if (rows.length < PAGE) break;
+                offset += PAGE;
+              }
+              return acc;
+            });
+            const m = new Map<string, BenefitCertRow[]>();
+            for (const rows of perChunk) for (const r of rows) {
+              const list = m.get(r.client_id);
+              if (list) list.push(r); else m.set(r.client_id, [r]);
+            }
+            return m;
+          } catch (e) {
+            console.warn("負担割合証の取得に失敗 (「割」バッジ無しで続行):", (e as { message?: string })?.message ?? e);
+            return null;
+          }
+        };
+
+        const [{ certs, hasInsurance }, serviceUse, hospitalization, benefitCerts] = await Promise.all([
           fetchCerts(),
           fetchServiceUse(),
           getHospitalizationMap(supabase, ids), // 3) 入退院 (テーブル未作成は空 Map で続行)
+          fetchBenefitCerts(),
         ]);
-        if (!cancelled) setBadgeData({ certs, hasInsurance, serviceUse, hospitalization });
+        if (!cancelled) setBadgeData({ certs, hasInsurance, serviceUse, hospitalization, benefitCerts });
       } catch (err) {
         console.warn(
           "利用者バッジ情報の取得に失敗 (バッジ無しで続行):",
