@@ -16,6 +16,7 @@ import {
   Download,
 } from "lucide-react";
 import { format } from "date-fns";
+import { getPerOfficeOfficeIds, sharedScopeOrFilter } from "@/lib/insurance/office-scope";
 
 export interface BillingRecord {
   id: string;
@@ -248,11 +249,14 @@ export function BillingContent({
       const certs: CertRow[] = [];
       {
         let fromC = 0;
+        const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase)); // 事業所別保険 規則 3
         while (true) {
-          const { data, error: certsErr } = await supabase
+          let q = supabase
             .from("client_insurance_records")
             .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
-            .in("client_id", userIds)
+            .in("client_id", userIds);
+          if (scopeOr) q = q.or(scopeOr);
+          const { data, error: certsErr } = await q
             .order("certification_date", { ascending: false })
             .range(fromC, fromC + PAGE_CERTS - 1);
           if (certsErr) throw new Error(`認定情報の取得に失敗しました: ${certsErr.message}`);

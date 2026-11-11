@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { mapChunksParallel, ID_IN_CHUNK } from "./chunk-parallel";
 import { isYoboLevel } from "./yobo-kubun";
 import { resolveBenefitForMonth, type BenefitCertRow, type BenefitForMonth } from "./insurance/cert-month";
+import { getPerOfficeOfficeIds, sharedScopeOrFilter } from "./insurance/office-scope";
 
 /**
  * 認定情報 (client_insurance_records) を「対象月に有効な認定」で解決する共有リゾルバ。
@@ -106,15 +107,19 @@ async function fetchCertRowsByClient(
 ): Promise<Map<string, DbRow[]>> {
   // limit_period_* 列未適用の環境は 42703 → 列なしで再試行 (モジュール内で1度だけ落とす)
   let selectCols = SELECT_COLS;
+  // ★ 2026-11-11 事業所別保険 規則 3: per_office (切替済み) の事業所の行は kaigo (shared) の候補から外す。0 なら絞らない
+  const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase));
   // chunk は並列 (直列だと 1000 名規模で chunk 数 × 往復時間 = 数十秒待ちになる)
   const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
     const acc: DbRow[] = [];
     let offset = 0;
     while (true) {
-      const { data, error } = await supabase
+      let q = supabase
         .from("client_insurance_records")
         .select(selectCols)
-        .in("client_id", chunk)
+        .in("client_id", chunk);
+      if (scopeOr) q = q.or(scopeOr);
+      const { data, error } = await q
         .order("client_id", { ascending: true })
         .order("certification_start_date", { ascending: false, nullsFirst: false })
         .order("effective_date", { ascending: false, nullsFirst: false })
@@ -242,14 +247,17 @@ async function fetchBenefitCertsByClient(
 ): Promise<Map<string, BenefitCertRow[]> | null> {
   if (benefitCertsOverride) return benefitCertsOverride;
   try {
+    const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase));
     const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
       const acc: BenefitDbRow[] = [];
       let offset = 0;
       while (true) {
-        const { data, error } = await supabase
+        let q = supabase
           .from("client_benefit_certificates")
           .select("id, client_id, kind, benefit_rate, valid_from, valid_to, office_id, restriction")
-          .in("client_id", chunk)
+          .in("client_id", chunk);
+        if (scopeOr) q = q.or(scopeOr);
+        const { data, error } = await q
           .order("client_id", { ascending: true })
           .order("id", { ascending: true })
           .range(offset, offset + PAGE - 1);

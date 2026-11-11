@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ID_IN_CHUNK, mapChunksParallel } from "./chunk-parallel";
 import { filterRecentlyActiveClients } from "./active-clients";
+import { getPerOfficeOfficeIds, sharedScopeOrFilter } from "./insurance/office-scope";
 
 /**
  * 認定更新の能動アラート (cert expiry alert)。
@@ -179,16 +180,19 @@ export async function scanCertExpiry(
 
   // 3) 認定行を client ごとに収集 (chunk 並列 + chunk 内は page-loop)
   const certsByClient = new Map<string, CertRow[]>();
+  const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase)); // 事業所別保険 規則 3
   const certChunks = await mapChunksParallel(activeIds, IN_CHUNK, async (chunk) => {
     const out: CertRow[] = [];
     let offset = 0;
     while (true) {
-      const { data, error } = await supabase
+      let q = supabase
         .from("client_insurance_records")
         .select(
           "id, client_id, certification_status, certification_start_date, certification_end_date, care_level",
         )
-        .in("client_id", chunk)
+        .in("client_id", chunk);
+      if (scopeOr) q = q.or(scopeOr);
+      const { data, error } = await q
         .order("client_id", { ascending: true })
         .order("certification_start_date", { ascending: false, nullsFirst: false })
         .range(offset, offset + PAGE - 1);

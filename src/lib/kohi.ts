@@ -27,6 +27,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getPerOfficeOfficeIds, sharedScopeOrFilter } from "./insurance/office-scope";
 import { mapChunksParallel, ID_IN_CHUNK } from "./chunk-parallel";
 
 /** 対象月に有効な公費 (優先 1 件) */
@@ -172,18 +173,22 @@ async function fetchKohiRowsByClient(
   ids: string[],
 ): Promise<Map<string, KohiRow[]> | "table-missing"> {
   let tableMissing = false;
+  // ★ 2026-11-11 事業所別保険 規則 3: per_office の事業所の行は外す (0 なら絞らない)
+  const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase));
   // chunk は並列 (chunk 順で返るので per-client の並びは保たれる)
   const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
     const acc: KohiRow[] = [];
     // chunk 内でも PostgREST の 1000 行上限に掛かり得るため order 付き page-loop
     let offset = 0;
     while (!tableMissing) {
-      const { data, error } = await supabase
+      let q = supabase
         .from("client_kohi_records")
         .select(
           "client_id, kohi_hobetsu, futansha_number, jukyusha_number, start_date, end_date, priority, honnin_futan, created_at",
         )
-        .in("client_id", chunk)
+        .in("client_id", chunk);
+      if (scopeOr) q = q.or(scopeOr);
+      const { data, error } = await q
         .order("client_id", { ascending: true })
         .order("id", { ascending: true })
         .range(offset, offset + PAGE - 1);
@@ -344,18 +349,21 @@ async function resolveKohiLegacy(
     kohi_futansha_number: string | null;
     kohi_jukyusha_number: string | null;
   };
+  const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase));
   // chunk は並列 (chunk 順で返るので per-client の先頭 = 最新 effective_date は保たれる)
   const perChunk = await mapChunksParallel(ids, IN_CHUNK, async (chunk) => {
     const acc: LegacyRow[] = [];
     // client_id 順に固定して page-loop (per-client の先頭 = 最新 effective_date を保証)
     let offset = 0;
     while (true) {
-      const { data, error } = await supabase
+      let q = supabase
         .from("client_insurance_records")
         .select(
           "client_id, kohi_hobetsu, kohi_futansha_number, kohi_jukyusha_number, effective_date",
         )
-        .in("client_id", chunk)
+        .in("client_id", chunk);
+      if (scopeOr) q = q.or(scopeOr);
+      const { data, error } = await q
         .order("client_id", { ascending: true })
         .order("effective_date", { ascending: false, nullsFirst: false })
         .range(offset, offset + PAGE - 1);

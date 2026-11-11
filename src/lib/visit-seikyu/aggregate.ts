@@ -37,6 +37,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getPerOfficeOfficeIds, sharedScopeOrFilter } from "../insurance/office-scope";
 import { ID_IN_CHUNK, NAME_IN_CHUNK, mapChunksParallel } from "@/lib/chunk-parallel";
 import {
   serviceNameVariantsAll,
@@ -955,12 +956,14 @@ export async function aggregateMonthlyVisitSeikyu(
   //   - client_kohi_records あり環境: 「テキストあり・公費レコード未登録」warning のみ
   //   - client_kohi_records 未作成環境: 従来どおり公費扱いのフォールバック
   const publicExpenseTextByClient = new Map<string, string>();
+  const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase)); // 事業所別保険 規則 3
   await mapChunksParallel(userIds, ID_IN_CHUNK, async (chunk) => {
-    const { data, error } = await supabase
+    let q = supabase
       .from("client_insurance_records")
       .select("client_id, public_expense, effective_date")
-      .in("client_id", chunk)
-      .order("effective_date", { ascending: false });
+      .in("client_id", chunk);
+    if (scopeOr) q = q.or(scopeOr);
+    const { data, error } = await q.order("effective_date", { ascending: false });
     if (error) throw new Error(`保険情報 (公費テキスト) 取得失敗: ${error.message}`);
     // chunk は client_id で分割済み (1 client は 1 chunk にしか出ない) なので
     // chunk 単位で「最新のみ」を採るのは直列時と同じ結果になる。

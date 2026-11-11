@@ -28,6 +28,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getPerOfficeOfficeIds, sharedScopeOrFilter } from "../insurance/office-scope";
 import { ID_IN_CHUNK } from "@/lib/chunk-parallel";
 import { validInMonth, monthRange } from "@/lib/service-code-valid";
 import {
@@ -161,12 +162,15 @@ export async function aggregateBathVisitSeikyu(
     if (scheduled.length > 0) {
       const schedClientIds = Array.from(new Set(scheduled.map((s) => s.client_id)));
       const schedCareLevel = new Map<string, string | null>();
+      const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase)); // 事業所別保険 規則 3
       for (let i = 0; i < schedClientIds.length; i += ID_IN_CHUNK) {
         const chunk = schedClientIds.slice(i, i + ID_IN_CHUNK);
-        const { data, error } = await supabase
+        let q = supabase
           .from("client_insurance_records")
           .select("client_id, care_level")
           .in("client_id", chunk);
+        if (scopeOr) q = q.or(scopeOr);
+        const { data, error } = await q;
         if (error) throw error;
         for (const r of (data ?? []) as { client_id: string; care_level: string | null }[]) {
           if (!schedCareLevel.has(r.client_id)) schedCareLevel.set(r.client_id, r.care_level);

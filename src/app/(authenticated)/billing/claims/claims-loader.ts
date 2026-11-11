@@ -5,6 +5,7 @@ import {
   type ClaimsOfficeInfo,
 } from "./claims-shared";
 import { selectInChunks } from "@/lib/in-chunks";
+import { getPerOfficeOfficeIds, sharedScopeOrFilter } from "@/lib/insurance/office-scope";
 
 export interface ClaimsLoadResult {
   initialClaims: ClaimRow[];
@@ -62,13 +63,16 @@ export async function loadClaimsData(
     // 150 人 chunk ごとに PostgREST の 1000 行制限まで page-loop で回しきる
     type CertRow = { client_id: string; care_level: string; insurer_number: string | null; insured_number: string | null; certification_start_date: string | null; certification_end_date: string | null };
     const PAGE = 1000;
+    const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase)); // 事業所別保険 規則 3
     const certs = await selectInChunks<CertRow>(userIds, async (chunk) => {
       const rows: CertRow[] = [];
       for (let fromC = 0; ; fromC += PAGE) {
-        const { data, error } = await supabase
+        let q = supabase
           .from("client_insurance_records")
           .select("client_id, care_level, insurer_number, insured_number, certification_start_date, certification_end_date")
-          .in("client_id", chunk)
+          .in("client_id", chunk);
+        if (scopeOr) q = q.or(scopeOr);
+        const { data, error } = await q
           .order("certification_start_date", { ascending: false, nullsFirst: false })
           .order("id", { ascending: true })
           .range(fromC, fromC + PAGE - 1);

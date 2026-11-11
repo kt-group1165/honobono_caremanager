@@ -68,6 +68,7 @@ import {
   type MergeBank,
   type SheetCompany,
 } from "./riyou-merge-print";
+import { getPerOfficeOfficeIds, sharedScopeOrFilter } from "@/lib/insurance/office-scope";
 
 // ─── 3 制度統合の表示行モデル ────────────────────────────────────────────────
 // 介護 / 総合事業 は同型 UserSeikyuRow (既存ロジックをそのまま流用)。
@@ -755,12 +756,15 @@ export function RiyouSeikyuContent() {
     }
     // 1) client → care_office_id (最新の非 null)
     const careOfficeIdByClient = new Map<string, string>();
+    const scopeOr = sharedScopeOrFilter(await getPerOfficeOfficeIds(supabase)); // 事業所別保険 規則 3
     for (let i = 0; i < ids.length; i += ID_IN_CHUNK) {
       const chunk = ids.slice(i, i + ID_IN_CHUNK);
-      const { data, error: e } = await supabase
+      let q = supabase
         .from("client_insurance_records")
         .select("client_id, care_office_id, effective_date")
-        .in("client_id", chunk)
+        .in("client_id", chunk);
+      if (scopeOr) q = q.or(scopeOr);
+      const { data, error: e } = await q
         .not("care_office_id", "is", null)
         .order("effective_date", { ascending: false });
       if (e) {
