@@ -156,7 +156,7 @@ const plannedCount = (s: Svc) =>
 const actualCount = (s: Svc) =>
   Array.isArray(s.actual_counts) ? sum(s.actual_counts) : (s.actual ?? []).filter(Boolean).length;
 
-type OurKind = { planned: number; actual: number; over30: number; plannedMonthly1: number; actualMonthly1: number; aside: string | null; rows: number };
+type OurKind = { planned: number; actual: number; over30: number; over30Actual: number; plannedMonthly1: number; actualMonthly1: number; aside: string | null; rows: number };
 type OurDoc = { doc: Doc; ym: string; insurer: string; insured: string; kinds: Map<string, OurKind>; limit: number | null };
 
 /**
@@ -170,7 +170,7 @@ function buildOurs(docs: Doc[], unitShift?: (s: Svc) => number, capMonthly = tru
     const kinds = new Map<string, OurKind>();
     for (const s of c.services ?? []) {
       const kind = (s.category ?? "").trim() || "(種類不明)";
-      const k = kinds.get(kind) ?? { planned: 0, actual: 0, over30: 0, plannedMonthly1: 0, actualMonthly1: 0, aside: null, rows: 0 };
+      const k = kinds.get(kind) ?? { planned: 0, actual: 0, over30: 0, over30Actual: 0, plannedMonthly1: 0, actualMonthly1: 0, aside: null, rows: 0 };
       k.rows++;
       kinds.set(kind, k);
       if (OUTSIDE_LIMIT.test(s.content ?? "")) continue; // 限度額対象外の加算は計画単位数に入らない
@@ -185,6 +185,7 @@ function buildOurs(docs: Doc[], unitShift?: (s: Svc) => number, capMonthly = tru
       k.planned += rowMonthlyUnitsOf(u, plannedCount(s), ut);
       k.actual += rowMonthlyUnitsOf(u, actualCount(s), ut);
       if (OVER30.test(s.content ?? "")) k.over30 += rowMonthlyUnitsOf(u, plannedCount(s), ut);
+      if (OVER30.test(s.content ?? "")) k.over30Actual += rowMonthlyUnitsOf(u, actualCount(s), ut);
       // 型の分類用。名前で月 1 回とみなす初版の規則に unit_type を足す
       // (capMonthly=false の負のコントロールでは ut=null なので初版の分類そのまま)
       const m1 = MONTHLY.test(s.content ?? "") || isMonthlyUnitType(ut);
@@ -258,9 +259,11 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
       // 利用票に行はあるが計画回数が 0 で KY に欄が無い = 0 同士なので一致
       if (ok && (kv != null ? ourV === kyV : ourV === 0)) { r.match++; area.match++; r.status.set(`${tk}|${kind}`, "一致"); continue; }
       let type: string;
-      if (!ok || kv == null) type = !ok ? "片側のみ(KYだけ)" : "片側のみ(利用票だけ)";
+      if (ok && kv == null && ok.actual === 0) type = "実績0回でKYに欄が無い";
+      else if (!ok || kv == null) type = !ok ? "片側のみ(KYだけ)" : "片側のみ(利用票だけ)";
       else if (ok.actual === kyV) type = "実績回数で一致";
       else if (ok.over30 > 0 && ourV - ok.over30 === kyV) type = "30日超の日を除けば一致";
+      else if (ok.over30Actual > 0 && ok.actual - ok.over30Actual === kyV) type = "実績回数+30日超を除けば一致";
       else if (ok.plannedMonthly1 !== ourV && ok.plannedMonthly1 === kyV) type = "月1回の加算を回数分数えている";
       else if (ok.actualMonthly1 === kyV) type = "実績回数+月1回の加算で一致";
       else if (o.limit != null && ourTotal > o.limit && kyTotal <= o.limit && ourV > kyV) type = "限度額で頭打ち";
