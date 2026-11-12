@@ -45,6 +45,9 @@ const DETAIL = process.argv.includes("--detail");
 const CSV = process.env.TEIKYOHYO_CSV || join(ROOT, "サービス実績データ", "全社", "202606", "訪問介護", "提供票一覧_KSG0261.CSV");
 // 当方に実績が 1 件も無い既知の事業所 (SESSION_START「訪問介護 君津 / 八千代 / 船橋 は元データが手元に 1 つも無い」)
 const NO_DATA_OFFICE = /船橋ヘルパー|君津ムツミヘルパー|八千代ヘルパー/;
+// ほのぼのが利用者番号を採番していない人に入れる仮の値。別人が同じ番号を共有するので、番号での突合に使わない
+// (2147483647 = int32 の最大値。migrations/fix_junk_user_number_owners.mjs 参照。9999 も 2026-11-12 に提供票で別人共有を確認)
+const JUNK_USER_NUMBERS = new Set(["2147483647", "9999"]);
 
 // ── 0. CSV ──────────────────────────────────────────────────────
 if (!existsSync(CSV)) {
@@ -149,13 +152,15 @@ function buildOurs(dayShift?: (s: Sched) => number): { m: Counts; rows: number; 
   return { m, rows: n, noCode };
 }
 
-const st = { 実績行: 0, 加算減算: 0, 事業所が引けない: 0, 利用者が引けない: 0, 利用者が複数: 0, 使えた: 0 };
+const st = { 実績行: 0, 加算減算: 0, 仮の利用者番号: 0, 事業所が引けない: 0, 利用者が引けない: 0, 利用者が複数: 0, 使えた: 0 };
+const junkNames = new Set<string>();
 const hono: Counts = new Map();
 const unresolvedOffice: Record<string, number> = {};
 for (const r of rows) {
   if (r[C.kind] !== "実績" || r[C.billing] !== "介護保険") continue;
   st.実績行++;
   if (/加算|減算/.test(r[C.content])) { st.加算減算++; continue; }
+  if (JUNK_USER_NUMBERS.has(r[C.userNo])) { st.仮の利用者番号++; junkNames.add(`${r[C.userNo]} ${r[C.officeName]}`); continue; }
   const offs = offByNo.get(r[C.officeNo]);
   if (!offs) { st.事業所が引けない++; unresolvedOffice[`${r[C.officeNo]} ${r[C.officeName]}`] = (unresolvedOffice[`${r[C.officeNo]} ${r[C.officeName]}`] ?? 0) + 1; continue; }
   const oc = resolve(offs, r[C.userNo]);
@@ -220,7 +225,8 @@ console.log(`CSV ${rows.length} 行 (実績 ${rows.filter((r) => r[C.kind] === "
 console.log("\n■ 母数の定義");
 console.log("  CSV の請求区分「介護保険」の実績行のうち、(事業所, 利用者) を当方の 1 人に引き当てられた組の範囲で、");
 console.log("  キー (事業所, 利用者, サービスコード, 日) の回数を比べる。総合事業はコードを見ず (事業所, 利用者, 日)");
-console.log(`  CSV 実績行 ${st.実績行} = 使えた ${st.使えた} + 加算減算 ${st.加算減算} + 事業所が引けない ${st.事業所が引けない} + 利用者が引けない ${st.利用者が引けない} + 利用者が複数 ${st.利用者が複数}`);
+console.log(`  CSV 実績行 ${st.実績行} = 使えた ${st.使えた} + 加算減算 ${st.加算減算} + 仮の利用者番号 ${st.仮の利用者番号} + 事業所が引けない ${st.事業所が引けない} + 利用者が引けない ${st.利用者が引けない} + 利用者が複数 ${st.利用者が複数}`);
+if (junkNames.size) console.log(`  仮の利用者番号 (2147483647 / 9999。別人が共有するので使わない): ${[...junkNames].join(" / ")}`);
 if (Object.keys(unresolvedOffice).length) console.log(`  事業所が引けない: ${JSON.stringify(unresolvedOffice)}`);
 if (Object.keys(oursBuilt.noCode).length) console.log(`  当方でサービス名からコードが一意に引けない: ${JSON.stringify(oursBuilt.noCode)}`);
 console.log("\n■ ① 日別の回数");
