@@ -397,7 +397,8 @@ export function ImportEquipmentRecordModal({
     const added = extracted.incoming.filter((r) => !existingNames.has(r.equipment_name));
     const replaced = extracted.incoming.filter((r) => existingNames.has(r.equipment_name));
     const keepOnly = existing.filter((s) => !incomingNames.has(s.content ?? ""));
-    return { added, replaced, keepOnly };
+    // ★ existing = 取込で消える既存の貸与行 (persistEquipmentRecords は種類 17 を全部消して作り直す)
+    return { added, replaced, keepOnly, existing };
   }, [target, extracted.incoming]);
 
   const handleImport = async () => {
@@ -542,10 +543,19 @@ export function ImportEquipmentRecordModal({
                   <div className="text-base font-bold text-amber-700">{diff.replaced.length} 件</div>
                 </div>
                 <div>
-                  <div className="text-gray-500">既存のみ (維持)</div>
-                  <div className="text-base font-bold text-gray-700">{diff.keepOnly.length} 件</div>
+                  <div className="text-gray-500">★ 削除される既存の貸与行</div>
+                  <div className="text-base font-bold text-red-700">{diff.existing.length} 件</div>
                 </div>
               </div>
+
+              {diff.existing.length > 0 && (
+                <p className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
+                  ★ 取り込むと、この利用票の既存の福祉用具貸与行 {diff.existing.length} 件は ★ 出どころに関係なく すべて削除され、
+                  受信した用具から作り直されます (手入力・別表・明細から入れた単位数も消えます)。
+                  「新規追加 / 同名上書き」は 受信した用具名 (商品名) と 既存行のサービス名 (例: 特殊寝台貸与) を比べた結果で、
+                  表記が違うためほとんど一致しません。
+                </p>
+              )}
 
               {diff.added.length > 0 && (
                 <section>
@@ -591,14 +601,14 @@ export function ImportEquipmentRecordModal({
                 </section>
               )}
 
-              {diff.keepOnly.length > 0 && (
+              {diff.existing.length > 0 && (
                 <section>
-                  <details className="rounded border border-gray-200 bg-gray-50">
-                    <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-gray-600">
-                      既存のみ (= 削除されません) {diff.keepOnly.length} 件
+                  <details className="rounded border border-red-200 bg-red-50">
+                    <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-red-700">
+                      ★ 削除される既存の貸与行 {diff.existing.length} 件 (受信した用具名と一致しなかった {diff.keepOnly.length} 件を含む)
                     </summary>
                     <ul className="px-3 py-2 space-y-0.5">
-                      {diff.keepOnly.map((s, i) => (
+                      {diff.existing.map((s, i) => (
                         <li key={`keep-${i}`} className="text-[11px] text-gray-600 truncate">
                           ・{s.content}
                         </li>
