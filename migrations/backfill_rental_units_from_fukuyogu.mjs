@@ -63,9 +63,12 @@ const SOURCE_TAG = "fukuyogu_meisai_202606";
 //     しかも ★ 画面は貸与行に切り替えた瞬間に「1 日に印」を自動で付ける (rentalSwitchOn) ので、
 //     ★ 「印が 1 日目だけ」は既定値であって「1 か月まるごと」の証拠にならない。
 //     → ★ この script が入れるのは monthly_rate (単価) だけ。実額は別キー。
-//   ⚠ `_units_period` は移行後は不要になる (列で意味が表せるため)。
+//   ⚠ `_units_period` は ★ 廃止した (列で意味が表せるため)。この script は書かず、残っていれば落とす。
 //     移し替え script が betsuhyou 由来の行から消す。
-const PERIOD_TAG = "monthly_rate";
+// ★ 2026-11-13: `_units_period` は ★ 書かない。列 (manual_units / rental_month_actual_units) で
+//   意味が表せるようになったため、タグは死んだメタデータになる。
+//   ★ 残っていると「タグを信じてよい」と誤解させるので、見つけたら ★ 落とす。
+//   実行時の消費者は 0 件 (2026-11-13 grep 済み)。
 
 const env = Object.fromEntries(
   fs.readFileSync(path.join(HERE, "..", ".env.local"), "utf8")
@@ -192,11 +195,13 @@ for (const d of docs) {
       return r;
     }
     if (Number(r.manual_units) === hit.full && r._units_source === SOURCE_TAG
-        && r._units_period === PERIOD_TAG) { stat.既に同値++; return r; }
+        && r._units_period === undefined) { stat.既に同値++; return r; }
     // ★ 値が変わった場合 (月額単位数 列の追加で復元値から差し替わる等) は上書きする
     stat.投入++;
     changed++;
-    return { ...r, manual_units: hit.full, _units_source: SOURCE_TAG, _units_period: PERIOD_TAG, _units_tais: hit.tais };
+    // ★ `_units_period` は書かない。残っていれば落とす (死んだメタデータの再混入を防ぐ)
+    const { _units_period: _dropPeriod, ...restRow } = r; // eslint-disable-line @typescript-eslint/no-unused-vars
+    return { ...restRow, manual_units: hit.full, _units_source: SOURCE_TAG, _units_tais: hit.tais };
   });
   if (changed === 0) continue;
   updates.push({ id: d.id, content: { ...d.content, services: next, _rental_units_backfill: { at: NOW, n: changed, source: SOURCE_TAG } } });
