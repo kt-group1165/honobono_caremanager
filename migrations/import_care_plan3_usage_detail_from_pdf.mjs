@@ -60,10 +60,8 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { extractPages } from "./_pdf_words.mjs";
 import { resolveClients } from "./_client_resolve.mjs";
-import { classifyPage, extractWeeklySchedule, extractBetsuhyouRows } from "./_parse_careplan_bundle_pdf.mjs";
-import { extractGrid, pickIdentity } from "./_riyouhyou_grid.mjs";
+import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
 import { normName } from "./_name_normalize.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
@@ -93,56 +91,6 @@ const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_
 
 const CARE_PLAN3_HOUR_KEYS = ["h00", "h02", "h04", "h06", "h08", "h10", "h12", "h14", "h16", "h18", "h20", "h22"];
 
-/** 束ねPDF 1件を読んで {weekly, riyouhyou, betsuhyou} のページ内容を返す */
-function parseBundle(pdfPath) {
-  const { texts, words } = extractPages(pdfPath);
-  const out = {
-    weekly: null, riyouhyouIdentity: null, riyouhyouGrid: null, riyouhyouMonth: null,
-    betsuhyouItems: null, betsuhyouWarn: [], betsuhyouPublicExpense: [], betsuhyouMonth: null, betsuhyouName: null,
-    betsuhyouLimitAmount: null, pages: [],
-  };
-  for (let i = 0; i < texts.length; i++) {
-    const kind = classifyPage(texts[i]);
-    out.pages.push(kind);
-    if (kind === "weekly") out.weekly = extractWeeklySchedule(words[i]);
-    if (kind === "riyouhyou") {
-      out.riyouhyouIdentity = pickIdentity(words[i]);
-      out.riyouhyouGrid = extractGrid(words[i]);
-      // ★ 対象月の唯一の正しいソース (2026-09-14 H指摘)。週間計画のヘッダ月は
-      // 「計画作成月」であって提供月ではないため使わない。
-      const mm = /令和[\s　]*(\d+)[\s　]*年[\s　]*(\d+)[\s　]*月分/.exec(texts[i]);
-      if (mm) out.riyouhyouMonth = `${2018 + Number(mm[1])}-${String(Number(mm[2])).padStart(2, "0")}`;
-    }
-    if (kind === "betsuhyou") {
-      const { items, warn, publicExpenseByProvider } = extractBetsuhyouRows(words[i]);
-      out.betsuhyouItems = items;
-      out.betsuhyouWarn = warn;
-      out.betsuhyouPublicExpense = publicExpenseByProvider ?? [];
-      // 「区分支給限度基準額(単位)」の直後に出る数字 (要介護度から機械的に決まる値。
-      // _riyouhyou_pdf.mjs の LIMIT_TO_CARE_LEVEL と同じ値だが、印字を直接読むほうが
-      // 要介護度の読み取り誤りに影響されず確実)
-      // ⚠ ラベル「区分支給限度基準額(単位)」の**右**に値が出る (実測で左と誤認して
-      //   一度 null になった。値は同じ行のラベルの右、次の「合計」ラベルより手前)
-      const limitLabel = words[i].find((w) => w.t.includes("区分支給限度基準額"));
-      if (limitLabel) {
-        const near = words[i].find((w) => Math.abs(w.y - limitLabel.y) <= 3
-          && w.x > limitLabel.x && w.x < limitLabel.x + 200 && /^\d{4,6}$/.test(w.t));
-        if (near) out.betsuhyouLimitAmount = Number(near.t);
-      }
-      // 別表ヘッダー「令和 8年 6月   0000375402   秋葉 法昌 様」から提供年月と氏名を拾う
-      // (週間計画の対象月欄が空欄のときのフォールバック用)
-      const m = /令和[\s　]*(\d+)[\s　]*年[\s　]*(\d+)[\s　]*月/.exec(texts[i]);
-      if (m) out.betsuhyouMonth = `${2018 + Number(m[1])}-${String(Number(m[2])).padStart(2, "0")}`;
-      const nm = /様/.exec(texts[i]);
-      if (nm) {
-        const before = texts[i].slice(0, nm.index).trimEnd();
-        const lastLine = before.split("\n").filter((l) => l.trim()).pop();
-        if (lastLine) out.betsuhyouName = lastLine.trim();
-      }
-    }
-  }
-  return out;
-}
 
 // ── 認定 (certification_id) の紐付け — fix_assessment_cert_link.mjs と同一規則 ──
 /** PostgREST の 1000 行上限を超えて全件取る */
@@ -255,7 +203,7 @@ function buildDetailPayload(prev, b, month) {
     limit_amount: prev?.limit_amount || b.betsuhyouLimitAmount || "",
     limit_period: prev?.limit_period || "",
     creation_date: prev?.creation_date || b.weekly?.creationDate || "",
-    insured_number: prev?.insured_number || b.riyouhyouIdentity?.insured || "",
+    insured_number: prev?.insured_number || b.riyouhyouIdentity?.insured || b.betsuhyouHeader?.insured || "",
     insurer_number: prev?.insurer_number || b.riyouhyouIdentity?.insurer || "",
     short_stay_days: prev?.short_stay_days ?? { prev: 0, current: 0, total: 0 },
     limit_management: prev?.limit_management ?? [],
@@ -273,20 +221,57 @@ async function main() {
   console.log(EXECUTE ? "*** 本番実行 ***" : "*** DRY RUN ***");
   console.log("");
 
-  const parsed = PDF_PATHS.map((p) => ({ path: p, ...parseBundle(p) }));
+  // 1 ファイルに複数人いるときは path を「ファイル#何人目」にする (1 人だけのファイルは以前と同じ path)
+  const parsed = PDF_PATHS.flatMap((p) => {
+    const persons = parseBundles(p);
+    return persons.map((b, i) => ({ ...b, path: persons.length > 1 ? `${p}#${i + 1}` : p }));
+  });
+  {
+    const files = new Map();
+    for (const b of parsed) { const f = b.path.replace(/#\d+$/, ""); files.set(f, (files.get(f) ?? 0) + 1); }
+    for (const [f, n] of files) if (n > 1) console.log(`${path.basename(f)}: ${n} 人に分けた (別表 2 ページ以上 ${parsed.filter((b) => b.path.startsWith(f + "#") && b.betsuhyouPages > 1).length} 人)`);
+  }
 
   // ── 利用者を引き当てる (利用票ページの (保険者,被保険者) で) ────────────
   const people = new Map();
   const noIdentity = [];
+  const byBetsuhyouHeader = []; // 利用票ページが無く、別表ヘッダ (被保番 + 氏名) だけで引く人
   for (const b of parsed) {
     if (!b.riyouhyouIdentity?.insurer || !b.riyouhyouIdentity?.insured) {
-      noIdentity.push(b);
+      if (b.betsuhyouHeader?.insured && b.betsuhyouHeader?.name) byBetsuhyouHeader.push(b);
+      else noIdentity.push(b);
       continue;
     }
     const nameKey = normName(b.riyouhyouIdentity.name ?? "");
     people.set(b.path, { insurer: b.riyouhyouIdentity.insurer, insured: b.riyouhyouIdentity.insured, nameKey });
   }
   const { byPair, nameById } = await resolveClients(sb, people, { normalizeName: normName });
+
+  // ── 別表ヘッダだけの人: 保険者番号が印字されないので (被保番, 氏名) の両方が一致する人が 1 人のときだけ使う ──
+  //   被保番は保険者の中でしか一意でない (別人衝突の実例 28 件)。氏名だけの引き当ても禁止
+  //   (memory feedback_name_based_lookup_collision_risk)。両方そろって 1 人に決まるときだけ
+  const headerResolved = new Map(); // b.path -> { clientId, name } | { reason }
+  if (byBetsuhyouHeader.length) {
+    const insureds = [...new Set(byBetsuhyouHeader.map((b) => b.betsuhyouHeader.insured))];
+    const recs = [];
+    for (let i = 0; i < insureds.length; i += 150) {
+      recs.push(...await fetchAllRows(() => sb.from("client_insurance_records").select("id, client_id, insured_number")
+        .in("insured_number", insureds.slice(i, i + 150)).order("id")));
+    }
+    const cids = [...new Set(recs.map((r) => r.client_id))];
+    const names = new Map();
+    for (let i = 0; i < cids.length; i += 150) {
+      const rows = await fetchAllRows(() => sb.from("clients").select("id, name, deleted_at").in("id", cids.slice(i, i + 150)).order("id"));
+      for (const c of rows) if (!c.deleted_at) names.set(c.id, c.name ?? "");
+    }
+    for (const b of byBetsuhyouHeader) {
+      const h = b.betsuhyouHeader;
+      const cand = [...new Set(recs.filter((r) => r.insured_number === h.insured).map((r) => r.client_id))].filter((id) => names.has(id));
+      const hit = cand.filter((id) => normName(names.get(id)) === normName(h.name));
+      if (hit.length === 1) headerResolved.set(b.path, { clientId: hit[0], name: names.get(hit[0]) });
+      else headerResolved.set(b.path, { reason: `別表ヘッダ 被保番${h.insured}「${h.name}」→ 被保番の一致 ${cand.length} 人 / うち氏名も一致 ${hit.length} 人 (1 人に決まらない)` });
+    }
+  }
 
   // 番号が全く読めない (利用票ページ自体が無い) ファイルは、週間計画の氏名だけで
   // ★参考情報として★ 1名に絞れるか見る。書込には使わない (氏名だけの引き当ては
@@ -312,6 +297,8 @@ async function main() {
   const resolvedClientId = new Map(); // b.path -> clientId
   for (const b of parsed) {
     if (noIdentity.includes(b)) continue;
+    const hr = headerResolved.get(b.path);
+    if (hr) { if (hr.clientId) resolvedClientId.set(b.path, hr.clientId); continue; }
     const p = people.get(b.path);
     const ids = byPair.get(`${p.insurer}|${p.insured}`);
     if (ids && ids.size === 1) resolvedClientId.set(b.path, [...ids][0]);
@@ -343,26 +330,36 @@ async function main() {
   }
 
   let ok = 0, unresolved = noIdentity.length, nameMismatch = 0, care3Written = 0, detailWritten = 0, skipped = 0;
+  let detailSkippedWarn = 0, detailSkippedMismatch = 0;
   for (const b of parsed) {
     if (noIdentity.includes(b)) continue;
     const base = path.basename(b.path);
     console.log(`\n── ${base}  (ページ構成: ${b.pages.join(" / ")})`);
 
-    const p = people.get(b.path);
-    const ids = byPair.get(`${p.insurer}|${p.insured}`);
-    if (!ids || ids.size !== 1) {
-      console.log(`  ✗ 引き当て失敗 (保険者${p.insurer} 被保番${p.insured} → 該当 ${ids?.size ?? 0} 件)`);
-      unresolved++;
-      continue;
+    let clientId, dbName;
+    const hr = headerResolved.get(b.path);
+    if (hr) {
+      // 利用票ページが無く、別表ヘッダの (被保番, 氏名) で引いた人
+      if (!hr.clientId) { console.log(`  ✗ 引き当て失敗: ${hr.reason}`); unresolved++; continue; }
+      clientId = hr.clientId; dbName = hr.name;
+      console.log(`  → ${dbName} (client_id=${clientId}) ※利用票ページが無いため別表ヘッダの被保番+氏名で特定`);
+    } else {
+      const p = people.get(b.path);
+      const ids = byPair.get(`${p.insurer}|${p.insured}`);
+      if (!ids || ids.size !== 1) {
+        console.log(`  ✗ 引き当て失敗 (保険者${p.insurer} 被保番${p.insured} → 該当 ${ids?.size ?? 0} 件)`);
+        unresolved++;
+        continue;
+      }
+      clientId = [...ids][0];
+      dbName = nameById.get(clientId)?.name ?? "";
+      if (dbName && normName(dbName) !== p.nameKey) {
+        console.log(`  ⚠ 氏名不一致: PDF「${b.riyouhyouIdentity.name}」 vs 当方「${dbName}」→ skip`);
+        nameMismatch++;
+        continue;
+      }
+      console.log(`  → ${dbName || b.riyouhyouIdentity.name} (client_id=${clientId})`);
     }
-    const clientId = [...ids][0];
-    const dbName = nameById.get(clientId)?.name ?? "";
-    if (dbName && normName(dbName) !== p.nameKey) {
-      console.log(`  ⚠ 氏名不一致: PDF「${b.riyouhyouIdentity.name}」 vs 当方「${dbName}」→ skip`);
-      nameMismatch++;
-      continue;
-    }
-    console.log(`  → ${dbName || b.riyouhyouIdentity.name} (client_id=${clientId})`);
     ok++;
 
     // ── 対象月: 利用票(第6表)の提供年月を正とする (2026-09-14 H指摘で訂正) ──
@@ -446,7 +443,20 @@ async function main() {
         console.log("  ⚠ 自己検算の注意:");
         for (const w of b.betsuhyouWarn) console.log(`    ⚠ ${w}`);
       } else {
-        console.log("  ✓ 自己検算: 印字の合計行と items[] の合計が完全一致 (円単位)");
+        console.log(`  ✓ 自己検算: 印字の合計行と items[] の合計が完全一致 (円単位)${b.betsuhyouPages > 1 ? ` — 別表 ${b.betsuhyouPages} ページをつないだ` : ""}`);
+      }
+      // ★ 書かない条件 (2026-11-13 追加)。どちらも既存 9 本では 0 件で、以前の結果は変わらない
+      //   ・自己検算の警告がある: 金額が合っていない別表を正として焼き付けない
+      //   ・利用票の被保番と別表ヘッダの被保番が違う: ページの切れ目の誤りで別人の別表を付けない
+      if (b.betsuhyouWarn.length) {
+        console.log("  ✗ 第7表: 自己検算の警告があるので書かない (別掲)");
+        detailSkippedWarn++;
+        continue;
+      }
+      if (b.riyouhyouIdentity?.insured && b.betsuhyouHeader?.insured && b.riyouhyouIdentity.insured !== b.betsuhyouHeader.insured) {
+        console.log(`  ✗ 第7表: 利用票の被保番 ${b.riyouhyouIdentity.insured} と別表ヘッダの被保番 ${b.betsuhyouHeader.insured} が違うので書かない`);
+        detailSkippedMismatch++;
+        continue;
       }
 
       const { data: existingDetail } = await sb
@@ -484,13 +494,16 @@ async function main() {
   }
 
   console.log("\n=== まとめ ===");
-  console.log(`  PDF                    ${parsed.length} 本`);
+  console.log(`  PDF                    ${PDF_PATHS.length} 本`);
   console.log(`  利用者引き当て成功     ${ok} 件`);
   console.log(`  引き当て失敗           ${unresolved} 件 (うち利用票ページ自体が無い: ${noIdentity.length} 件)`);
   console.log(`  氏名不一致でskip       ${nameMismatch} 件`);
   console.log(`  対象月不明でskip       ${skipped} 件`);
   console.log(`  第3表 ${EXECUTE ? "書込完了" : "書込予定"}       ${care3Written} 件`);
   console.log(`  第7表 ${EXECUTE ? "書込完了" : "書込予定"}       ${detailWritten} 件`);
+  console.log(`  第7表 書かない (自己検算の警告)       ${detailSkippedWarn} 件`);
+  console.log(`  第7表 書かない (利用票と別表の被保番が違う) ${detailSkippedMismatch} 件`);
+  console.log(`  人数 (ファイル内で人ごとに分けた後)  ${parsed.length} 人 / 利用票なしで別表ヘッダから引いた ${byBetsuhyouHeader.length} 人`);
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });

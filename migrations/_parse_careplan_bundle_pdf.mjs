@@ -1,3 +1,5 @@
+import { extractPages } from "./_pdf_words.mjs";
+import { extractGrid, pickIdentity } from "./_riyouhyou_grid.mjs";
 // ============================================================================
 // 「計画書一括印刷（利用者単位）」PDF (第1表→第2表→週間計画→利用票→別表 を
 // 1ファイルに束ねたもの) を読む共通パーサ。
@@ -495,4 +497,108 @@ function finalizeItem(r, money) {
     fixed_copay: 0, user_copay: userCopay, user_full_pay: 0,
     _money_source: money ? (hasDirect ? "direct" : "group-total") : "default",
   };
+}
+
+// ── 束ね PDF を人ごとに切る (2026-11-13。import_care_plan3_usage_detail_from_pdf.mjs から移した。
+//    別表から利用票の manual_units を埋める手順でも同じ切り方を使うため) ──
+/** 別表ページ先頭のヘッダ「令和 8年 6月   0000375402   秋葉 法昌 様」→ {month, insured, name}。読めなければ null。
+ *  ★ 計画書一括印刷・利用票別表(全CM) の出し方では全ページに印字される (2026-11-13 実測: 高品 178/178・
+ *  木更津 177/177・計画書一括印刷 7/7)。CM 別に出した高品の 5 本 (例: 高品利用票別表佐藤CM.pdf) では 0/40 で読めない */
+export function parseBetsuhyouHeader(text) {
+  const m = /令和[\s　]*(\d+)[\s　]*年[\s　]*(\d+)[\s　]*月[\s　]+(\S{10})[\s　]+(.+?)[\s　]*様/.exec(text);
+  if (!m) return null;
+  return { month: `${2018 + Number(m[1])}-${String(Number(m[2])).padStart(2, "0")}`, insured: m[3], name: m[4].trim() };
+}
+
+function emptyPerson() {
+  return {
+    weekly: null, riyouhyouIdentity: null, riyouhyouGrid: null, riyouhyouMonth: null,
+    betsuhyouItems: null, betsuhyouWarn: [], betsuhyouPublicExpense: [], betsuhyouMonth: null, betsuhyouName: null,
+    betsuhyouLimitAmount: null, betsuhyouHeader: null, betsuhyouPages: 0, pages: [],
+  };
+}
+
+/**
+ * 束ねPDF 1件を読み、**人ごと**の {weekly, riyouhyou, betsuhyou} の配列を返す (2026-11-13 に複数人対応)。
+ *
+ * 以前は 1 ファイル = 1 人の前提で、利用票・別表のページが複数あると最後のページで上書きしていた。
+ * そのため (a) 別表が 2 ページにまたがる人は 1 ページ目の行が消え、(b) 複数人を 1 本に出すと最後の 1 人しか入らなかった。
+ *
+ * 人の切れ目 (ページは人ごとに連続して並ぶ前提。計画書(1) → 計画書(2) → 週間計画 → 利用票 → 別表 の順):
+ *   ・計画書(1) が来たら新しい人 (それまでに何かページがあれば)
+ *   ・週間計画: 今の人に 週間計画 / 利用票 / 別表 が既にあれば新しい人
+ *   ・利用票: 今の人の利用票と (保険者番号, 被保番) が違う、または今の人に別表が既にあれば新しい人。同じなら続きのページ
+ *   ・別表: ヘッダの (年月, 被保番, 氏名) が今の人の別表と違えば新しい人。同じなら続きのページとして **行を連結**する。
+ *          今の人の利用票と被保番が違うときも新しい人 (利用票の無い人の別表)
+ * 1 人だけのファイルは以前と同じ結果になる (既存 9 本で前後一致を確認)。
+ * 自己検算 (印字の合計 = 行の合計) はページごとに行い、警告は人ごとに積む (ページをつないで 1 回で読んでも
+ * 警告の件数は同じだった: 高品 2 ページ以上 35 人中 1 / 木更津 27 人中 2。どれも 2 ページ目の公費欄)。
+ */
+export function parseBundles(pdfPath) {
+  const { texts, words } = extractPages(pdfPath);
+  const persons = [];
+  let cur = emptyPerson();
+  const startNew = () => { if (cur.pages.length) persons.push(cur); cur = emptyPerson(); };
+  const idKey = (id) => `${id?.insurer ?? ""}|${id?.insured ?? ""}`;
+  const hKey = (h) => (h ? `${h.month}|${h.insured}|${h.name}` : "");
+  for (let i = 0; i < texts.length; i++) {
+    const kind = classifyPage(texts[i]);
+    if (kind === "careplan1" && cur.pages.length) startNew();
+    if (kind === "weekly" && (cur.weekly || cur.riyouhyouIdentity || cur.betsuhyouItems)) startNew();
+    let riyouId = null;
+    if (kind === "riyouhyou") {
+      riyouId = pickIdentity(words[i]);
+      if ((cur.riyouhyouIdentity && idKey(cur.riyouhyouIdentity) !== idKey(riyouId)) || cur.betsuhyouItems) startNew();
+    }
+    let header = null;
+    if (kind === "betsuhyou") {
+      header = parseBetsuhyouHeader(texts[i]);
+      if (cur.betsuhyouItems && hKey(cur.betsuhyouHeader) !== hKey(header)) startNew();
+      else if (!cur.betsuhyouItems && header && cur.riyouhyouIdentity?.insured && cur.riyouhyouIdentity.insured !== header.insured) startNew();
+    }
+    const out = cur;
+    out.pages.push(kind);
+    if (kind === "weekly") out.weekly = extractWeeklySchedule(words[i]);
+    if (kind === "riyouhyou") {
+      out.riyouhyouIdentity = riyouId;
+      out.riyouhyouGrid = extractGrid(words[i]);
+      // ★ 対象月の唯一の正しいソース (2026-09-14 H指摘)。週間計画のヘッダ月は
+      // 「計画作成月」であって提供月ではないため使わない。
+      const mm = /令和[\s　]*(\d+)[\s　]*年[\s　]*(\d+)[\s　]*月分/.exec(texts[i]);
+      if (mm) out.riyouhyouMonth = `${2018 + Number(mm[1])}-${String(Number(mm[2])).padStart(2, "0")}`;
+    }
+    if (kind === "betsuhyou") {
+      const { items, warn, publicExpenseByProvider } = extractBetsuhyouRows(words[i]);
+      const cont = out.betsuhyouItems != null; // 同じ人の 2 ページ目以降
+      out.betsuhyouPages++;
+      out.betsuhyouHeader ??= header;
+      out.betsuhyouItems = cont ? [...out.betsuhyouItems, ...items] : items;
+      out.betsuhyouWarn = cont ? [...out.betsuhyouWarn, ...warn.map((w) => `(${out.betsuhyouPages} ページ目) ${w}`)] : warn;
+      out.betsuhyouPublicExpense = cont ? [...out.betsuhyouPublicExpense, ...(publicExpenseByProvider ?? [])] : (publicExpenseByProvider ?? []);
+      if (cont) continue; // 限度額・年月・氏名は 1 ページ目のものを使う
+      // 「区分支給限度基準額(単位)」の直後に出る数字 (要介護度から機械的に決まる値。
+      // _riyouhyou_pdf.mjs の LIMIT_TO_CARE_LEVEL と同じ値だが、印字を直接読むほうが
+      // 要介護度の読み取り誤りに影響されず確実)
+      // ⚠ ラベル「区分支給限度基準額(単位)」の**右**に値が出る (実測で左と誤認して
+      //   一度 null になった。値は同じ行のラベルの右、次の「合計」ラベルより手前)
+      const limitLabel = words[i].find((w) => w.t.includes("区分支給限度基準額"));
+      if (limitLabel) {
+        const near = words[i].find((w) => Math.abs(w.y - limitLabel.y) <= 3
+          && w.x > limitLabel.x && w.x < limitLabel.x + 200 && /^\d{4,6}$/.test(w.t));
+        if (near) out.betsuhyouLimitAmount = Number(near.t);
+      }
+      // 別表ヘッダー「令和 8年 6月   0000375402   秋葉 法昌 様」から提供年月と氏名を拾う
+      // (週間計画の対象月欄が空欄のときのフォールバック用)
+      const m = /令和[\s　]*(\d+)[\s　]*年[\s　]*(\d+)[\s　]*月/.exec(texts[i]);
+      if (m) out.betsuhyouMonth = `${2018 + Number(m[1])}-${String(Number(m[2])).padStart(2, "0")}`;
+      const nm = /様/.exec(texts[i]);
+      if (nm) {
+        const before = texts[i].slice(0, nm.index).trimEnd();
+        const lastLine = before.split("\n").filter((l) => l.trim()).pop();
+        if (lastLine) out.betsuhyouName = lastLine.trim();
+      }
+    }
+  }
+  startNew();
+  return persons;
 }
