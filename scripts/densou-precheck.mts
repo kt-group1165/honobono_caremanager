@@ -21,6 +21,7 @@
  *   4. 上限管理が他事業所なのに管理結果が未入力  (自事業所で 1 割を算定 = 過大請求)
  *   5. 対象月に実績があるのに、その月に有効な認定が無い  (返戻)
  *   6. 事業所番号が 10 桁でない
+ *   7. 訪問日の認定の区分と、実績の制度 (介護 / 総合事業) が食い違う  (返戻)  ★ この項目だけ基準値で落とす
  *
  *   ⚠ 検証数字は 介護保険の保険者番号も 障害の市町村番号も **JIS5桁 + modulus10**。
  *     地方公共団体コードの modulus11 とは別物 (feedback_shogai_shichoson_number)。
@@ -324,7 +325,71 @@ async function main(): Promise<void> {
   }
   section("事業所番号が 10 桁でない", badOffice);
 
+  // ── 7. 訪問日の認定の区分 と 実績の制度 (介護 / 総合事業) の食い違い (2026-11-12 追加) ──
+  // 要介護の人を総合事業で出すと返戻、要支援の人を介護で出しても返戻。
+  // 2026-11-12 に提供票一覧 (check:teikyohyo-diff) で見つかった: 要支援 → 要介護 に変わった後も、
+  // 取込元 MEISAI のサービス名が区分変更前 (訪問型独自サービス) のままで、総合事業として入っていた。
+  // ★ この項目だけ 月ごとの既知件数 を超えたら exit 1 にする (他の項目は従来どおり一覧のみ)。
+  //   既知件数は「直すまでの間の現状」。直したら 0 に下げること。悪化したまま上げないこと。
+  //   判定不能 (その日に有効な認定が 0 件 / 区分の違う認定が 2 件以上) も見張る。増えたら判定そのものが怪しい
+  const SYSTEM_CARE_LEVEL_KNOWN: Record<string, { sougouButKaigo: number; kaigoButShien: number; undecidable: number }> = {
+    // 東城 宏三 4 回 / 市川 博義 2 回 / 荻野 秀之 1 回 (全社・全月で数えてこの 7 回だけ。2026-11-12)
+    "2026-06": { sougouButKaigo: 7, kaigoButShien: 0, undecidable: 0 },
+  };
+  const gateFails: string[] = [];
+  {
+    const visits: { user_id: string; visit_date: string; system: string }[] = [];
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from("kaigo_visit_schedule")
+        .select("user_id, visit_date, system")
+        .eq("status", "completed").in("system", ["介護", "総合事業"])
+        .gte("visit_date", monthStart).lte("visit_date", monthEnd)
+        .order("id").range(from, from + PAGE - 1);
+      if (error) throw new Error(`kaigo_visit_schedule (制度と認定): ${error.message}`);
+      visits.push(...((data ?? []) as { user_id: string; visit_date: string; system: string }[]));
+      if (!data || data.length < PAGE) break;
+    }
+    const certsByClient = new Map<string, typeof certs>();
+    for (const c of certs) { if (!certsByClient.has(c.client_id)) certsByClient.set(c.client_id, []); certsByClient.get(c.client_id)!.push(c); }
+    const group = (lv: string | null): string | null =>
+      !lv ? null : /^要介護/.test(lv) ? "要介護" : /^要支援|事業対象/.test(lv) ? "要支援" : null;
+    const sougouButKaigo = new Map<string, number>(), kaigoButShien = new Map<string, number>(), undecidable = new Map<string, number>();
+    const add = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+    for (const v of visits) {
+      const valid = (certsByClient.get(v.user_id) ?? []).filter((c) =>
+        c.certification_start_date && c.certification_start_date <= v.visit_date &&
+        (!c.certification_end_date || c.certification_end_date >= v.visit_date));
+      const groups = new Set(valid.map((c) => group(c.care_level)));
+      const nm = nameOf.get(v.user_id) ?? "?";
+      if (valid.length === 0 || groups.size !== 1 || groups.has(null)) { add(undecidable, `${nm} (${v.system}) — ${valid.length === 0 ? "その日に有効な認定なし" : "区分の違う認定が重複 / 区分が読めない"}`); continue; }
+      const g = [...groups][0];
+      if (v.system === "総合事業" && g === "要介護") add(sougouButKaigo, `${nm} — 総合事業の実績だが その日は要介護`);
+      if (v.system === "介護" && g === "要支援") add(kaigoButShien, `${nm} — 介護の実績だが その日は要支援`);
+    }
+    const fmt = (m: Map<string, number>) => [...m].map(([k, n]) => `${k} ${n} 回`);
+    const total = (m: Map<string, number>) => [...m.values()].reduce((a, b) => a + b, 0);
+    console.log(`${EOL}  [7] 母数: ${MONTH} の 介護/総合事業 の実績 ${visits.length} 回`);
+    section("総合事業の実績なのに その日の認定が要介護 (返戻)", fmt(sougouButKaigo),
+      "取込元 MEISAI のサービス名が区分変更前のままのことがある。system とサービス名を介護に直す (取込も直さないと巻き戻る)");
+    section("介護の実績なのに その日の認定が要支援 (返戻)", fmt(kaigoButShien));
+    section("制度と認定を突き合わせられない (その日に有効な認定が無い / 区分の違う認定が重複)", fmt(undecidable),
+      "判定不能。増えたら この点検の判定そのものを疑うこと");
+    const known = SYSTEM_CARE_LEVEL_KNOWN[MONTH] ?? { sougouButKaigo: 0, kaigoButShien: 0, undecidable: 0 };
+    const now = { sougouButKaigo: total(sougouButKaigo), kaigoButShien: total(kaigoButShien), undecidable: total(undecidable) };
+    for (const k of Object.keys(now) as (keyof typeof now)[]) {
+      if (now[k] > known[k]) gateFails.push(`[7] ${k}: 既知 ${known[k]} 回 → ${now[k]} 回 (増えた)`);
+      else if (now[k] < known[k]) console.log(`   ○ [7] ${k}: 既知 ${known[k]} 回 → ${now[k]} 回 (減った。SYSTEM_CARE_LEVEL_KNOWN を下げてよい)`);
+    }
+  }
+
   console.log("");
+  if (gateFails.length > 0) {
+    console.log("✗ FAIL (基準値で見張っている項目が悪化した)");
+    for (const f of gateFails) console.log("  " + f);
+    process.exit(1);
+  }
   if (problems === 0) {
     console.log("PASS — 事前点検で引っかかるものはありません");
     process.exit(0);
