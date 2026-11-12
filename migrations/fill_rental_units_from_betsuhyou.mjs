@@ -29,6 +29,11 @@
 // ── 書くもの (--execute) ────────────────────────────────────────────────────
 //   services[i].manual_units = 別表の service_units / services[i]._units_source = "betsuhyou_<提供年月>"
 //   (H の fukuyogu_meisai_202606 と区別できるように)。content._betsuhyou_fill = { at, n } を立てる。
+//   services[i]._units_period = "month_actual" (その月の実額。半月なら半額が入りうる)。
+//     fukuyogu_meisai 由来は「月額の単価 (按分前)」で意味が違う ("monthly_rate"。既存行への付与は H が行う)。
+//     ★ 今は画面の表示月計が合うので実害なし。危ないのは誰かが日付の印を編集したとき
+//       (印から 1月/半月 を判定し直すので、実額の半額をさらに半分にしうる)。
+//   既に manual_units がある行は触らない。1 対 1 で別表と食い違うものは一覧に出す (上書きしない)。
 //   --execute の前に対象帳票の content を JSON に退避 (migrations/_backup_fill_rental_betsuhyou_<時刻>.json・commit しない)。
 //   更新は帳票ごとに id 指定で、読み直した content が想定どおりかを確かめる。
 // ============================================================================
@@ -97,6 +102,7 @@ async function main() {
   const cls = { A: 0, B: 0, C: 0, D: 0, E: 0, 投入済み: 0 };
   const plans = []; // { docId, content, fills: [{ i, units }] }
   const examples = { C: [], D: [], E: [] };
+  const existingMismatch = [];
   for (const b of persons) {
     const key = `${b.file}#${b.idx}`;
     let clientId = null;
@@ -133,7 +139,13 @@ async function main() {
       const [prov, content] = [k.slice(0, k.indexOf("|")), k.slice(k.indexOf("|") + 1)];
       const its = items.filter((it) => it.service_content === content && prov && normProv(it.provider_name).startsWith(prov));
       const label = `${names.get(clientId) ?? b.betsuhyouHeader?.name ?? ""} ${ym} ${content} @${prov}`;
-      if (rs.every((r) => Number(r.s.manual_units) > 0)) { cls.投入済み += rs.length; continue; }
+      if (rs.every((r) => Number(r.s.manual_units) > 0)) {
+        cls.投入済み += rs.length;
+        // 既に単位がある行は触らない。1 対 1 で別表と食い違うものだけ一覧に出す (事業所をまたぐ不整合の材料)
+        if (rs.length === 1 && its.length === 1 && Number(rs[0].s.manual_units) !== Number(its[0].service_units))
+          existingMismatch.push(`${label}  既存 ${rs[0].s.manual_units} (${rs[0].s._units_source ?? "出どころ不明"}) / 別表 ${its[0].service_units}${Number(its[0].service_units) * 2 === Number(rs[0].s.manual_units) ? "  ← 別表がちょうど半額 (半月)" : ""}`);
+        continue;
+      }
       if (its.length !== rs.length || !its.length) { cls.D += rs.length; if (examples.D.length < 6) examples.D.push(`${label} 利用票 ${rs.length} 行 / 別表 ${its.length} 行`); continue; }
       const unitsSet = new Set(its.map((it) => Number(it.service_units)));
       if (rs.length > 1 && unitsSet.size > 1) { cls.C += rs.length; if (examples.C.length < 6) examples.C.push(`${label} ${rs.length} 行 単位 ${its.map((it) => it.service_units).join("/")}`); continue; }
@@ -157,6 +169,8 @@ async function main() {
   console.log(`  E 月途中の可能性 (半月按分) → 埋めない ${cls.E}`);
   console.log(`  既に manual_units あり (触らない) ${cls.投入済み}`);
   for (const t of ["C", "D", "E"]) if (examples[t].length) { console.log(`  ${t} の例:`); for (const x of examples[t]) console.log(`    ${x}`); }
+  console.log(`\n■ 既に単位がある行で 別表と食い違う (1 対 1・上書きしない) ${existingMismatch.length} 行`);
+  for (const x of existingMismatch) console.log(`    ${x}`);
   console.log(`\n埋める帳票 ${plans.length} 件 / 行 ${plans.reduce((s, p) => s + p.fills.length, 0)}`);
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で 退避 → 帳票ごとに更新 → 読み直して検算。"); return; }
 
@@ -168,7 +182,8 @@ async function main() {
   for (const p of plans) {
     const services = p.content.services.map((s, i) => {
       const f = p.fills.find((x) => x.i === i);
-      return f ? { ...s, manual_units: f.units, _units_source: `betsuhyou_${p.ym}` } : s;
+      // _units_period: 別表の単位は「その月の実額」(半月なら半額)。fukuyogu_meisai 由来の「月額の単価」と意味が違う
+      return f ? { ...s, manual_units: f.units, _units_source: `betsuhyou_${p.ym}`, _units_period: "month_actual" } : s;
     });
     const content = { ...p.content, services, _betsuhyou_fill: { at: new Date().toISOString().slice(0, 10), n: p.fills.length } };
     const { data, error } = await sb.from("kaigo_report_documents").update({ content, updated_at: new Date().toISOString() }).eq("id", p.docId).select("id, content");

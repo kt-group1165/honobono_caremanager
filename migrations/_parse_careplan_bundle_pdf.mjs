@@ -321,7 +321,9 @@ export function extractBetsuhyouRows(words) {
   if (!layoutKey) return { items: [], warn: ["見出しから別表の出し方を判定できない (列の位置が分からないので読まない)"], publicExpenseByProvider: [], layout: null };
   const L = LAYOUTS[layoutKey];
   // サービスコードは6桁の数字で、x が概ね190〜210に出る (実測。全CM は 205〜235)
-  const codeWords = words.filter((w) => /^\d{6}$/.test(w.t) && w.x >= L.code[0] && w.x <= L.code[1])
+  // コードは 6 桁。数字だけでなく総合事業は英字で始まる (A61111 / A66311 など。2026-11-13 に全CM で上代 庄二が 0 行になって判明)。
+  // 形を数字 6 桁に決め打ちすると、制度が増えた瞬間に黙って読み落とす (SESSION_START ⑱ の型)
+  const codeWords = words.filter((w) => /^(\d{6}|[A-Z][0-9A-Z]\d{4})$/.test(w.t) && w.x >= L.code[0] && w.x <= L.code[1])
     .sort((a, b) => a.y - b.y);
   const raw = [];
   for (const cw of codeWords) {
