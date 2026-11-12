@@ -54,6 +54,18 @@ const EXECUTE = process.argv.includes("--execute");
 const MONTH = "2026-06";
 const CSV = path.join(HERE, "..", "..", "..", "_session_share", "fukuyogu_units_202606.csv");
 const SOURCE_TAG = "fukuyogu_meisai_202606";
+// ★ manual_units の意味を行に残す。出どころで意味が違うため (2026-11-13)。
+//   monthly_rate  = 按分前の「1 月あたりの単価」。この script が入れる値
+//   ★ 2026-11-13 更新: 「その月の実額」は ★ manual_units には入れないことにした。
+//     列を分けて `rental_month_actual_units` に入れる (migrate_rental_month_actual_units.mjs)。
+//     理由: 別表由来の値は「その月の実額」で、画面 (rentalMonthlyUnits) は manual_units を
+//     月額とみなして日付の印から 1月/半月 を判定し半分にするため、★ 意味が衝突する。
+//     しかも ★ 画面は貸与行に切り替えた瞬間に「1 日に印」を自動で付ける (rentalSwitchOn) ので、
+//     ★ 「印が 1 日目だけ」は既定値であって「1 か月まるごと」の証拠にならない。
+//     → ★ この script が入れるのは monthly_rate (単価) だけ。実額は別キー。
+//   ⚠ `_units_period` は移行後は不要になる (列で意味が表せるため)。
+//     移し替え script が betsuhyou 由来の行から消す。
+const PERIOD_TAG = "monthly_rate";
 
 const env = Object.fromEntries(
   fs.readFileSync(path.join(HERE, "..", ".env.local"), "utf8")
@@ -179,11 +191,12 @@ for (const d of docs) {
       stat.手入力を尊重++;
       return r;
     }
-    if (Number(r.manual_units) === hit.full && r._units_source === SOURCE_TAG) { stat.既に同値++; return r; }
+    if (Number(r.manual_units) === hit.full && r._units_source === SOURCE_TAG
+        && r._units_period === PERIOD_TAG) { stat.既に同値++; return r; }
     // ★ 値が変わった場合 (月額単位数 列の追加で復元値から差し替わる等) は上書きする
     stat.投入++;
     changed++;
-    return { ...r, manual_units: hit.full, _units_source: SOURCE_TAG, _units_tais: hit.tais };
+    return { ...r, manual_units: hit.full, _units_source: SOURCE_TAG, _units_period: PERIOD_TAG, _units_tais: hit.tais };
   });
   if (changed === 0) continue;
   updates.push({ id: d.id, content: { ...d.content, services: next, _rental_units_backfill: { at: NOW, n: changed, source: SOURCE_TAG } } });
