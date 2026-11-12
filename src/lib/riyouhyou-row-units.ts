@@ -32,3 +32,39 @@ export function rowMonthlyUnitsOf(units: number | null | undefined, count: numbe
   const n = isMonthlyUnitType(unitType) ? Math.min(1, count) : count;
   return (units ?? 0) * n;
 }
+
+/**
+ * 帳票 1 枚の集計用: 月 1 回のコードが同じ (事業所, サービス) で複数行に分かれているとき、
+ * 2 行目以降の回数を 0 にした回数の配列を返す (行の並びはそのまま)。
+ *
+ * ほのぼのの利用票は同じコードを時間帯ごとに別の行で書く (2026-11-12 に元 PDF で 7 組すべて確認。
+ * 例: 小菅 トミ子 定期巡回随時Ⅰ１３ を 02:10 / 03:50 / 15:50 / 20:50 / 21:50 の 5 行)。
+ * 行ごとに rowMonthlyUnitsOf で 1 回にしても行数ぶん数えてしまうので、帳票の合計ではここで畳む。
+ * KY 8222 も (事業所, コード) ごとに 1 回で数えている。
+ *
+ * - 月 1 回でない行・unit_type 不明の行は、回数をそのまま返す (行ごとの計算と同じ)
+ * - 月 1 回の行は、同じキーで最初に回数が 1 以上になる行だけ回数を残し、以降の行は 0
+ * - 行ごとの表示 (各行の月計欄) には使わない。データ (印) も触らない
+ * 戻り値を rowMonthlyUnitsOf(units, counts[i], unitType) に渡せば帳票の合計になる。
+ */
+export function dedupeMonthlyCounts<T>(
+  rows: readonly T[],
+  keyOf: (row: T) => string,
+  countOf: (row: T) => number,
+  unitTypeOf: (row: T) => string | null | undefined,
+): number[] {
+  const seen = new Set<string>();
+  return rows.map((r) => {
+    const n = countOf(r);
+    if (!isMonthlyUnitType(unitTypeOf(r)) || n <= 0) return n;
+    const k = keyOf(r);
+    if (seen.has(k)) return 0;
+    seen.add(k);
+    return n;
+  });
+}
+
+/** 利用票の行を畳むときのキー: 提供事業所名 + サービス内容 (行にサービスコードを持たないため名前で引く) */
+export function riyouhyouRowKey(row: { provider?: string | null; content?: string | null }): string {
+  return `${(row.provider ?? "").trim()}|${(row.content ?? "").trim()}`;
+}

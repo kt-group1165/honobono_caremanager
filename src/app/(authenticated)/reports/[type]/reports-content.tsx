@@ -14,7 +14,7 @@ import { format, parseISO, differenceInYears } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { validInMonth } from "@/lib/service-code-valid";
-import { rowMonthlyUnitsOf } from "@/lib/riyouhyou-row-units";
+import { rowMonthlyUnitsOf, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
 import { selectCurrentPlanForReports, isExpired, type CarePlanForSelection } from "@/lib/careplan-selection";
 import {
   selectCertForReportDoc,
@@ -699,6 +699,14 @@ function autoRentalPeriodType(marks: boolean[], yearMonth: string): "1month" | "
   }
   // 同月内開始+終了 (boundary 触れない): 半月固定
   return "half_month";
+}
+
+/**
+ * 帳票の合計に使う回数 (印の数)。月 1 回のコードが同じ事業所で複数行に分かれているときは
+ * 2 行目以降を 0 にする (dedupeMonthlyCounts)。各行の月計欄には使わない。
+ */
+function monthlyEffCounts(services: SvcRow[], kind: "planned" | "actual"): number[] {
+  return dedupeMonthlyCounts(services, riyouhyouRowKey, (s) => s[kind].filter(Boolean).length, (s) => s.unit_type);
 }
 
 /** rental 行の月計単位数を計算 (= round(units × 倍率))。区分は marks から自動判定。 */
@@ -2613,13 +2621,13 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
               {/* 合計行: rental も 1日="1" を持つため、全行の回数を集計。
                   単位列は予定/実績それぞれの月計単位を合算。 */}
               {services.length > 0 && (() => {
-                const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
+                const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual", i: number): number => {
                   if (isRentalRow(svc)) return rentalMonthlyUnits(svc, selectedYearMonth, kind);
-                  const count = svc[kind].filter(Boolean).length;
-                  return rowMonthlyUnitsOf(svc.units, count, svc.unit_type);
+                  // 帳票の合計: 月 1 回のコードが同じ事業所で複数行 (時間帯ごと) なら 2 行目以降は数えない
+                  return rowMonthlyUnitsOf(svc.units, monthlyEffCounts(services, kind)[i], svc.unit_type);
                 };
-                const plannedUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
-                const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
+                const plannedUnitsSum = services.reduce((s, svc, i) => s + rowMonthlyUnits(svc, "planned", i), 0);
+                const actualUnitsSum = services.reduce((s, svc, i) => s + rowMonthlyUnits(svc, "actual", i), 0);
                 return (
                 <>
                   {rowMode !== "actual" && (
@@ -2678,13 +2686,13 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
           未 backfill 行は units=undefined → 0 として扱う (= サマリでは合算されない)。
           単価は 1単位=10円 ハードコード (TODO: 地域区分・サービス種別ごとの実単価対応)。 */}
       {(() => {
-        const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
+        const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual", i: number): number => {
           if (isRentalRow(svc)) return rentalMonthlyUnits(svc, selectedYearMonth, kind);
-          const count = svc[kind].filter(Boolean).length;
-          return rowMonthlyUnitsOf(svc.units, count, svc.unit_type);
+          // 帳票の合計: 月 1 回のコードが同じ事業所で複数行 (時間帯ごと) なら 2 行目以降は数えない
+          return rowMonthlyUnitsOf(svc.units, monthlyEffCounts(services, kind)[i], svc.unit_type);
         };
-        const plannedUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
-        const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
+        const plannedUnitsSum = services.reduce((s, svc, i) => s + rowMonthlyUnits(svc, "planned", i), 0);
+        const actualUnitsSum = services.reduce((s, svc, i) => s + rowMonthlyUnits(svc, "actual", i), 0);
         const diffUnits = plannedUnitsSum - actualUnitsSum;
         // 区分支給限度基準額 (= 単位)。content.limit_amount は文字列の場合があるので Number() で正規化
         const limitUnits = Number(content.limit_amount ?? 0) || 0;
@@ -2703,8 +2711,8 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
         //     画面と印刷が **同じ数字になる**ことを優先する。
         const withinRatio = usedUnits > 0 ? withinLimitUnits / usedUnits : 0;
         let costAcc = 0;
-        for (const svc of services) {
-          const u = rowMonthlyUnits(svc, actualUnitsSum > 0 ? "actual" : "planned");
+        for (const [i, svc] of services.entries()) {
+          const u = rowMonthlyUnits(svc, actualUnitsSum > 0 ? "actual" : "planned", i);
           if (u <= 0) continue;
           const up = beppyoUnitPrice(officeAreaByName?.get((svc.provider ?? "").trim()) ?? null, svc.content ?? "");
           costAcc += Math.floor((u * withinRatio * Math.round(up * 100)) / 100);
@@ -4470,13 +4478,13 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                      合計と食い違って読み間違えるため。 */}
               {(() => {
                 const printYM = String(c.report_month ?? format(new Date(), "yyyy-MM"));
-                const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
+                const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual", i: number): number => {
                   if (isRentalRow(svc)) return rentalMonthlyUnits(svc, printYM, kind);
-                  const count = svc[kind].filter(Boolean).length;
-                  return rowMonthlyUnitsOf(svc.units, count, svc.unit_type);
+                  // 帳票の合計: 月 1 回のコードが同じ事業所で複数行 (時間帯ごと) なら 2 行目以降は数えない
+                  return rowMonthlyUnitsOf(svc.units, monthlyEffCounts(services, kind)[i], svc.unit_type);
                 };
-                const plannedUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
-                const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
+                const plannedUnitsSum = services.reduce((s, svc, i) => s + rowMonthlyUnits(svc, "planned", i), 0);
+                const actualUnitsSum = services.reduce((s, svc, i) => s + rowMonthlyUnits(svc, "actual", i), 0);
                 return (<>
                   <tr style={{ height: `${ROW_H}px` }}>
                     <td colSpan={4} style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>予定合計</td>
