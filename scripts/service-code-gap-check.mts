@@ -8,6 +8,12 @@
  *     ① 訪問介護の units=0 コード (身体９系ほか。所要時間で増える可変扱いと
  *        思われてきたが、実際は WAM Excel 取込元に値が無かった単純な欠損
  *        だったことが「身体９生活１」で判明済み — migrations/fix_shintai9_seikatsu1_units.mjs)
+ *        ⚠ 2026-11-12 訂正: 116711 の 1,124 は「身体８生活１ 1,042 + 82」の外挿で埋めた値で、
+ *          ほのぼのの実出力 (KY 逆算・提供票の概算単位数) は 1,206 だった。2 回とも 5 時間超の訪問で、
+ *          30 分ごとに +82 の「1 段上」と読める = ★ 身体９ は所要時間で増える可変コードの疑いが濃い。
+ *          1,124 は最初の段としては正しいので書き換えないこと (check:teikyohyo-diff の基準値 _readme 参照)
+ *        ⚠ 2026-11-12: 計算区分「減算」の身体９系 (虐防/業未 の変種 50 件) も対象に入れた。
+ *          以前は「基本」だけを見ていて、使われても気づけなかった
  *     ② 障害の処遇改善加算 formula が Ⅰイ/Ⅱイ/Ⅰロ/Ⅱロ で欠落 (Ⅲ・Ⅳ は入っている)
  *
  * ── ★ この script は埋めない。規模と「今は無害/いつ有害になるか」の分類までに留める ──
@@ -47,6 +53,8 @@ async function fetchAll(system: string): Promise<CodeRow[]> {
       .from("kaigo_service_codes")
       .select("service_code,service_name,units,calculation_type,formula,valid_from,valid_until,system,service_category,service_category_name")
       .eq("system", system)
+      // ⚠ order 無しのページングは行が抜ける (memory feedback_postgrest_paging_needs_order)
+      .order("id")
       .range(from, from + PAGE - 1);
     if (error) throw new Error(`kaigo_service_codes(${system}) 取得失敗: ${error.message}`);
     out.push(...((data ?? []) as CodeRow[]));
@@ -68,7 +76,10 @@ async function main() {
   const kaigoAll = await fetchAll("介護");
   const kaigoNow = kaigoAll.filter(validNow);
   const zeroHoumon = kaigoNow.filter(
-    (r) => r.service_category === "11" && r.calculation_type === "基本" && Number(r.units) === 0,
+    (r) => r.service_category === "11" && Number(r.units) === 0 &&
+      // 基本コード + 身体９系の「減算」区分 (虐防/業未 の変種。使われたら ¥0 請求になる)。
+      // 同一建物減算など率で計算する減算は units=0 が正しいので入れない
+      (r.calculation_type === "基本" || (r.calculation_type === "減算" && /身体(介護)?９/.test(r.service_name))),
   );
   console.log(`  【分母】訪問介護(11) 現行世代 units=0 基本コード: ${zeroHoumon.length} 件`);
   const gyakubou = zeroHoumon.filter((r) => r.service_name.includes("虐防"));
@@ -81,7 +92,7 @@ async function main() {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await sb
       .from("kaigo_visit_schedule").select("service_type")
-      .eq("system", "介護").eq("status", "completed").range(from, from + 999);
+      .eq("system", "介護").eq("status", "completed").order("id").range(from, from + 999);
     if (error) throw new Error(`kaigo_visit_schedule 取得失敗: ${error.message}`);
     for (const r of (data ?? []) as { service_type: string | null }[]) if (r.service_type) usedNames.add(r.service_type.trim());
     if (!data || data.length < 1000) break;
@@ -117,7 +128,7 @@ async function main() {
   for (let from = 0; ; from += 1000) {
     const { data, error } = await sb
       .from("kaigo_visit_schedule").select("service_type")
-      .eq("system", "障害").eq("status", "completed").range(from, from + 999);
+      .eq("system", "障害").eq("status", "completed").order("id").range(from, from + 999);
     if (error) throw new Error(`kaigo_visit_schedule(障害) 取得失敗: ${error.message}`);
     for (const r of (data ?? []) as { service_type: string | null }[]) if (r.service_type) shogaiServiceTypes.add(r.service_type.trim());
     if (!data || data.length < 1000) break;
