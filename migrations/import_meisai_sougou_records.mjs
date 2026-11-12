@@ -61,8 +61,11 @@ async function main(){
   // ⚠ マーカーだけに頼ると、TAG 無しで取り込まれた拠点 (茂原・姉ム・四街道) で
   //   保険者が引けず総合事業が丸ごと未解決になる (2026-08-07 に 3 拠点で発生)。
   const insurerBy={}; const insurerNameByNum={};
+  // 訪問日の認定の区分 (要介護なら総合事業にしない。下の「区分変更後の行」参照)
+  const certsByClient=new Map();
   {
-    const all=await fetchAll("client_insurance_records","client_id,insurer_number,insurer_name,notes");
+    const all=await fetchAll("client_insurance_records","client_id,insurer_number,insurer_name,notes,care_level,certification_start_date,certification_end_date");
+    for(const r of all){ if(!certsByClient.has(r.client_id)) certsByClient.set(r.client_id,[]); certsByClient.get(r.client_id).push(r); }
     for(const r of all){ if(!r.insurer_number) continue;
       if(r.notes===STEP1_MARK) insurerBy[r.client_id]=r.insurer_number;         // 当拠点・当月が最優先
       else if(!(r.client_id in insurerBy)) insurerBy[r.client_id]=r.insurer_number;
@@ -78,6 +81,7 @@ async function main(){
   for(const m of members){const k=normStaff(m.name); if(!memBy.has(k))memBy.set(k,[]); memBy.get(k).push(m.id);}
 
   const payloads=[]; let skipNoClient=0, skipNoCode=0; const skipCodes={};
+  const careLevelConflicts=[]; let careLevelUndecidable=0;
   // ⚠ 保険者が PREFIX に一切登録されていない (=総合事業のこの市町村を一度も
   //   取り込めたことがない) 場合と、登録はあるがそのコードだけ master に無い場合を
   //   分けて集計する。前者は「サイレントスキップ」の実害が大きい (2026-09-05実測:
@@ -93,6 +97,16 @@ async function main(){
       skipCodes[r.code+"@"+(insurer||"?")]=(skipCodes[r.code+"@"+(insurer||"?")]||0)+1;
       if(insurer && !pref) skipByUnregisteredInsurer[insurer]=(skipByUnregisteredInsurer[insurer]||0)+1;
       continue;
+    }
+    // ── 区分変更後の行 (2026-11-12 追加) ──
+    // MEISAI のサービス名は区分変更前 (訪問型独自サービス) のまま残ることがある。訪問日の認定が要介護なら
+    // 総合事業として入れると返戻になる (2026-06 実例: 東城 宏三 / 市川 博義 / 荻野 秀之 の 7 回)。
+    // ★ 黙って介護に振り替えない (なぜその制度になったかが消える)。数えて出し、--execute なら下で止める
+    {
+      const valid=(certsByClient.get(cid)||[]).filter(c=>c.certification_start_date&&c.certification_start_date<=r.date&&(!c.certification_end_date||c.certification_end_date>=r.date));
+      const groups=new Set(valid.map(c=>/^要介護/.test(c.care_level||"")?"要介護":/^要支援|事業対象/.test(c.care_level||"")?"要支援":"?"));
+      if(groups.size===1&&groups.has("要介護")) careLevelConflicts.push(`${r.date} ${r.num} ${r.code} (認定 ${valid.map(c=>c.care_level+" "+c.certification_start_date+"〜").join(" / ")})`);
+      else if(valid.length===0||groups.size!==1||groups.has("?")) careLevelUndecidable++;
     }
     const sids=memBy.get(normStaff(r.staff))||[];
     payloads.push({ user_id:cid, staff_id:sids.length===1?sids[0]:null, visit_date:r.date,
@@ -116,7 +130,17 @@ async function main(){
   console.log(`取込対象 利用者数: ${uClients.size}`);
   if(payloads[0]) console.log("payloadサンプル:\n",JSON.stringify(payloads[0],null,1));
 
+  console.log(`訪問日の認定が判定できない行 (有効な認定なし / 区分の違う重複): ${careLevelUndecidable}`);
+  if(careLevelConflicts.length){
+    console.log(`\n⚠⚠⚠ 訪問日の認定が要介護なのに 総合事業として入ろうとしている行: ${careLevelConflicts.length} 行 ⚠⚠⚠`);
+    for(const l of careLevelConflicts) console.log(`  ${l}`);
+    console.log(`  → 要介護の人を総合事業で出すと返戻。MEISAI のサービス名が区分変更前のままと思われる。`);
+    console.log(`    --execute はここで止める (exit 2)。行の扱いを決めてから回すこと (黙って介護に振り替えない)`);
+  } else {
+    console.log(`訪問日の認定が要介護なのに総合事業になる行: 0`);
+  }
   if(!EXECUTE){ console.log("\n※ DRY RUN。--execute で 既存マーカー行削除→投入。"); return; }
+  if(careLevelConflicts.length){ console.error(`✗ 停止: 訪問日の認定が要介護の行が ${careLevelConflicts.length} 行ある (削除・投入はしていない)`); process.exit(2); }
   // ★ 削除の前に FK を検証する (削除だけ実行されてデータが消える事故を防ぐ)
   await assertRefsExist(sb, payloads, [{ column: "user_id", table: "clients", label: "利用者" }, { column: "staff_id", table: "members", label: "職員" }],
     { hint: "名寄せ / 事前取込の id を確認" });
