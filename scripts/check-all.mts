@@ -125,17 +125,81 @@ const CHECKS: Check[] = [
     kind: "baseline" }, // 2026-06: 証なし 559 名 / 食い違い 0 (件数は区分ごとなので合計に含めない)
 ];
 
-/** ★ この一覧が見ていないもの。緑でも安心しないための明示 */
-const NOT_COVERED = [
-  "訪問入浴の ★ 実データ — 0 行 (check:bath-fixture はモック。★ 実データでは一度も通っていない)",
-  "介護予防支援(46) — ★ レセプトが 0 件",
-  "福祉用具 — ★ ほのぼの実出力が手元に 1 本も無い (月 ¥17,527,920)",
-  "住宅改修 — ★ 請求の実装が存在しない (5年 ¥113,055,753)",
-  "payroll-app の給与本体 — ★ 別アプリ。apps/payroll-app 側で回す",
-  "国保連からの通知取込 — ★ 実ファイルで一度も検証していない (check:kokuho-tsuchi はモック fixture のみ。" +
-    "実ファイルは repo 内のどこにも見つからず、初回取込時のプレビュー目視確認が必須。" +
-    "また過誤決定(取消)通知は仕様書上も専用フィールドが無く、マイナス金額の通常通知と構造上区別できない)",
-];
+/**
+ * ★ この一覧が見ていないもの。緑でも安心しないための明示
+ * ★ 2026-11-13: 文書は古くなるので、件数で言えるものは ★ 回すたびに実測する (measureNotCovered)。
+ *   実測できなかったときは「実測できず」と出して止めない (この一覧は合否に関わらない)。
+ *   ハードコードのまま残るものは ★ 確かめた日付と出どころを書く。
+ *   2026-11-13 に直した古い記載: 「福祉用具のほのぼの実出力が 1 本も無い」→ ケアサポ分は手元にある /
+ *   「住宅改修の請求の実装が存在しない」→ 2026-10-15 に「請求はシステムの外」で決着 (DECISIONS_PENDING B-2h)
+ */
+async function measureNotCovered(): Promise<string[]> {
+  const { readFileSync, readdirSync, existsSync } = await import("node:fs");
+  const { join, dirname } = await import("node:path");
+  const { fileURLToPath } = await import("node:url");
+  const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+  let env: Record<string, string> = {};
+  try {
+    env = Object.fromEntries(readFileSync(join(ROOT, ".env.local"), "utf8").split(/\r?\n/).filter((l) => l.includes("="))
+      .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; }));
+  } catch { /* 下で「実測できず」になる */ }
+  const count = async (q: string): Promise<string> => {
+    try {
+      const r = await fetch(`${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/${q}${q.includes("?") ? "&" : "?"}limit=1`,
+        { headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`, Prefer: "count=exact" } });
+      if (!r.ok) return `実測できず (${r.status})`;
+      return (r.headers.get("content-range") ?? "").split("/")[1] ?? "実測できず";
+    } catch (e) { return `実測できず (${e instanceof Error ? e.message : e})`; }
+  };
+  const months = async (): Promise<string> => {
+    try {
+      const m: Record<string, number> = {};
+      for (let off = 0; ; off += 1000) {
+        const r = await fetch(`${env.NEXT_PUBLIC_SUPABASE_URL}/rest/v1/kaigo_report_documents?select=id,report_month&report_type=eq.service-usage&order=id.asc&limit=1000&offset=${off}`,
+          { headers: { apikey: env.SUPABASE_SERVICE_ROLE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}` } });
+        if (!r.ok) return `実測できず (${r.status})`;
+        const d = (await r.json()) as { report_month: string | null }[];
+        for (const x of d) m[x.report_month ?? "(なし)"] = (m[x.report_month ?? "(なし)"] ?? 0) + 1;
+        if (d.length < 1000) break;
+      }
+      return Object.entries(m).sort().map(([k, v]) => `${k} ${v}`).join(" / ");
+    } catch (e) { return `実測できず (${e instanceof Error ? e.message : e})`; }
+  };
+  /** 伝送データ/<拠点>/福祉用具/<月>/ほのぼのから/ にあるほのぼの実出力 (KK・明細書明細付) の拠点と月 */
+  const fukuyoguFiles = (): string => {
+    const base = join(ROOT, "伝送データ");
+    if (!existsSync(base)) return "実測できず (伝送データが無い)";
+    const hits: string[] = [];
+    for (const area of readdirSync(base)) {
+      const fy = join(base, area, "福祉用具");
+      if (!existsSync(fy)) continue;
+      const ms = readdirSync(fy).filter((m) => /^\d{6}$/.test(m) && existsSync(join(fy, m, "ほのぼのから"))
+        && readdirSync(join(fy, m, "ほのぼのから")).some((f) => /^KK.*\.CSV$|^KDS0031/i.test(f)));
+      if (ms.length) hits.push(`${area} ${ms[0]}〜${ms[ms.length - 1]} (${ms.length} か月)`);
+    }
+    return hits.length ? hits.join(" / ") : "0 拠点";
+  };
+  const [bathVisit, bathSched, yobo46, claimsAll, detail, usage] = await Promise.all([
+    count("kaigo_bath_visit_records?select=id"), count("kaigo_bath_schedule?select=id"),
+    count("kaigo_care_support_claims?select=id&care_support_code=like.46*"), count("kaigo_care_support_claims?select=id"),
+    count("kaigo_report_documents?select=id&report_type=eq.service-usage-detail"), months(),
+  ]);
+  return [
+    `訪問入浴の ★ 実データ — 実績 ${bathVisit} 行 / 予定 ${bathSched} 行 (check:bath-fixture はモック。★ 実データでは一度も通っていない)`,
+    `介護予防支援(46) — ★ レセプト ${yobo46} 件 (居宅のレセプト全体 ${claimsAll} 件中)`,
+    `福祉用具 — order-app 側。★ ほのぼの実出力があるのは ${fukuyoguFiles()} だけ。` +
+      "高品・Hanaムツミ・リンクス・花見川 の 4 事業所は無い (請求規模 月 ¥17,527,920 は order-app fukuyogu-coverage-check の記載)",
+    "住宅改修 — 請求はシステムの外 (2026-10-15 に決着。DECISIONS_PENDING B-2h/B-2j)。書類・進捗・原価は order-app 側",
+    "payroll-app の給与本体 — ★ 別アプリ。apps/payroll-app 側で回す",
+    "国保連からの通知取込 — ★ 実ファイルで一度も検証していない (check:kokuho-tsuchi はモック fixture のみ。" +
+      "実ファイルは repo 内のどこにも見つからず (2026-11-13 にも 伝送データ・サービス実績データ・Box の出力先を探して 0 本)、初回取込時のプレビュー目視確認が必須。" +
+      "また過誤決定(取消)通知は仕様書上も専用フィールドが無く、マイナス金額の通常通知と構造上区別できない)",
+    `利用票 (第6表) の検証の月 — ★ 利用票は ${usage}。伝送 KY は 2026-06・2026-07 がある (check:riyouhyou-units が突き合わせられるのは両方そろう月だけ)`,
+    `利用票 (第7表 別表 service-usage-detail) — ★ ${detail} 件しか無い (別表の画面・限度額の割り振りは給付管理から作る)`,
+    "利用票の福祉用具貸与の単位数 — ★ 9,006 行中 1,491 行 (16.6%) しか入っていない (2026-11-13 実測・H の報告。" +
+      "残りは利用票別表 (全CM) を出して migrations/fill_rental_units_from_betsuhyou.mjs で埋める)",
+  ];
+}
 
 const results: { name: string; ok: boolean; ms: number; skipped?: boolean; out?: string; kind: "strict" | "baseline"; knownDiff?: number; noSample?: boolean }[] = [];
 for (const c of CHECKS) {
@@ -161,8 +225,8 @@ for (const r of results) {
 }
 const failed = results.filter((r) => !r.ok);
 console.log("");
-console.log("⚠ この一覧が ★ 見ていないもの:");
-for (const n of NOT_COVERED) console.log(`   ${n}`);
+console.log("⚠ この一覧が ★ 見ていないもの (件数は今回の実測):");
+for (const n of await measureNotCovered()) console.log(`   ${n}`);
 console.log("");
 
 // ★ [基準値] は「0件PASS」ではない。既知の差・既知のリスクを許容している検査を一覧化する
