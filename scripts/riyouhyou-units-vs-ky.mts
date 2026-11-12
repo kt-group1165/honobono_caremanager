@@ -239,10 +239,23 @@ type Result = {
   status: Map<string, string>;
 };
 
+// ★ 基準値の対象の月 (2026-11-13)。基準値の合計は月を分けていないので、新しい月の利用票が入ると
+//   それだけで不一致が増えて FAIL する。基準値に無い月は別掲にして件数だけ出し、中身を確かめてから --update で取り込む
+const baselineMonths: Set<string> | null = (() => {
+  if (UPDATE || !existsSync(BASELINE)) return null;
+  const m = (JSON.parse(readFileSync(BASELINE, "utf8")) as { months?: string[] }).months;
+  return m ? new Set(m) : null;
+})();
+
 function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
   const r: Result = { denomTickets: 0, denomKeys: 0, match: 0, mismatches: [], aside: {}, asideKeysByReason: {}, byArea: new Map(), noKyByMonth: {}, kyOnlyTickets: 0, status: new Map() };
   const bump = (o: Record<string, number>, k: string, n = 1) => { o[k] = (o[k] ?? 0) + n; };
   const seen = new Set<string>();
+  if (baselineMonths) ours = ours.filter((o) => {
+    if (baselineMonths.has(o.doc.report_month)) return true;
+    bump(r.aside, "基準値に無い月 (--update で取り込む)");
+    return false;
+  });
   for (const o of ours) {
     if (!o.insurer || !o.insured) { bump(r.aside, "被保番なし(利用票)"); continue; }
     const tk = `${o.ym}|${o.insurer}|${o.insured}`;
@@ -417,8 +430,12 @@ console.log("  畳むかどうかで結果が変わったキー (畳まないと
 printTransitions(transDedupe);
 
 // ── 基準値 ──
-type Baseline = { _readme: string[]; denomKeys: number; match: number; mismatch: number; byArea: Record<string, number>; byType: Record<string, number> };
-const cur = { denomKeys: res.denomKeys, match: res.match, mismatch: res.mismatches.length, byArea: areaMis, byType };
+type Baseline = { _readme: string[]; months?: string[]; denomKeys: number; match: number; mismatch: number; byArea: Record<string, number>; byType: Record<string, number> };
+const cur = { months: [...new Set(docs.map((d) => d.report_month))].sort(), denomKeys: res.denomKeys, match: res.match, mismatch: res.mismatches.length, byArea: areaMis, byType };
+const newMonthDocs: Record<string, number> = {};
+if (baselineMonths) for (const d of docs) if (!baselineMonths.has(d.report_month)) newMonthDocs[d.report_month] = (newMonthDocs[d.report_month] ?? 0) + 1;
+for (const [m, n] of Object.entries(newMonthDocs).sort())
+  console.log(`\n○ 基準値に無い月の利用票 ${m}: ${n} 件 → 突き合わせに入れていない。中身を確かめてから --update で取り込む (月が増えると不一致の合計も増える)`);
 if (UPDATE) {
   const prev: Baseline | null = existsSync(BASELINE) ? JSON.parse(readFileSync(BASELINE, "utf8")) : null;
   writeFileSync(BASELINE, JSON.stringify({ _readme: prev?._readme ?? ["(説明を書くこと)"], ...cur }, null, 2) + "\n");
