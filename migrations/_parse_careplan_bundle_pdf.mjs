@@ -72,6 +72,43 @@ import { extractGrid, pickIdentity } from "./_riyouhyou_grid.mjs";
 //   ★ 通所リハ送迎減算のような **負の単位数** (-47×2回=-94) も実在する。
 //   数値の正規表現は符号つきにしてある。
 // ============================================================================
+// ── 別表の列の範囲は「出し方 (レイアウト)」ごとに持つ (2026-11-13) ─────────────────────
+//   計画書一括印刷 と 利用票別表 (全CM) は同じ様式だが列の位置が違う (コード列 x≈196 / x≈220)。
+//   ずれ方は列ごとに違い (コード +24・単位数 +16・回数 +8・サービス単位 +20)、見出しと数字の相対位置も
+//   出し方で違う (サービス単位: 一括は見出し+12 / 全CM は+3.6) ので、平行移動や見出しへの写像では直らない。
+//   → ページの見出し (ｻｰﾋﾞｽｺｰﾄﾞ の「ｻｰﾋﾞｽ」の x) で出し方を判定し、出し方ごとの範囲を使う。
+//   判定できないページは読まない (推測で列を決めない。呼出側には warn で返す)。
+//   ikkatsu は以前の固定値そのまま (2026-09-14 に実PDF6本で実測)。
+//   zencm は 高品 178 ページ・木更津 177 ページの数字の位置の分布から決めた (2026-11-13)。
+const LAYOUTS = {
+  ikkatsu: {
+    label: "計画書一括印刷", codeHeaderX: [190, 205],
+    code: [185, 215], content: [108, 185], providerMaxX: 40, providerNumber: [41, 110], subtotal: [108, 190],
+    units: [295, 322], count: [360, 385], serviceUnits: [393, 412], serviceUnits2: [414, 442],
+    withinLimitBracket: [583, 601], unitPrice: [605, 622], totalCost: [623, 663], benefitRate: [668, 683],
+    insuranceClaim: [683, 716], userCopay: [750, 786],
+    kohiName: [395, 500], kohiClaim: [495, 545], kohiHonnin: [545, 580],
+  },
+  zencm: {
+    label: "利用票別表 (全CM)", codeHeaderX: [212, 228],
+    // 内容は 2 行に折り返すと 2 行目が x≈134 から出る (例「特殊寝台付属品貸」+「与」@134)。128 から取る
+    code: [205, 235], content: [128, 205], providerMaxX: 115, providerNumber: [115, 140], subtotal: [140, 210],
+    // 全CM は事業所名が 2 行に折り返すと 2 行目が事業所番号とつながって 1 語で x≈123 に出る
+    // (例「祉用具　高品1270402124」)。この帯の「末尾が事業所番号の語」も事業所名に入れる
+    providerJoinBand: [115, 128],
+    units: [313, 345], count: [365, 395], serviceUnits: [405, 440], serviceUnits2: [440, 470],
+    withinLimitBracket: [598, 622], unitPrice: [622, 646], totalCost: [646, 676], benefitRate: [676, 693],
+    insuranceClaim: [693, 742], userCopay: [762, 805],
+    kohiName: [455, 525], kohiClaim: [520, 555], kohiHonnin: [555, 600],
+  },
+};
+/** 見出し「ｻｰﾋﾞｽ」(ｻｰﾋﾞｽｺｰﾄﾞ の上段。y<90) の x で出し方を判定。判定できなければ null */
+export function detectBetsuhyouLayout(words) {
+  const hits = words.filter((w) => w.t === "ｻｰﾋﾞｽ" && w.y < 90);
+  for (const [key, L] of Object.entries(LAYOUTS)) if (hits.some((w) => w.x >= L.codeHeaderX[0] && w.x < L.codeHeaderX[1])) return key;
+  return null;
+}
+
 const NUM_RE = /^\(?(-?\d+)\)?$/;
 const DEC_RE = /^(\d+\.\d+)$/;
 
@@ -92,19 +129,19 @@ function decAt(words, y, xMin, xMax, tol) {
 
 /** その y の行が「◯◯合計」行かどうか (x 108〜185 の内容帯に「合計」を含む語があるか、
  * 2行に折り返す場合もあるので y±10 で見る) */
-function isSubtotalRow(words, y) {
-  return words.some((w) => Math.abs(w.y - y) <= 10 && w.x >= 108 && w.x < 190 && w.t.includes("合計"));
+function isSubtotalRow(words, y, L) {
+  return words.some((w) => Math.abs(w.y - y) <= 10 && w.x >= L.subtotal[0] && w.x < L.subtotal[1] && w.t.includes("合計"));
 }
 
 /** 1行ぶんの金額列を y から読む。無ければ null 埋めで返す (呼出側が判定に使う) */
-function readMoneyAt(words, y, tol = 3) {
+function readMoneyAt(words, y, tol, L) {
   return {
-    unitPrice: decAt(words, y, 605, 622, tol),
-    totalCost: numAt(words, y, 623, 663, tol),
-    benefitRate: numAt(words, y, 668, 683, tol),
-    insuranceClaim: numAt(words, y, 683, 716, tol),
-    userCopay: numAt(words, y, 750, 786, tol),
-    withinLimitBracket: numAt(words, y, 583, 601, tol),
+    unitPrice: decAt(words, y, ...L.unitPrice, tol),
+    totalCost: numAt(words, y, ...L.totalCost, tol),
+    benefitRate: numAt(words, y, ...L.benefitRate, tol),
+    insuranceClaim: numAt(words, y, ...L.insuranceClaim, tol),
+    userCopay: numAt(words, y, ...L.userCopay, tol),
+    withinLimitBracket: numAt(words, y, ...L.withinLimitBracket, tol),
   };
 }
 
@@ -280,8 +317,11 @@ export function extractWeeklySchedule(words) {
  * @returns {{items: object[], warn: string[]}}
  */
 export function extractBetsuhyouRows(words) {
-  // サービスコードは6桁の数字で、x が概ね190〜210に出る (実測)
-  const codeWords = words.filter((w) => /^\d{6}$/.test(w.t) && w.x >= 185 && w.x <= 215)
+  const layoutKey = detectBetsuhyouLayout(words);
+  if (!layoutKey) return { items: [], warn: ["見出しから別表の出し方を判定できない (列の位置が分からないので読まない)"], publicExpenseByProvider: [], layout: null };
+  const L = LAYOUTS[layoutKey];
+  // サービスコードは6桁の数字で、x が概ね190〜210に出る (実測。全CM は 205〜235)
+  const codeWords = words.filter((w) => /^\d{6}$/.test(w.t) && w.x >= L.code[0] && w.x <= L.code[1])
     .sort((a, b) => a.y - b.y);
   const raw = [];
   for (const cw of codeWords) {
@@ -293,7 +333,7 @@ export function extractBetsuhyouRows(words) {
     const TOL = 8;
     const nearY = (w) => Math.abs(w.y - cw.y) <= TOL;
     const content = words
-      .filter((w) => nearY(w) && w.x >= 108 && w.x < 185)
+      .filter((w) => nearY(w) && w.x >= L.content[0] && w.x < L.content[1])
       .sort((a, b) => a.y - b.y || a.x - b.x)
       .map((w) => w.t)
       .join("");
@@ -303,23 +343,30 @@ export function extractBetsuhyouRows(words) {
     //      (例 フランスベッド: 名前は x<40・番号は x=83.2 で分離)
     //   どちらで出るかは事業所名の折返し方次第らしく、決め打ちできないので両方見る。
     const providerRaw = words
-      .filter((w) => nearY(w) && w.x < 40)
+      .filter((w) => nearY(w) && (w.x < L.providerMaxX
+        // 番号とつながった名前の 2 行目だけ (末尾が事業所番号の形)。内容の折り返し (例「与」) は入れない
+        || (L.providerJoinBand && w.x >= L.providerJoinBand[0] && w.x < L.providerJoinBand[1] && /\D.*\d{2}[0-9A-Z]\d{7}$/.test(w.t))))
       .sort((a, b) => a.y - b.y || a.x - b.x)
       .map((w) => w.t)
       .join("");
-    const suffixMatch = /(\d{10})$/.exec(providerRaw);
-    const standaloneNumber = words.find((w) => nearY(w) && w.x >= 41 && w.x <= 110 && /^\d{10}$/.test(w.t));
-    const providerNumber = suffixMatch ? suffixMatch[1] : (standaloneNumber ? standaloneNumber.t : null);
-    const providerName = suffixMatch ? providerRaw.slice(0, suffixMatch.index) : providerRaw;
+    // 事業所番号は 10 桁。介護医療院などは 3 桁目が英字 (例 12B0100042。全CM で実測 2026-11-13)
+    const suffixMatch = /(\d{2}[0-9A-Z]\d{7})$/.exec(providerRaw);
+    const standaloneNumber = words.find((w) => nearY(w) && w.x >= L.providerNumber[0] && w.x <= L.providerNumber[1] && /^\d{2}[0-9A-Z]\d{7}$/.test(w.t));
+    // 3 行に折り返すと番号が名前の途中に入る (全CM 実測 15 行。例「さかいリハ訪問看千代・四街道支所1260490144護ステーション八」)。
+    // 末尾にも単独にも無いときだけ、名前の中の番号を取り出して名前から除く
+    const embedded = !suffixMatch && !standaloneNumber ? /(\d{2}[0-9A-Z]\d{7})/.exec(providerRaw) : null;
+    const providerNumber = suffixMatch ? suffixMatch[1] : (standaloneNumber ? standaloneNumber.t : (embedded ? embedded[1] : null));
+    const providerName = suffixMatch ? providerRaw.slice(0, suffixMatch.index)
+      : embedded ? providerRaw.slice(0, embedded.index) + providerRaw.slice(embedded.index + embedded[1].length) : providerRaw;
 
     // 単位数・回数・サービス単位／金額は全行に出る (実測6本で確認)
-    const units = numAt(words, cw.y, 295, 322, 3);
-    const count = numAt(words, cw.y, 360, 385, 3);
-    const serviceUnits = numAt(words, cw.y, 393, 412, 3) ?? numAt(words, cw.y, 414, 442, 3)
+    const units = numAt(words, cw.y, ...L.units, 3);
+    const count = numAt(words, cw.y, ...L.count, 3);
+    const serviceUnits = numAt(words, cw.y, ...L.serviceUnits, 3) ?? numAt(words, cw.y, ...L.serviceUnits2, 3)
       ?? (units != null && count != null ? units * count : null);
     // 金額がこの行自身に直接出ているか (①のパターン)。出ていなければ null のまま返し、
     // 呼出側 (groupBetsuhyouItems) が直後の「◯◯合計」行から借りる (②のパターン)。
-    const money = readMoneyAt(words, cw.y, 3);
+    const money = readMoneyAt(words, cw.y, 3, L);
 
     raw.push({
       y: cw.y,
@@ -334,7 +381,7 @@ export function extractBetsuhyouRows(words) {
 
   // 「◯◯合計」行 (コード無し) を集めて、直前の同一事業所番号の無金額行に配る
   const subtotalYs = [...new Set(
-    words.filter((w) => w.x >= 108 && w.x < 190 && w.t.includes("合計")).map((w) => Math.round(w.y * 2) / 2),
+    words.filter((w) => w.x >= L.subtotal[0] && w.x < L.subtotal[1] && w.t.includes("合計")).map((w) => Math.round(w.y * 2) / 2),
   )].sort((a, b) => a - b);
 
   const warn = [];
@@ -343,7 +390,7 @@ export function extractBetsuhyouRows(words) {
   const flushGroup = (subtotalY) => {
     if (!pendingGroup.length) return;
     const providerNum = pendingGroup[0].provider_number;
-    const money = readMoneyAt(words, subtotalY, 8);
+    const money = readMoneyAt(words, subtotalY, 8, L);
     if (money.unitPrice == null || money.benefitRate == null) {
       warn.push(`「◯◯合計」行 (y=${subtotalY}) の単価/給付率が読めない (事業所番号 ${providerNum ?? "不明"}) — 対象 ${pendingGroup.length} 行を規定値のまま出す`);
       for (const r of pendingGroup) items.push(finalizeItem(r, null));
@@ -391,7 +438,7 @@ export function extractBetsuhyouRows(words) {
     //   グループの先頭行だけで早期に flush してしまい、後続行が別グループとして
     //   誤って同じ合計行に群がる事故になる。
     const nextSubtotalY = subtotalYs.find((sy) => sy > r.y && sy < r.y + 30);
-    if (nextSubtotalY != null && isSubtotalRow(words, nextSubtotalY)) {
+    if (nextSubtotalY != null && isSubtotalRow(words, nextSubtotalY, L)) {
       flushGroup(nextSubtotalY);
     }
   }
@@ -408,7 +455,7 @@ export function extractBetsuhyouRows(words) {
   //   本人負担を「合計行と同じ最終行で差額吸収」方式で items[].user_copay に
   //   反映する (介護保険の給付率だけでは公費適用者の利用者負担がわからず、
   //   全額が利用者負担に見えてしまうため)。
-  const kohi = extractKohiTable(words);
+  const kohi = extractKohiTable(words, L);
   const publicExpenseByProvider = [];
   if (kohi) {
     for (const row of kohi.rows) {
@@ -440,34 +487,34 @@ export function extractBetsuhyouRows(words) {
     }
   }
 
-  return { items, warn, publicExpenseByProvider };
+  return { items, warn, publicExpenseByProvider, layout: layoutKey };
 }
 
 /**
  * 「公費適用事業所／公費額／本人負担」表 (公費併用者にだけ印字される) を読む。
  * 印字が無い (対象外の人) ときは null を返す。
  */
-function extractKohiTable(words) {
+function extractKohiTable(words, L) {
   const header = words.find((w) => w.t === "公費適用事業所");
   if (!header) return null;
   const totalLabel = words.find((w) => w.t === "公費額合計");
   const rowYs = [...new Set(
     words
-      .filter((w) => w.x > 395 && w.x < 500 && w.y > header.y + 5 && (!totalLabel || w.y < totalLabel.y - 2))
+      .filter((w) => w.x > L.kohiName[0] && w.x < L.kohiName[1] && w.y > header.y + 5 && (!totalLabel || w.y < totalLabel.y - 2))
       .map((w) => Math.round(w.y * 2) / 2),
   )].sort((a, b) => a - b);
   const rows = [];
   for (const y of rowYs) {
-    const nameWord = words.find((w) => Math.abs(w.y - y) <= 2 && w.x > 395 && w.x < 500);
+    const nameWord = words.find((w) => Math.abs(w.y - y) <= 2 && w.x > L.kohiName[0] && w.x < L.kohiName[1]);
     if (!nameWord) continue;
-    const kohiClaim = numAt(words, y, 495, 545, 2);
-    const honninFutan = numAt(words, y, 545, 580, 2);
+    const kohiClaim = numAt(words, y, ...L.kohiClaim, 2);
+    const honninFutan = numAt(words, y, ...L.kohiHonnin, 2);
     if (kohiClaim == null) continue;
     const m = /^(.*?)\((\d+)\)$/.exec(nameWord.t);
     rows.push({ providerNamePrefix: m ? m[1] : nameWord.t, kohiClaim, honninFutan: honninFutan ?? 0 });
   }
   const total = totalLabel
-    ? { kohiClaim: numAt(words, totalLabel.y, 495, 545, 3), honninFutan: numAt(words, totalLabel.y, 545, 580, 3) }
+    ? { kohiClaim: numAt(words, totalLabel.y, ...L.kohiClaim, 3), honninFutan: numAt(words, totalLabel.y, ...L.kohiHonnin, 3) }
     : null;
   return { rows, total };
 }
