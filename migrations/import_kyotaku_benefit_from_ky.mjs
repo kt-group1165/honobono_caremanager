@@ -10,6 +10,9 @@
 //   ★ TARGET_MONTH は必須 (既定値なし)。削除は billing_month = TARGET_MONTH の行だけ。
 //   ★ --execute は 退避 (migrations/_backup_benefit_<TAG>_<YYYYMM>_<時刻>.json) → 削除 → 投入 の順。
 //     入れる行が消す行の 8 割未満なら止める (--allow-shrink で続行)。
+//   ⚠ 2026-07 は 2026-11-13 時点で流していない (H 判断: 7 月の利用票 PDF が入ってから まとめて処理する)。
+//     DRY RUN では 15 拠点で 5,723 行・消す 0 行。★ 2026-07 の KY では 113 人が対応表に居ない
+//     (いすみ 23・袖ケ浦 14・木更津 11・八千代 9・高品 9・K姉 8・大網 7・船橋 7・五井 5 ほか)。流すときに対応表へ足すこと
 //   ⚠ KY を取込元にすると、給付管理と KY を突き合わせる検査 (kyotaku-k-diff 等) はその月について循環になる
 //     (import_kyotaku_benefit_from_jisseki.mjs の冒頭参照)。ケアマネの限度額調整が KY にしか無いので KY を使っている
 //
