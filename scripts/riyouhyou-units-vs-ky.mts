@@ -18,7 +18,8 @@
  *            保険者番号は 8 桁ゼロ埋めにそろえる (KY=00122069 / 利用票=122069)
  *            保険者・被保番は 利用票 content.insurer_number / insured_number
  *            (ほのぼのの利用票から取り込んだ値。当方の認定テーブルを経由しない)
- *   当方     Σ units × 回数 (サービス種類ごと)。★ 区分支給限度基準額の対象外の加算は足さない
+ *   当方     Σ rowMonthlyUnitsOf(units, 回数, unit_type) (サービス種類ごと。画面・印刷と同じ式。
+ *            unit_type が「1月につき」「月1回限度」なら 1 回分)。★ 区分支給限度基準額の対象外の加算は足さない
  *            (サービス提供体制強化 / 総合マネジメント体制強化 / 緊急時訪問看護 / 特別管理 / ターミナル。
  *             下の OUTSIDE_LIMIT。給付管理票の計画単位数は限度額の内側だけなので)
  *            回数 = planned_counts の合計。無ければ planned[] の true 数
@@ -58,6 +59,7 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findKyFiles, readKy8222Lines } from "./_ky-parse.mjs";
+import { rowMonthlyUnitsOf, isMonthlyUnitType } from "@/lib/riyouhyou-row-units";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -66,7 +68,7 @@ const UPDATE = process.argv.includes("--update");
 const DETAIL = process.argv.includes("--detail");
 
 type Svc = {
-  content?: string; units?: number | null; category?: string | null; manual_units?: number | null;
+  content?: string; units?: number | null; category?: string | null; manual_units?: number | null; unit_type?: string | null;
   planned?: boolean[]; actual?: boolean[]; planned_counts?: number[]; actual_counts?: number[];
 };
 type Doc = {
@@ -75,25 +77,60 @@ type Doc = {
 };
 
 // ── 1. 利用票 ───────────────────────────────────────────────────
-async function loadDocs(): Promise<Doc[]> {
-  if (process.env.DOCS_CACHE) return JSON.parse(readFileSync(process.env.DOCS_CACHE, "utf8")) as Doc[];
+function restGet(): (q: string) => Promise<unknown[]> {
   const env = Object.fromEntries(
     readFileSync(join(ROOT, ".env.local"), "utf8").split(/\r?\n/).filter((l) => l.includes("="))
       .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^"|"$/g, "")]; }),
   );
   const url = env.NEXT_PUBLIC_SUPABASE_URL, key = env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error(".env.local に NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が無い");
-  const out: Doc[] = [];
-  for (let off = 0; ; off += 1000) {
-    const r = await fetch(`${url}/rest/v1/kaigo_report_documents?select=id,user_id,report_month,content&report_type=eq.service-usage&order=id.asc&limit=1000&offset=${off}`,
-      { headers: { apikey: key, Authorization: `Bearer ${key}` } });
+  return async (q: string) => {
+    const r = await fetch(`${url}/rest/v1/${q}`, { headers: { apikey: key, Authorization: `Bearer ${key}` } });
     const t = await r.text();
     if (!r.ok) throw new Error(`REST ${r.status}: ${t}`);
-    const d = JSON.parse(t) as Doc[];
+    return JSON.parse(t) as unknown[];
+  };
+}
+async function loadDocs(): Promise<Doc[]> {
+  if (process.env.DOCS_CACHE) return JSON.parse(readFileSync(process.env.DOCS_CACHE, "utf8")) as Doc[];
+  const get = restGet();
+  const out: Doc[] = [];
+  for (let off = 0; ; off += 1000) {
+    const d = await get(`kaigo_report_documents?select=id,user_id,report_month,content&report_type=eq.service-usage&order=id.asc&limit=1000&offset=${off}`) as Doc[];
     out.push(...d);
     if (d.length < 1000) break;
   }
   return out;
+}
+
+// ── 1b. unit_type (行に unit_type が無いときだけ使う。名前 × 対象月に有効な世代で引く) ──
+type CodeRow = { service_name: string; unit_type: string | null; valid_from: string; valid_until: string | null; system: string };
+async function loadUnitTypes(docs: Doc[]): Promise<CodeRow[]> {
+  if (process.env.CODES_CACHE) return JSON.parse(readFileSync(process.env.CODES_CACHE, "utf8")) as CodeRow[];
+  const names = [...new Set(docs.flatMap((d) => (d.content?.services ?? []).map((s) => s.content).filter((n): n is string => !!n)))];
+  const get = restGet();
+  const out: CodeRow[] = [];
+  // ⚠ 1 回に引く名前が多いと応答ヘッダが溢れて fetch が落ちる (100 件で実際に失敗)。25 件ずつ
+  for (let i = 0; i < names.length; i += 25) {
+    const list = names.slice(i, i + 25).map((n) => `"${n.replace(/"/g, '\\"')}"`).join(",");
+    out.push(...await get(`kaigo_service_codes?select=service_name,unit_type,valid_from,valid_until,system&system=in.(${encodeURIComponent("介護,総合事業")})&service_name=in.(${encodeURIComponent(list)})`) as CodeRow[]);
+  }
+  return out;
+}
+let codeRows: CodeRow[] = [];
+const unitTypeCache = new Map<string, string | null>();
+/** 行の unit_type。行に持っていればそれ、無ければマスタ (対象月に有効な世代)。世代で値が割れたら null (従来の数え方) */
+function unitTypeOf(s: Svc, reportMonth: string): string | null {
+  if (s.unit_type != null) return s.unit_type;
+  const name = s.content ?? "";
+  const ck = `${name}|${reportMonth}`;
+  if (unitTypeCache.has(ck)) return unitTypeCache.get(ck)!;
+  const first = `${reportMonth}-01`;
+  const hits = codeRows.filter((c) => c.service_name === name && (c.system === "介護" || c.system === "総合事業") && c.valid_from <= first && (!c.valid_until || c.valid_until >= first));
+  const types = new Set(hits.map((c) => c.unit_type));
+  const v = types.size === 1 ? [...types][0] : null;
+  unitTypeCache.set(ck, v);
+  return v;
 }
 
 const RENTAL = new Set(["17", "67"]);
@@ -122,7 +159,11 @@ const actualCount = (s: Svc) =>
 type OurKind = { planned: number; actual: number; over30: number; plannedMonthly1: number; actualMonthly1: number; aside: string | null; rows: number };
 type OurDoc = { doc: Doc; ym: string; insurer: string; insured: string; kinds: Map<string, OurKind>; limit: number | null };
 
-function buildOurs(docs: Doc[], unitShift?: (s: Svc) => number): OurDoc[] {
+/**
+ * @param capMonthly true = unit_type が「1月につき」等なら回数を月 1 回に (画面と同じ rowMonthlyUnitsOf)。
+ *                   false = 従来の units × 回数 (負のコントロール用。2026-11-12 初版の基準値と同じ値になるはず)
+ */
+function buildOurs(docs: Doc[], unitShift?: (s: Svc) => number, capMonthly = true): OurDoc[] {
   const out: OurDoc[] = [];
   for (const d of docs) {
     const c = d.content ?? {};
@@ -138,10 +179,15 @@ function buildOurs(docs: Doc[], unitShift?: (s: Svc) => number): OurDoc[] {
       else if ((s.content ?? "").includes("同一建物減算")) k.aside ??= "同一建物減算";
       else if (s.units == null) k.aside ??= "マスタ無し";
       const u = (s.units ?? 0) + (unitShift ? unitShift(s) : 0);
-      k.planned += u * plannedCount(s);
-      k.actual += u * actualCount(s);
-      if (OVER30.test(s.content ?? "")) k.over30 += u * plannedCount(s);
-      const m1 = MONTHLY.test(s.content ?? "");
+      // ★ 画面・印刷と同じ式 (src/lib/riyouhyou-row-units.ts)。回数の取り方だけ違う:
+      //   画面は印の数 (boolean)、ここは planned_counts の合計 (1 日 2 回を 2 と数える。KY と同じ)
+      const ut = capMonthly ? unitTypeOf(s, d.report_month) : null;
+      k.planned += rowMonthlyUnitsOf(u, plannedCount(s), ut);
+      k.actual += rowMonthlyUnitsOf(u, actualCount(s), ut);
+      if (OVER30.test(s.content ?? "")) k.over30 += rowMonthlyUnitsOf(u, plannedCount(s), ut);
+      // 型の分類用。名前で月 1 回とみなす初版の規則に unit_type を足す
+      // (capMonthly=false の負のコントロールでは ut=null なので初版の分類そのまま)
+      const m1 = MONTHLY.test(s.content ?? "") || isMonthlyUnitType(ut);
       k.plannedMonthly1 += u * (m1 ? Math.min(1, plannedCount(s)) : plannedCount(s));
       k.actualMonthly1 += u * (m1 ? Math.min(1, actualCount(s)) : actualCount(s));
     }
@@ -182,10 +228,12 @@ type Result = {
   aside: Record<string, number>; asideKeysByReason: Record<string, number>;
   byArea: Map<string, { keys: number; match: number }>;
   noKyByMonth: Record<string, number>; kyOnlyTickets: number;
+  /** キーごとの結果 ("一致" または不一致の型)。月 1 回の扱いの有無で比べるのに使う */
+  status: Map<string, string>;
 };
 
 function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
-  const r: Result = { denomTickets: 0, denomKeys: 0, match: 0, mismatches: [], aside: {}, asideKeysByReason: {}, byArea: new Map(), noKyByMonth: {}, kyOnlyTickets: 0 };
+  const r: Result = { denomTickets: 0, denomKeys: 0, match: 0, mismatches: [], aside: {}, asideKeysByReason: {}, byArea: new Map(), noKyByMonth: {}, kyOnlyTickets: 0, status: new Map() };
   const bump = (o: Record<string, number>, k: string, n = 1) => { o[k] = (o[k] ?? 0) + n; };
   const seen = new Set<string>();
   for (const o of ours) {
@@ -208,7 +256,7 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
       r.denomKeys++; area.keys++;
       const ourV = ok?.planned ?? 0, kyV = kv ?? 0;
       // 利用票に行はあるが計画回数が 0 で KY に欄が無い = 0 同士なので一致
-      if (ok && (kv != null ? ourV === kyV : ourV === 0)) { r.match++; area.match++; continue; }
+      if (ok && (kv != null ? ourV === kyV : ourV === 0)) { r.match++; area.match++; r.status.set(`${tk}|${kind}`, "一致"); continue; }
       let type: string;
       if (!ok || kv == null) type = !ok ? "片側のみ(KYだけ)" : "片側のみ(利用票だけ)";
       else if (ok.actual === kyV) type = "実績回数で一致";
@@ -217,6 +265,7 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
       else if (ok.actualMonthly1 === kyV) type = "実績回数+月1回の加算で一致";
       else if (o.limit != null && ourTotal > o.limit && kyTotal <= o.limit && ourV > kyV) type = "限度額で頭打ち";
       else type = ourV > kyV ? "当方>KY" : "当方<KY";
+      r.status.set(`${tk}|${kind}`, type);
       r.mismatches.push({ key: `${tk}|${kind}`, area: t.area, name: o.doc.content?.user_name ?? "", kind, ours: ourV, ky: kyV, type });
     }
   }
@@ -227,8 +276,31 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
 }
 
 // ── main ────────────────────────────────────────────────────────
+// 0) 画面・印刷と共有の式 rowMonthlyUnitsOf の境界 (DB 不要)。
+//   ★ unit_type 未設定 (null/undefined) は従来どおり units × 回数。既存帳票は unit_type を持たないので、
+//     ここが月 1 回側に倒れると印刷が一斉に過少になる (2026-11-12 H 指摘)
+{
+  const cases: [number | null | undefined, number, string | null | undefined, number, string][] = [
+    [40, 3, null, 120, "unit_type=null は従来どおり"],
+    [40, 3, undefined, 120, "unit_type=undefined は従来どおり"],
+    [40, 3, "1回につき", 120, "1回につき"],
+    [40, 3, "1月につき", 40, "1月につき は 1 回"],
+    [40, 3, "月1回限度", 40, "月1回限度 は 1 回"],
+    [40, 0, "1月につき", 0, "印 0 なら 0"],
+    [-600, 30, "1月につき", -600, "定期巡回の同一建物減算 (負) も 1 回"],
+    [-600, 30, null, -18000, "負の units でも null は従来どおり"],
+    [null, 3, "1月につき", 0, "units 未設定は 0"],
+    [270, 2, " 1月につき ", 270, "前後の空白"],
+  ];
+  const bad = cases.filter(([u, n, t, want]) => rowMonthlyUnitsOf(u, n, t) !== want);
+  for (const [u, n, t, want, label] of bad) console.error(`✗ rowMonthlyUnitsOf(${u}, ${n}, ${JSON.stringify(t)}) = ${rowMonthlyUnitsOf(u, n, t)} / 期待 ${want} (${label})`);
+  if (bad.length) { console.error("✗ FAIL: 共有の式 rowMonthlyUnitsOf の境界が崩れている"); process.exit(1); }
+  console.log(`共有の式 rowMonthlyUnitsOf: 境界 ${cases.length} 件 OK (unit_type 未設定は従来どおり units × 回数)`);
+}
+
 const docs = await loadDocs();
 const ky = loadKy();
+codeRows = await loadUnitTypes(docs);
 const ours = buildOurs(docs);
 const res = compare(ours, ky);
 
@@ -289,6 +361,20 @@ if (firstMatchKey) {
   console.log("\n■ 負のコントロール: 一致キーが 1 つも無く実施できない ✗");
 }
 
+// ── 負のコントロール 2: 月 1 回の扱いを外す (= 2026-11-12 初版の units × 回数) ──
+// 外すと一致が減り、移った分がそのまま元の型に戻ることを確かめる。移り変わりを型ごとに出す
+const resOff = compare(buildOurs(docs, undefined, false), ky);
+const transitions: Record<string, number> = {};
+for (const [k, before] of resOff.status) {
+  const after = res.status.get(k) ?? "(分母外)";
+  if (before !== after) transitions[`${before} → ${after}`] = (transitions[`${before} → ${after}`] ?? 0) + 1;
+}
+const monthlyGain = res.match - resOff.match;
+const negMonthlyOk = monthlyGain > 0;
+console.log(`\n■ 負のコントロール 2: 「1月につき」を月 1 回として扱うのをやめる → 一致 ${res.match} → ${resOff.match} (${negMonthlyOk ? "✓ 鳴った" : "✗ 鳴らない"})`);
+console.log("  月 1 回の扱いの有無で結果が変わったキー (外したとき → 今):");
+for (const [k, v] of Object.entries(transitions).sort((a, b) => b[1] - a[1])) console.log(`    ${k.padEnd(40)} ${v}`);
+
 // ── 基準値 ──
 type Baseline = { _readme: string[]; denomKeys: number; match: number; mismatch: number; byArea: Record<string, number>; byType: Record<string, number> };
 const cur = { denomKeys: res.denomKeys, match: res.match, mismatch: res.mismatches.length, byArea: areaMis, byType };
@@ -302,6 +388,7 @@ if (!existsSync(BASELINE)) { console.error("\n✗ 基準値ファイルが無い
 const base = JSON.parse(readFileSync(BASELINE, "utf8")) as Baseline;
 const fails: string[] = [];
 if (!negOk) fails.push("負のコントロールが鳴らない");
+if (!negMonthlyOk) fails.push("負のコントロール 2 (月 1 回の扱い) が鳴らない = rowMonthlyUnitsOf の月 1 回が効いていない");
 if (cur.mismatch > base.mismatch) fails.push(`不一致 ${base.mismatch} → ${cur.mismatch} (増えた)`);
 for (const [a, n] of Object.entries(areaMis)) if (n > (base.byArea[a] ?? 0)) fails.push(`${a}: 不一致 ${base.byArea[a] ?? 0} → ${n}`);
 // 単位数そのものの誤りが出るのは「説明のつかない型」。ここは型ごとに増えたら落とす

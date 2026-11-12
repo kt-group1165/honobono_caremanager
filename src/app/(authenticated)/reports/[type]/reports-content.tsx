@@ -14,6 +14,7 @@ import { format, parseISO, differenceInYears } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { validInMonth } from "@/lib/service-code-valid";
+import { rowMonthlyUnitsOf } from "@/lib/riyouhyou-row-units";
 import { selectCurrentPlanForReports, isExpired, type CarePlanForSelection } from "@/lib/careplan-selection";
 import {
   selectCertForReportDoc,
@@ -622,6 +623,12 @@ type SvcRow = {
   category?: string;
   /** サービスコードマスタの単位数 (1 回あたり)。非 rental 行で「単位計 = units × 回数」算出に使う。 */
   units?: number;
+  /**
+   * サービスコードマスタの unit_type (「1回につき」「1月につき」…)。
+   * 「1月につき」「月1回限度」の行は印が複数日に付いていても単位計は 1 回分 (rowMonthlyUnitsOf)。
+   * 未設定 (既存帳票) は従来どおり units × 回数。
+   */
+  unit_type?: string | null;
   /** 福祉用具貸与行で手入力する月単位の単位数。master units を上書きする想定。 */
   manual_units?: number | null;
   /** 1month=1.0 / half_month=0.5 / daily=rental_days/月日数。 */
@@ -1970,11 +1977,12 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
   // services 配列にも backfill (units + category) する。
   // backfill 後は次回 DB 保存時に units / category も永続化される。
   // lookup map のキー: name (exact match の category は同名同じだろう想定 → 最初のヒット採用)
-  const [unitsLookup, setUnitsLookup] = useState<Map<string, { units: number; category: string }>>(new Map());
+  // unit_type も同じ仕組みで補う (2026-11-12。「1月につき」の行を月 1 回で数えるため。rowMonthlyUnitsOf)
+  const [unitsLookup, setUnitsLookup] = useState<Map<string, { units: number; category: string; unitType: string | null }>>(new Map());
   const missingNamesKey = useMemo(() => {
     const names: string[] = [];
     for (const s of services) {
-      if (typeof s.units !== "number" && s.content) {
+      if ((typeof s.units !== "number" || s.unit_type == null) && s.content) {
         names.push(s.content);
       }
     }
@@ -1991,7 +1999,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
       const { data, error } = await validInMonth(
         supabase
           .from("kaigo_service_codes")
-          .select("service_name, service_category, units")
+          .select("service_name, service_category, units, unit_type")
           .eq("system", "介護")
           .in("service_name", names),
         ymYear,
@@ -2005,10 +2013,10 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
       if (!data) return;
       setUnitsLookup((prev) => {
         const next = new Map(prev);
-        for (const r of data as { service_name: string; service_category: string; units: number }[]) {
+        for (const r of data as { service_name: string; service_category: string; units: number; unit_type: string | null }[]) {
           // 同名複数カテゴリの場合は最初のヒットを採用 (大半のケースで一意)
           if (!next.has(r.service_name)) {
-            next.set(r.service_name, { units: Number(r.units ?? 0), category: r.service_category });
+            next.set(r.service_name, { units: Number(r.units ?? 0), category: r.service_category, unitType: r.unit_type ?? null });
           }
         }
         return next;
@@ -2023,13 +2031,14 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
     if (unitsLookup.size === 0) return;
     let hasUpdate = false;
     const updated = services.map((s) => {
-      if (typeof s.units === "number" && s.category) return s;
+      if (typeof s.units === "number" && s.category && s.unit_type != null) return s;
       if (!s.content) return s;
       const entry = unitsLookup.get(s.content);
       if (!entry) return s;
       const patch: Partial<SvcRow> = {};
       if (typeof s.units !== "number") patch.units = entry.units;
       if (!s.category) patch.category = entry.category;
+      if (s.unit_type == null && entry.unitType != null) patch.unit_type = entry.unitType;
       if (Object.keys(patch).length === 0) return s;
       hasUpdate = true;
       return { ...s, ...patch };
@@ -2512,7 +2521,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                         {(() => {
                           const m = rental
                             ? rentalMonthlyUnits(svc, selectedYearMonth, "planned")
-                            : (svc.units ?? 0) * plannedCount;
+                            : rowMonthlyUnitsOf(svc.units, plannedCount, svc.unit_type);
                           return m > 0 ? m : "";
                         })()}
                       </td>
@@ -2589,7 +2598,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                         {(() => {
                           const m = rental
                             ? rentalMonthlyUnits(svc, selectedYearMonth, "actual")
-                            : (svc.units ?? 0) * actualCount;
+                            : rowMonthlyUnitsOf(svc.units, actualCount, svc.unit_type);
                           return m > 0 ? m : "";
                         })()}
                       </td>
@@ -2607,7 +2616,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                 const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
                   if (isRentalRow(svc)) return rentalMonthlyUnits(svc, selectedYearMonth, kind);
                   const count = svc[kind].filter(Boolean).length;
-                  return (svc.units ?? 0) * count;
+                  return rowMonthlyUnitsOf(svc.units, count, svc.unit_type);
                 };
                 const plannedUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
                 const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
@@ -2672,7 +2681,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
         const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
           if (isRentalRow(svc)) return rentalMonthlyUnits(svc, selectedYearMonth, kind);
           const count = svc[kind].filter(Boolean).length;
-          return (svc.units ?? 0) * count;
+          return rowMonthlyUnitsOf(svc.units, count, svc.unit_type);
         };
         const plannedUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
         const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
@@ -4416,8 +4425,8 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   const monthlyActual = rental ? rentalMonthlyUnits(svc, printYM, "actual") : 0;
                   const plannedCount = svc.planned.filter(Boolean).length;
                   const actualCount = svc.actual.filter(Boolean).length;
-                  const mPlanned = rental ? monthlyPlanned : (svc.units ?? 0) * plannedCount;
-                  const mActual = rental ? monthlyActual : (svc.units ?? 0) * actualCount;
+                  const mPlanned = rental ? monthlyPlanned : rowMonthlyUnitsOf(svc.units, plannedCount, svc.unit_type);
+                  const mActual = rental ? monthlyActual : rowMonthlyUnitsOf(svc.units, actualCount, svc.unit_type);
                   return (
                   <React.Fragment key={i}>
                     {/* 予定行 */}
@@ -4464,7 +4473,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                 const rowMonthlyUnits = (svc: SvcRow, kind: "planned" | "actual"): number => {
                   if (isRentalRow(svc)) return rentalMonthlyUnits(svc, printYM, kind);
                   const count = svc[kind].filter(Boolean).length;
-                  return (svc.units ?? 0) * count;
+                  return rowMonthlyUnitsOf(svc.units, count, svc.unit_type);
                 };
                 const plannedUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "planned"), 0);
                 const actualUnitsSum = services.reduce((s, svc) => s + rowMonthlyUnits(svc, "actual"), 0);
