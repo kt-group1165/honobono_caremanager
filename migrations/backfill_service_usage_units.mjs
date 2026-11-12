@@ -1,6 +1,6 @@
 /**
  * 利用票 (第6表 / kaigo_report_documents.report_type='service-usage') の
- * content.services[] に **単位数 (units) と サービス種類 (category)** を
+ * content.services[] に **単位数 (units) / サービス種類 (category) / 算定単位 (unit_type)** を
  * kaigo_service_codes から backfill する。
  *
  * ── なぜ必要か (2026-11-12 実測) ─────────────────────────────────
@@ -82,7 +82,7 @@ console.log("利用票 (service-usage) " + docs.length + " 件" + (MONTH ? " [" 
 
 // ── 2. サービスコードマスタ (介護 + 総合事業) ─────────────────────
 const mast = await pageAll(
-  "kaigo_service_codes?select=service_code,service_name,service_category,units,calculation_type,formula,system,valid_from,valid_until"
+  "kaigo_service_codes?select=service_code,service_name,service_category,units,unit_type,calculation_type,formula,system,valid_from,valid_until"
   + "&system=in.(" + encodeURIComponent("介護") + "," + encodeURIComponent("総合事業") + ")&order=service_code.asc",
 );
 console.log("サービスコードマスタ " + mast.length + " 件");
@@ -111,7 +111,7 @@ function resolve(name, ym) {
 }
 
 // ── 3. 突合して更新 payload を作る ────────────────────────────────
-const stat = { 対象doc: 0, 更新doc: 0, 行_units設定: 0, 行_category設定: 0, 行_変更なし: 0, 行_未解決: 0, 行_空: 0 };
+const stat = { 対象doc: 0, 更新doc: 0, 行_units設定: 0, 行_category設定: 0, 行_unit_type設定: 0, 行_変更なし: 0, 行_未解決: 0, 行_空: 0 };
 const unresolved = new Map();
 const catDist = {};
 const updates = [];
@@ -132,6 +132,12 @@ for (const d of docs) {
     const wantCat = String(m.service_category ?? "");
     if (r.units !== wantUnits) { patch.units = wantUnits; stat.行_units設定++; }
     if (wantCat && String(r.category ?? "") !== wantCat) { patch.category = wantCat; stat.行_category設定++; }
+    // unit_type は rowMonthlyUnitsOf (src/lib/riyouhyou-row-units.ts) が見る。
+    // 「1月につき」「月1回限度」なら 回数を min(1, 印の数) にして月 1 回で数える。
+    // ★ null/未設定 は従来どおり units × 回数 に倒れるので、マスタが null のときは入れない
+    //   (入れないことと null を入れることは同じだが、差分を増やさないため触らない)。
+    const wantUT = m.unit_type == null ? null : String(m.unit_type);
+    if (wantUT && (r.unit_type ?? null) !== wantUT) { patch.unit_type = wantUT; stat.行_unit_type設定++; }
     if (Object.keys(patch).length === 0) { stat.行_変更なし++; return r; }
     catDist[wantCat] = (catDist[wantCat] ?? 0) + 1;
     changed++;
