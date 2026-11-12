@@ -14,7 +14,8 @@
  *   出力: 伝送データ/<AREA>/居宅/202606/新システム/K202606.CSV (SJIS 上書き) + diff レポート
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { splitKyLine, readKyLines, is8222, findKyFiles } from "./_ky-parse.mjs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "@supabase/supabase-js";
@@ -193,10 +194,9 @@ async function main() {
   // 8) KY と突合 (正規化: クォート / 連番 / 作成年月日 / 明細行番号)
   const norm = (p: string, filterYm: string | null) => {
     const groups = new Map<string, string[]>();
-    for (const l of readFileSync(p, "latin1").split(/\r?\n/)) {
-      if (!l.trim()) continue;
-      const r = l.split(",").map((x) => x.replace(/^"(.*)"$/, "$1"));
-      if (r[0] !== "2" || r[2] !== "8222") continue;
+    for (const l of readKyLines(p)) {
+      const r = splitKyLine(l);
+      if (!is8222(r)) continue;
       if (filterYm && r[3] !== filterYm) continue;
       r[1] = "*"; r[7] = "*";
       if (r[9] !== "99") r[9] = "*";
@@ -221,23 +221,7 @@ async function main() {
   const kyPaths: string[] = [];
   if (process.env.KY_FILE) kyPaths.push(join(BASE, "ほのぼのから", KY_FILE));
   const areaRoot = join(__dirname, "..", "伝送データ", AREA_DIR, "居宅");
-  {
-    const walk = (d: string) => {
-      if (!existsSync(d)) return;
-      for (const e of readdirSync(d, { withFileTypes: true })) {
-        const q = join(d, e.name);
-        if (e.isDirectory()) walk(q);
-        else if (/^KY.*\.CSV$/i.test(e.name) && !e.name.includes("解説")) {
-          const txt = readFileSync(q, "latin1");
-          if (txt.split(/\r?\n/).some((l) => {
-            const c = l.split(",").map((x) => x.replace(/^"(.*)"$/, "$1"));
-            return c[0] === "2" && c[2] === "8222" && c[3] === YM;
-          })) kyPaths.push(q);
-        }
-      }
-    };
-    walk(areaRoot);
-  }
+  kyPaths.push(...findKyFiles(areaRoot, YM));
   if (kyPaths.length === 0) { console.error(`✗ 対象月 ${YM} の 8222 を含む KY が見つかりません (${areaRoot})`); process.exit(1); }
   console.log(`ほのぼの KY: ${[...new Set(kyPaths)].map((p) => p.split(/[\\/]/).pop()).join(", ")}`);
   const H = new Map<string, string[]>();

@@ -19,6 +19,7 @@
     "check:kyotaku-diff": "tsx scripts/kyotaku-diff-check.mts",
     "check:kyotaku-matrix": "tsx scripts/kyotaku-matrix-verify.mts",
     "check:service-code-gap": "tsx scripts/service-code-gap-check.mts",
+    "check:riyouhyou-units": "tsx scripts/riyouhyou-units-vs-ky.mts",
     "check:service-code-calc": "tsx scripts/service-code-calc-verify.mts",
     "check:shoguu-4impl": "tsx scripts/shoguu-kaizen-4impl-diff.mts",
     "check:same-building": "tsx scripts/same-building-verify.mts",
