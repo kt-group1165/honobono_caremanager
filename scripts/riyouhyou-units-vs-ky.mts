@@ -62,6 +62,7 @@ import { findKyFiles, readKy8222Lines } from "./_ky-parse.mjs";
 import { rowMonthlyUnitsOf, isMonthlyUnitType, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
 import { rentalMonthlyUnits, type RentalRowLike } from "@/lib/rental-units";
 import { recordMonthActualUnits, splitInsuranceRecords, type EquipmentRecordLike } from "@/lib/equipment-record-units";
+import { planEquipmentImport, EQUIPMENT_IMPORT_SOURCE, type MergeRow, type MergePlan, type ImportChoice } from "@/lib/equipment-import-merge";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -413,6 +414,56 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
     if (!negNoDiv.length || !negLoose.length || !negNoQty.length) { console.error(`✗ FAIL: 負のコントロールが鳴らない (÷10 を外す ${negNoDiv.length} / 特価自費を通す ${negLoose.length} / 数量なし ${negNoQty.length})`); process.exit(1); }
     console.log(`用具の実績取込: 境界 単位 ${uc.length} 件・支払区分 ${pc.length} 件 OK / 負のコントロール ÷10 を外す→${negNoDiv.length}・特価自費を通す→${negLoose.length}・数量なし→${negNoQty.length} 件 落ちる ✓ (★ 実データ未投入のため境界テストのみ)`);
   }
+
+  // 取込の貸与行の入れ替え planEquipmentImport (src/lib/equipment-import-merge.ts・2026-11-13 H 判断 A)。
+  // ★ 本番の取込は 0 件 = 実データ未検証のため境界テストのみ (合格とは言わない)
+  {
+    type Row = MergeRow & { id: string };
+    const S = "介護ショップケア・サポート千葉";
+    const N: Row = { id: "N", category: "11", provider: "訪問介護" };
+    const imp: Row = { id: "imp", category: "17", provider: S, _units_source: EQUIPMENT_IMPORT_SOURCE };
+    const imp2: Row = { id: "imp2", category: "17", provider: S, _units_source: EQUIPMENT_IMPORT_SOURCE };
+    const noSrc: Row = { id: "noSrc", category: "17", provider: "介護ショップケア・サ" };
+    const fm: Row = { id: "fm", category: "17", provider: "介護ショップケア・サ", _units_source: "fukuyogu_meisai_202606" };
+    const bh: Row = { id: "bh", category: "17", provider: "介護ショップケア・サポ", _units_source: "betsuhyou_2026-06" };
+    const other: Row = { id: "other", category: "17", provider: "カシダス千葉" };
+    const r67: Row = { id: "r67", category: "67", provider: S };
+    const emptyProv: Row = { id: "emptyProv", category: "17", provider: "" };
+    type MC = [Row[], ImportChoice | null, string, string];  // 期待: "ok:<id,...>" / "choice:<件数>" / "throw"
+    const mc: MC[] = [
+      [[N, imp], null, "ok:N,imp2", "印付きのみ → 以前の取込行だけ置き換え"],
+      [[N, noSrc], null, "choice:1", "印無しのみ (同じ事業所かもしれない) → 止める"],
+      [[N, imp, noSrc], null, "choice:1", "印付き + 印無しの混在 → 止める"],
+      [[fm, bh], null, "choice:2", "他の出どころ (ケアサポ明細・別表) → 止める"],
+      [[N, r67, imp], null, "ok:N,r67,imp2", "種類 67 は触らない"],
+      [[other, imp], null, "ok:other,imp2", "別の事業所の行は触らない"],
+      [[], null, "ok:imp2", "空"],
+      [[emptyProv], null, "choice:1", "事業所名が空 → 同じかもしれない側 (止める)"],
+      [[N, imp, noSrc], "keep_existing", "ok:N,imp,noSrc", "既存を残す → 何も変えない"],
+      [[N, imp, noSrc, other], "replace_existing", "ok:N,other,imp2", "置き換える → 重なる行と以前の取込行だけ消す"],
+    ];
+    type PlanFn = (svc: Row[], rows: Row[], sender: string, ch: ImportChoice | null) => MergePlan<Row>;
+    const show = (fn: PlanFn, svc: Row[], ch: ImportChoice | null) => {
+      try {
+        const p = fn(svc, [imp2], S, ch);
+        return p.status === "ok" ? `ok:${p.services.map((r) => r.id).join(",")}` : `choice:${p.conflicts.length}`;
+      } catch { return "throw"; }
+    };
+    const runM = (fn: PlanFn) => mc.filter(([svc, ch, want]) => show(fn, svc, ch) !== want);
+    const badM = runM(planEquipmentImport);
+    for (const [svc, ch, want, label] of badM) console.error(`✗ planEquipmentImport(${svc.map((r) => r.id).join(",")}, ${ch}) = ${show(planEquipmentImport, svc, ch)} / 期待 ${want} (${label})`);
+    let strayThrows = false;
+    try { planEquipmentImport<Row>([], [{ id: "x", category: "17", provider: S }], S, null); } catch { strayThrows = true; }
+    const bs = planEquipmentImport<Row>([fm, bh, noSrc], [], S, null);
+    const bsOk = bs.status === "needs_choice" && bs.bySource["fukuyogu_meisai_*"] === 1 && bs.bySource["betsuhyou_*"] === 1 && Object.keys(bs.bySource).length === 3;
+    if (badM.length || !strayThrows || !bsOk) { console.error(`✗ FAIL: 取込の貸与行の入れ替えの境界が崩れている (印の無い取込行で止まる ${strayThrows} / 出どころ別の件数 ${bsOk})`); process.exit(1); }
+    // 負のコントロール: 今までの実装 (印を見ずに種類 17 を全部消す) / 二重計上の停止を外す
+    const negWipeAll: PlanFn = (svc, rows) => ({ status: "ok", services: [...svc.filter((r) => String(r.category) !== "17"), ...rows], removedImportRows: 0, replacedRows: 0, keptOtherProviderRows: [] });
+    const negNoStop: PlanFn = (svc, rows, sender) => planEquipmentImport(svc, rows, sender, "replace_existing");
+    const nW = runM(negWipeAll).length, nS = runM(negNoStop).length;
+    if (!nW || !nS) { console.error(`✗ FAIL: 負のコントロールが鳴らない (全部消す ${nW} / 停止を外す ${nS})`); process.exit(1); }
+    console.log(`取込の貸与行の入れ替え: 境界 ${mc.length} 件 + 印の無い取込行 + 出どころ別件数 OK / 負のコントロール 全部消す→${nW}・停止を外す→${nS} 件 落ちる ✓ (★ 実データ未検証のため境界テストのみ)`);
+  }
 }
 
 const docs = await loadDocs();
@@ -526,10 +577,11 @@ const fails: string[] = [];
 // ★ 用具の実績取込 (ImportEquipmentRecordModal) は manual_units に monthly_rental_fee をそのまま入れる。
 //   order-app はこの値を円 (¥) として送っており、ServiceSelector は ÷10 しているので、単位が 10 倍になる疑い (2026-11-13・未確認)。
 //   2026-11-13 に ÷10・数量・支払区分を直した (src/lib/equipment-record-units.ts)。ただし本番の取込は 0 件で、実データでは一度も確かめていない。
-//   初めて使われたら落とす: その帳票の単位を order-app の請求 (伝送) と突き合わせてから、この判定を外すこと
+//   2026-11-13 に「取込の印が付いた行だけ消す / 重なるかもしれない既存行があれば止めて選ばせる」に変えた (equipment-import-merge.ts)。
+//   初めて使われたら落とす: その帳票の単位を order-app の請求 (伝送) と突き合わせ、印の付かない貸与行と二重になっていないかも見てから、この判定を外すこと
 const eqDocs = docs.filter((d) => Array.isArray(d.content?.equipment_records) && d.content!.equipment_records!.length > 0);
 console.log(`用具の実績取込 (equipment_records) を使った利用票 ${eqDocs.length} 件 (0 であること。実データ未検証の経路)`);
-if (eqDocs.length) fails.push(`用具の実績取込が使われた利用票 ${eqDocs.length} 件 (${eqDocs.slice(0, 3).map((d) => d.id).join(",")}) — 実データで未検証の取込経路。単位を order-app の請求と突き合わせる (src/lib/equipment-record-units.ts)`);
+if (eqDocs.length) fails.push(`用具の実績取込が使われた利用票 ${eqDocs.length} 件 (${eqDocs.slice(0, 3).map((d) => d.id).join(",")}) — 実データで未検証の取込経路。単位を order-app の請求と突き合わせ、印 (equipment_import) の付かない貸与行と二重になっていないか見る`);
 if (!negOk) fails.push("負のコントロールが鳴らない");
 if (!negDedupeOk) fails.push("負のコントロール 3 (複数行を畳む) が鳴らない = dedupeMonthlyCounts が効いていない");
 if (!negMonthlyOk) fails.push("負のコントロール 2 (月 1 回の扱い) が鳴らない = rowMonthlyUnitsOf の月 1 回が効いていない");

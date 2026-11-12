@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { validInMonth } from "@/lib/service-code-valid";
 import { rowMonthlyUnitsOf, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
 import { daysInMonthOf, autoRentalPeriodType, rentalMonthlyUnits, rentalUnitsKind } from "@/lib/rental-units";
+import { planEquipmentImport, isImportRow, type MergeRow } from "@/lib/equipment-import-merge";
 import { selectCurrentPlanForReports, isExpired, type CarePlanForSelection } from "@/lib/careplan-selection";
 import {
   selectCertForReportDoc,
@@ -2170,15 +2171,23 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
           const switchMode = (next: AggregationMode) => {
             if (next === currentMode) return;
             const ok = window.confirm(
-              `福祉用具行を「${next === "per_equipment" ? "用具ごと" : "種別ごとに集約"}」モードで再生成します。\n手動編集した福祉用具行の内容は失われます。続行しますか?`
+              `取込で作った福祉用具行を「${next === "per_equipment" ? "用具ごと" : "種別ごとに集約"}」モードで作り直します。\n取込で作った行への手での変更は失われます (それ以外の貸与行には触りません)。続行しますか?`
             );
             if (!ok) return;
             const ym = String(content.report_month ?? selectedYearMonth);
             const newRentalRows = generateRentalServicesFromRecords(equipmentRecords, ym, next);
-            const nonRental = services.filter((s) => String(s.category ?? "") !== "17");
+            // ★ 消すのは取込の印が付いた行だけ (src/lib/equipment-import-merge.ts)。送信元と同じかもしれない事業所に
+            //   取込以外の貸与行があれば、切替では選ばせずに止める (取込画面で選ぶ)。既定で壊さない
+            for (const sender of new Set(equipmentRecords.map((r) => r.provider_name))) {
+              const plan = planEquipmentImport(services as MergeRow[], [], sender, null);
+              if (plan.status !== "ok") {
+                window.alert(`送信元 (${sender}) と同じかもしれない事業所に、取込以外で入った貸与行が ${plan.conflicts.length} 件あります。\n二重計上や削除を避けるため、切替を止めました。`);
+                return;
+              }
+            }
             onChange({
               ...content,
-              services: [...nonRental, ...newRentalRows],
+              services: [...services.filter((s) => !isImportRow(s as MergeRow)), ...newRentalRows],
               rental_aggregation_mode: next,
             });
           };

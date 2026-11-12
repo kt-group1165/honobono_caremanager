@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import type { SharedDocumentRow } from "@/lib/notifications";
 import { fetchTargetDoc, type TargetDoc } from "./ImportServiceRecordModal";
 import { recordMonthActualUnits, splitInsuranceRecords } from "@/lib/equipment-record-units";
+import { EQUIPMENT_IMPORT_SOURCE, planEquipmentImport, isImportRow, type ImportChoice, type MergePlan } from "@/lib/equipment-import-merge";
 
 // ─── 型 ───────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,10 @@ export type RentalSvcRow = {
   rental_period_type?: "1month" | "half_month" | "daily" | null;
   rental_days?: number | null;
   tais_code?: string | null; // 将来 TAIS 表示対応用
+  /** ★ 取込が作った行の印 (src/lib/equipment-import-merge.ts)。消してよいのはこの印の行だけ */
+  _units_source?: string | null;
+  /** 元になった shared_documents の id (種別ごと集約では複数) */
+  _shared_document_ids?: string[];
 };
 
 type AnySvcRow = {
@@ -64,6 +69,7 @@ type AnySvcRow = {
   rental_period_type?: "1month" | "half_month" | "daily" | null;
   rental_days?: number | null;
   tais_code?: string | null;
+  _units_source?: string | null;
 };
 
 /** 福祉用具行の集約モード */
@@ -158,6 +164,8 @@ function generateRentalServicesPerEquipment(
       manual_units: null,
       rental_month_actual_units: recordMonthActualUnits(r, yearMonth),
       tais_code: r.tais_code ?? null,
+      _units_source: EQUIPMENT_IMPORT_SOURCE,
+      _shared_document_ids: r.shared_document_id ? [r.shared_document_id] : [],
     };
   });
 }
@@ -201,6 +209,8 @@ function generateRentalServicesPerCategory(
       category: "17",
       manual_units: null,
       rental_month_actual_units: totalUnits,
+      _units_source: EQUIPMENT_IMPORT_SOURCE,
+      _shared_document_ids: [...new Set(list.map((r) => r.shared_document_id).filter((v): v is string => !!v))],
     };
   });
 }
@@ -230,12 +240,14 @@ async function persistEquipmentRecords(
   newRecords: StoredEquipmentRecord[],
   mode: AggregationMode,
   importedSharedDocId: string,
-): Promise<void> {
-  // 既存 services の rental 行以外はそのまま維持
+  senderName: string,
+  choice: ImportChoice | null,
+): Promise<MergePlan<AnySvcRow>> {
+  // ★ 消してよいのは 取込の印が付いた貸与行だけ (src/lib/equipment-import-merge.ts)。
+  //   送信元と同じかもしれない事業所に 印の無い / 他の出どころの貸与行があれば、人が選ぶまで保存しない
   const existing: AnySvcRow[] = Array.isArray(target.content.services)
     ? (target.content.services as AnySvcRow[])
     : [];
-  const nonRental = existing.filter((s) => !isRentalRow(s));
 
   // 既存 equipment_records と new をマージ (equipment_name + provider で同名上書き)
   const prevRecords: StoredEquipmentRecord[] = Array.isArray(target.content.equipment_records)
@@ -258,7 +270,9 @@ async function persistEquipmentRecords(
     yearMonth,
     mode,
   );
-  const mergedServices: AnySvcRow[] = [...nonRental, ...rentalRows];
+  const plan = planEquipmentImport<AnySvcRow>(existing, rentalRows, senderName, choice);
+  if (plan.status !== "ok") throw new Error("既存の貸与行と重なるかもしれないので、残すか置き換えるかを選んでください");
+  const mergedServices: AnySvcRow[] = plan.services;
 
   // imported_shared_document_ids 維持 + 追加
   const prevImportedIds = Array.isArray(target.content.imported_shared_document_ids)
@@ -281,7 +295,7 @@ async function persistEquipmentRecords(
       .update({ content: nextContent })
       .eq("id", target.id);
     if (error) throw new Error(error.message);
-    return;
+    return plan;
   }
   const newContent: Record<string, unknown> = {
     user_name: clientName,
@@ -301,6 +315,7 @@ async function persistEquipmentRecords(
     status: "draft",
   });
   if (error) throw new Error(error.message);
+  return plan;
 }
 
 // ─── modal ───────────────────────────────────────────────────────────────────
@@ -326,6 +341,8 @@ export function ImportEquipmentRecordModal({
   const [sourceOfficeName, setSourceOfficeName] = useState<string>("");
   // 既存 doc に rental_aggregation_mode があればそれをデフォルトに、無ければ per_equipment
   const [mode, setMode] = useState<AggregationMode>("per_equipment");
+  // ★ 既存の貸与行と重なるかもしれないときの選択。★ 既定は作らない (null = 未選択。選ぶまで取り込めない)
+  const [choice, setChoice] = useState<ImportChoice | null>(null);
 
   const extracted = useMemo(() => {
     const payload = (shared.payload ?? {}) as Record<string, unknown>;
@@ -397,9 +414,14 @@ export function ImportEquipmentRecordModal({
     const added = extracted.incoming.filter((r) => !existingNames.has(r.equipment_name));
     const replaced = extracted.incoming.filter((r) => existingNames.has(r.equipment_name));
     const keepOnly = existing.filter((s) => !incomingNames.has(s.content ?? ""));
-    // ★ existing = 取込で消える既存の貸与行 (persistEquipmentRecords は種類 17 を全部消して作り直す)
-    return { added, replaced, keepOnly, existing };
-  }, [target, extracted.incoming]);
+    // ★ 消すのは取込の印が付いた行だけ。重なるかもしれない既存行は人が選ぶ (src/lib/equipment-import-merge.ts)
+    const allServices: AnySvcRow[] = Array.isArray(target.content.services) ? (target.content.services as AnySvcRow[]) : [];
+    const preview = planEquipmentImport<AnySvcRow>(allServices, [], sourceOfficeName, null);
+    const oldImport = existing.filter(isImportRow);
+    const conflicts = preview.status === "needs_choice" ? preview.conflicts : [];
+    const bySource = preview.status === "needs_choice" ? preview.bySource : {};
+    return { added, replaced, keepOnly, existing, oldImport, conflicts, bySource, keptOther: preview.keptOtherProviderRows };
+  }, [target, extracted.incoming, sourceOfficeName]);
 
   const handleImport = async () => {
     if (!target || !diff) return;
@@ -413,7 +435,7 @@ export function ImportEquipmentRecordModal({
         shared_document_id: shared.id,
         imported_at: nowIso,
       }));
-      await persistEquipmentRecords(
+      const plan = await persistEquipmentRecords(
         supabase,
         target,
         extracted.clientId,
@@ -422,13 +444,17 @@ export function ImportEquipmentRecordModal({
         stored,
         mode,
         shared.id,
+        sourceOfficeName,
+        diff.conflicts.length ? choice : null,
       );
       const modeLabel = mode === "per_equipment" ? "用具ごと" : "種別ごとに集約";
       const sk = extracted.skipped;
       const skippedTotal = sk.自費 + sk.支払区分不明 + sk.その他;
       if (skippedTotal) console.warn("福祉用具の取込: 介護保険でない明細を利用票に入れなかった", sk);
       onSuccess(
-        `利用票に取り込みました (${modeLabel}・追加 ${diff.added.length} 件 / 上書き ${diff.replaced.length} 件)` +
+        (choice === "keep_existing" && diff.conflicts.length
+          ? `既存の貸与行を残し、取込行は足していません (受信した記録だけ保存)`
+          : `利用票に取り込みました (${modeLabel}・以前の取込行の置き換え ${plan.status === "ok" ? plan.removedImportRows : 0} 件${plan.status === "ok" && plan.replacedRows ? ` / 既存行の置き換え ${plan.replacedRows} 件` : ""})`) +
           (skippedTotal ? ` ※ 利用票に入れなかった明細 ${skippedTotal} 件 (自費 ${sk.自費} / 支払区分不明 ${sk.支払区分不明}${sk.その他 ? ` / その他 ${sk.その他}` : ""})` : ""),
       );
     } catch (e) {
@@ -544,17 +570,42 @@ export function ImportEquipmentRecordModal({
                 </div>
                 <div>
                   <div className="text-gray-500">★ 削除される既存の貸与行</div>
-                  <div className="text-base font-bold text-red-700">{diff.existing.length} 件</div>
+                  <div className="text-base font-bold text-red-700">
+                    {diff.oldImport.length + (choice === "replace_existing" ? diff.conflicts.length : 0)} 件
+                  </div>
                 </div>
               </div>
 
-              {diff.existing.length > 0 && (
-                <p className="rounded border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] text-red-700">
-                  ★ 取り込むと、この利用票の既存の福祉用具貸与行 {diff.existing.length} 件は ★ 出どころに関係なく すべて削除され、
-                  受信した用具から作り直されます (手入力・別表・明細から入れた単位数も消えます)。
-                  「新規追加 / 同名上書き」は 受信した用具名 (商品名) と 既存行のサービス名 (例: 特殊寝台貸与) を比べた結果で、
-                  表記が違うためほとんど一致しません。
-                </p>
+              <p className="rounded border border-gray-200 bg-gray-50 px-2 py-1.5 text-[11px] text-gray-700">
+                消えるのは 以前この取込で作った貸与行 ({diff.oldImport.length} 件) だけです。
+                別の事業所の貸与行 ({diff.keptOther.length} 件) には触りません。
+                「新規追加 / 同名上書き」は 受信した用具名 (商品名) と 既存行のサービス名 (例: 特殊寝台貸与) を比べた参考値で、
+                表記が違うためほとんど一致しません。
+              </p>
+
+              {diff.conflicts.length > 0 && (
+                <section className="rounded border border-red-300 bg-red-50 px-3 py-2 text-xs space-y-1.5">
+                  <p className="font-semibold text-red-700">
+                    ★ 送信元 ({sourceOfficeName}) と同じかもしれない事業所に、取込以外で入った貸与行が {diff.conflicts.length} 件あります。
+                    そのまま足すと同じ用具が二重に入るおそれがあります。どちらかを選んでください。
+                  </p>
+                  <p className="text-[11px] text-red-700">
+                    出どころ別: {Object.entries(diff.bySource).map(([k, v]) => `${k} ${v} 件`).join(" / ")}
+                  </p>
+                  <ul className="text-[11px] text-gray-700 space-y-0.5">
+                    {diff.conflicts.map((c, i) => (
+                      <li key={`cf-${i}`} className="truncate">・{c.content} @{c.provider || "(事業所名なし)"}</li>
+                    ))}
+                  </ul>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name="equip-import-choice" checked={choice === "keep_existing"} onChange={() => setChoice("keep_existing")} />
+                    既存を残し、取込行は足さない
+                  </label>
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input type="radio" name="equip-import-choice" checked={choice === "replace_existing"} onChange={() => setChoice("replace_existing")} />
+                    既存 ({diff.conflicts.length} 件) を消して取込に置き換える
+                  </label>
+                </section>
               )}
 
               {diff.added.length > 0 && (
@@ -601,16 +652,16 @@ export function ImportEquipmentRecordModal({
                 </section>
               )}
 
-              {diff.existing.length > 0 && (
+              {diff.keptOther.length > 0 && (
                 <section>
-                  <details className="rounded border border-red-200 bg-red-50">
-                    <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-red-700">
-                      ★ 削除される既存の貸与行 {diff.existing.length} 件 (受信した用具名と一致しなかった {diff.keepOnly.length} 件を含む)
+                  <details className="rounded border border-gray-200 bg-gray-50">
+                    <summary className="cursor-pointer px-3 py-2 text-xs font-semibold text-gray-600">
+                      別の事業所の貸与行 (触りません) {diff.keptOther.length} 件 — 送信元と同じ事業所の行が紛れていないか確認してください
                     </summary>
                     <ul className="px-3 py-2 space-y-0.5">
-                      {diff.existing.map((s, i) => (
+                      {diff.keptOther.map((s, i) => (
                         <li key={`keep-${i}`} className="text-[11px] text-gray-600 truncate">
-                          ・{s.content}
+                          ・{s.content} @{s.provider || "(事業所名なし)"}
                         </li>
                       ))}
                     </ul>
@@ -639,7 +690,7 @@ export function ImportEquipmentRecordModal({
           <button
             type="button"
             onClick={handleImport}
-            disabled={loading || submitting || !diff || extracted.incoming.length === 0}
+            disabled={loading || submitting || !diff || extracted.incoming.length === 0 || (diff.conflicts.length > 0 && choice == null)}
             className="text-sm text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed px-4 py-2 rounded-lg flex items-center gap-1.5"
           >
             {submitting ? (
