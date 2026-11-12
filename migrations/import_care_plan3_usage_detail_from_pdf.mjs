@@ -330,7 +330,7 @@ async function main() {
   }
 
   let ok = 0, unresolved = noIdentity.length, nameMismatch = 0, care3Written = 0, detailWritten = 0, skipped = 0;
-  let detailSkippedWarn = 0, detailSkippedMismatch = 0;
+  let detailSkippedWarn = 0, detailSkippedMismatch = 0, detailSkippedEmpty = 0;
   for (const b of parsed) {
     if (noIdentity.includes(b)) continue;
     const base = path.basename(b.path);
@@ -448,6 +448,13 @@ async function main() {
       // ★ 書かない条件 (2026-11-13 追加)。どちらも既存 9 本では 0 件で、以前の結果は変わらない
       //   ・自己検算の警告がある: 金額が合っていない別表を正として焼き付けない
       //   ・利用票の被保番と別表ヘッダの被保番が違う: ページの切れ目の誤りで別人の別表を付けない
+      if (b.betsuhyouItems.length === 0) {
+        // 2026-11-13: 利用票別表 (全CM) の出し方の PDF は列の位置が違い、extractBetsuhyouRows が 1 行も読めない
+        //   (高品 143 人・木更津 150 人すべて 0 行)。合計も 0 なので自己検算は「一致」になり、空の別表を書いてしまう
+        console.log("  ✗ 第7表: 別表の行が 1 行も読めない (レイアウト違いの疑い) ので書かない");
+        detailSkippedEmpty++;
+        continue;
+      }
       if (b.betsuhyouWarn.length) {
         console.log("  ✗ 第7表: 自己検算の警告があるので書かない (別掲)");
         detailSkippedWarn++;
@@ -501,6 +508,7 @@ async function main() {
   console.log(`  対象月不明でskip       ${skipped} 件`);
   console.log(`  第3表 ${EXECUTE ? "書込完了" : "書込予定"}       ${care3Written} 件`);
   console.log(`  第7表 ${EXECUTE ? "書込完了" : "書込予定"}       ${detailWritten} 件`);
+  console.log(`  第7表 書かない (行が 1 行も読めない)   ${detailSkippedEmpty} 件`);
   console.log(`  第7表 書かない (自己検算の警告)       ${detailSkippedWarn} 件`);
   console.log(`  第7表 書かない (利用票と別表の被保番が違う) ${detailSkippedMismatch} 件`);
   console.log(`  人数 (ファイル内で人ごとに分けた後)  ${parsed.length} 人 / 利用票なしで別表ヘッダから引いた ${byBetsuhyouHeader.length} 人`);
