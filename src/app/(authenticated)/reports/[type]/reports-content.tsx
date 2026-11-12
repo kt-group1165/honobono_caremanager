@@ -15,6 +15,7 @@ import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { validInMonth } from "@/lib/service-code-valid";
 import { rowMonthlyUnitsOf, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
+import { daysInMonthOf, autoRentalPeriodType, rentalMonthlyUnits, rentalUnitsKind } from "@/lib/rental-units";
 import { selectCurrentPlanForReports, isExpired, type CarePlanForSelection } from "@/lib/careplan-selection";
 import {
   selectCertForReportDoc,
@@ -629,8 +630,13 @@ type SvcRow = {
    * 未設定 (既存帳票) は従来どおり units × 回数。
    */
   unit_type?: string | null;
-  /** 福祉用具貸与行で手入力する月単位の単位数。master units を上書きする想定。 */
+  /** 福祉用具貸与行の 1 月あたりの単価 (按分前)。印から 1月/半月 を判定して按分する (src/lib/rental-units.ts)。 */
   manual_units?: number | null;
+  /**
+   * 福祉用具貸与行の「その月の実額」(半月なら半額)。別表 (第7表) 由来。★ 印で按分しない。
+   * manual_units があればそちらが優先。
+   */
+  rental_month_actual_units?: number | null;
   /** 1month=1.0 / half_month=0.5 / daily=rental_days/月日数。 */
   rental_period_type?: RentalPeriodType | null;
   /** rental_period_type='daily' の時に使う日数。 */
@@ -647,59 +653,7 @@ function isAddonRow(svc: SvcRow): boolean {
   return svc.content.includes("加算");
 }
 
-/** yyyy-MM から月の日数を計算。Invalid な値は 30 にフォールバック (UI 表示安全側)。 */
-function daysInMonthOf(yearMonth: string): number {
-  const m = /^(\d{4})-(\d{1,2})$/.exec(yearMonth);
-  if (!m) return 30;
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  if (!Number.isFinite(y) || !Number.isFinite(mo) || mo < 1 || mo > 12) return 30;
-  return new Date(y, mo, 0).getDate();
-}
-
-/**
- * 利用票の日付マークから区分 (1月 / 半月) を自動判定する。
- *
- * 介護保険の福祉用具貸与の算定ルール (厚労省 解釈通知):
- *   - 月の途中で開始または終了 → 原則「半月」
- *   - ただし「月初から開始」または「月末まで継続」で **利用日数 ≥ 16 日** → 「1月」
- *   - 同月内開始+終了 (boundary に触れない) → 常に「半月」
- *
- * 実装:
- *   - 0 マーク → 1月 (default)
- *   - 単独マーク:
- *       1日 or 末日 のみ → 1月 (= 月全体継続の慣習表記)
- *       中の日 のみ → 開始日と解釈し、末日までの利用日数 ≥16 → 1月、未満 → 半月
- *   - 2+ マーク:
- *       1日〜末日 (全月) → 1月
- *       boundary 触れる (1日 or 末日 を含む) → 利用日数 (= last - first + 1) ≥16 → 1月、未満 → 半月
- *       boundary 触れない → 常に 半月
- */
-function autoRentalPeriodType(marks: boolean[], yearMonth: string): "1month" | "half_month" {
-  const daysInMonth = daysInMonthOf(yearMonth);
-  const days: number[] = [];
-  for (let i = 0; i < Math.min(daysInMonth, marks.length); i++) {
-    if (marks[i]) days.push(i + 1);
-  }
-  if (days.length === 0) return "1month";
-  const first = days[0];
-  const last = days[days.length - 1];
-  // 単独マーク
-  if (days.length === 1) {
-    if (first === 1 || first === daysInMonth) return "1month"; // 慣習: 1日 or 末日 のみ = 全月
-    const utilizationDays = daysInMonth - first + 1;
-    return utilizationDays >= 16 ? "1month" : "half_month";
-  }
-  // 全月 (1日〜末日)
-  if (first === 1 && last === daysInMonth) return "1month";
-  // boundary 触れる: 利用日数で 16日 rule
-  if (first === 1 || last === daysInMonth) {
-    const utilizationDays = last - first + 1;
-    return utilizationDays >= 16 ? "1month" : "half_month";
-  }
-  // 同月内開始+終了 (boundary 触れない): 半月固定
-  return "half_month";
-}
+// daysInMonthOf / autoRentalPeriodType は src/lib/rental-units.ts へ移した (2026-11-13。検査から呼ぶため)
 
 /**
  * 帳票の合計に使う回数 (印の数)。月 1 回のコードが同じ事業所で複数行に分かれているときは
@@ -709,14 +663,7 @@ function monthlyEffCounts(services: SvcRow[], kind: "planned" | "actual"): numbe
   return dedupeMonthlyCounts(services, riyouhyouRowKey, (s) => s[kind].filter(Boolean).length, (s) => s.unit_type);
 }
 
-/** rental 行の月計単位数を計算 (= round(units × 倍率))。区分は marks から自動判定。 */
-function rentalMonthlyUnits(svc: SvcRow, yearMonth: string, kind: "planned" | "actual" = "planned"): number {
-  const units = Number(svc.manual_units ?? 0);
-  if (!Number.isFinite(units) || units <= 0) return 0;
-  const marks = kind === "planned" ? svc.planned : svc.actual;
-  const period = autoRentalPeriodType(marks, yearMonth);
-  return period === "1month" ? Math.round(units) : Math.round(units * 0.5);
-}
+// rentalMonthlyUnits は src/lib/rental-units.ts (manual_units=単価・印で按分 / rental_month_actual_units=実額・按分しない)
 type InvoiceItem = { content: string; units: number; unit_price: number; amount: number };
 
 const WEEK_DAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"] as const;
@@ -2413,7 +2360,30 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                         </button>
                         {/* rental 行: 単位数を編集可能 + 区分は日付マークから自動判定 (1月/半月)。
                             予定と実績で区分が異なる場合は両方表示。 */}
-                        {rental && (() => {
+                        {rental && rentalUnitsKind(svc) === "month_actual" && (
+                          // 別表由来の「その月の実額」。印で按分しないので 1月/半月 の表示は出さない。
+                          // 単位数欄に入力すると manual_units (単価) が優先される
+                          <div className="mt-0.5 px-1 leading-tight flex items-center gap-1 text-[9px] flex-wrap">
+                            <span className="text-gray-700 font-semibold" title="別表 (第7表) の値。その月の実額で、日付の印では按分しない">
+                              {svc.rental_month_actual_units}単位
+                            </span>
+                            <span className="text-gray-500">(別表・当月実額)</span>
+                            <input
+                              type="number"
+                              className="w-10 border border-gray-300 rounded px-0.5 text-right text-[9px]"
+                              value=""
+                              placeholder="単価"
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v !== "") updateSvc(i, "manual_units", Number(v));
+                              }}
+                              min={0}
+                              step={1}
+                              title="1月あたりの単価を入れると、こちらが優先され日付の印で按分する"
+                            />
+                          </div>
+                        )}
+                        {rental && rentalUnitsKind(svc) !== "month_actual" && (() => {
                           const periodPlanned = autoRentalPeriodType(svc.planned, selectedYearMonth);
                           const periodActual = autoRentalPeriodType(svc.actual, selectedYearMonth);
                           const labelP = periodPlanned === "1month" ? "1月" : "半月";
@@ -2902,7 +2872,8 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                 // (例: 特殊寝台付属品を2点貸与) はどの行に対応するか機械的に決まらない
                 // ため、誤った金額を割り当てるリスクを避けて何もしない (手入力のまま)。
                 let autoUnits: number | null = null;
-                if (nowRental && userId && current.manual_units == null) {
+                // 別表の実額 (rental_month_actual_units) がある行も、manual_units がある行と同じく触らない
+                if (nowRental && userId && current.manual_units == null && current.rental_month_actual_units == null) {
                   const equipCategory = svc.name.replace(/貸与.*$/, "");
                   const monthStart = `${selectedYearMonth}-01`;
                   const monthEnd = `${selectedYearMonth}-${String(daysInMonth).padStart(2, "0")}`;
@@ -2960,7 +2931,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                     ...rentalSwitchOn,
                     ...(autoUnits != null ? { manual_units: autoUnits } : {}),
                     ...(!nowRental && wasRental
-                      ? { manual_units: null, rental_period_type: null, rental_days: null }
+                      ? { manual_units: null, rental_month_actual_units: null, rental_period_type: null, rental_days: null }
                       : {}),
                   };
                 });
@@ -4443,9 +4414,15 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                       <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>{svc.time || "　"}</td>
                       <td style={{ ...tdStyle, verticalAlign: "top", whiteSpace: "pre-wrap", fontSize: "6.5pt" }} rowSpan={2}>
                         {svc.content || "　"}
-                        {rental && (svc.manual_units ?? 0) > 0 && (
+                        {rental && rentalUnitsKind(svc) === "rate" && (
                           <div style={{ fontSize: "5.5pt", color: "#8d6e00", marginTop: "1px" }}>
                             {svc.manual_units}単位/月
+                          </div>
+                        )}
+                        {/* 別表由来の実額は「/月」(単価) ではないので付けない */}
+                        {rental && rentalUnitsKind(svc) === "month_actual" && (
+                          <div style={{ fontSize: "5.5pt", color: "#8d6e00", marginTop: "1px" }}>
+                            {svc.rental_month_actual_units}単位
                           </div>
                         )}
                       </td>

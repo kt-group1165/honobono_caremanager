@@ -60,6 +60,7 @@ import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findKyFiles, readKy8222Lines } from "./_ky-parse.mjs";
 import { rowMonthlyUnitsOf, isMonthlyUnitType, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
+import { rentalMonthlyUnits, type RentalRowLike } from "@/lib/rental-units";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -73,7 +74,7 @@ type Svc = {
 };
 type Doc = {
   id: string; user_id: string; report_month: string;
-  content: { services?: Svc[]; insurer_number?: string; insured_number?: string; user_name?: string; limit_amount?: number | string | null } | null;
+  content: { services?: Svc[]; insurer_number?: string; insured_number?: string; user_name?: string; limit_amount?: number | string | null; equipment_records?: unknown[] } | null;
 };
 
 // ── 1. 利用票 ───────────────────────────────────────────────────
@@ -335,6 +336,41 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
   const want = [30, 0, 3, 5, 4, 0, 2, 2, 2];
   if (JSON.stringify(got) !== JSON.stringify(want)) { console.error(`✗ FAIL: dedupeMonthlyCounts = ${JSON.stringify(got)} / 期待 ${JSON.stringify(want)}`); process.exit(1); }
   console.log(`dedupeMonthlyCounts: 境界 ${rows.length} 行 OK`);
+
+  // 貸与の月計 rentalMonthlyUnits (src/lib/rental-units.ts・2026-11-13)。この突合は貸与を合否に入れていないが、
+  // 画面・印刷と同じ式なのでここで境界を固定する (新しい検査は作らない方針)。
+  //   manual_units = 単価 → 印で 1月/半月 按分 / rental_month_actual_units = 別表の実額 → 按分しない / 両方なら単価優先
+  {
+    const YM = "2026-06"; // 30 日
+    const D1 = Array<boolean>(31).fill(false); D1[0] = true;          // 1 日だけ = 1月
+    const H = Array<boolean>(31).fill(false); H[15] = true;           // 16 日だけ = 利用 15 日 = 半月
+    type C = [Partial<RentalRowLike>, boolean[], boolean[], "planned" | "actual", number, string];
+    const rc: C[] = [
+      [{ manual_units: 1000 }, D1, D1, "planned", 1000, "単価のみ・1月"],
+      [{ manual_units: 1000 }, H, H, "planned", 500, "単価のみ・半月は半分"],
+      [{ manual_units: 1001 }, H, H, "planned", 501, "単価のみ・半月の端数は四捨五入"],
+      [{ rental_month_actual_units: 550 }, D1, D1, "planned", 550, "実額のみ・1月"],
+      [{ rental_month_actual_units: 550 }, H, H, "planned", 550, "★ 実額のみ・半月でも按分しない"],
+      [{ rental_month_actual_units: 550 }, D1, H, "actual", 550, "★ 実額のみ・実績側が半月でも按分しない"],
+      [{ manual_units: 1000, rental_month_actual_units: 550 }, D1, D1, "planned", 1000, "両方・単価優先"],
+      [{ manual_units: 1000, rental_month_actual_units: 550 }, H, H, "planned", 500, "両方・単価優先で按分"],
+      [{}, D1, D1, "planned", 0, "どちらも無し"],
+      [{ manual_units: 0, rental_month_actual_units: 550 }, D1, D1, "planned", 550, "単価 0 は無し扱い"],
+      [{ manual_units: null, rental_month_actual_units: 0 }, D1, D1, "planned", 0, "実額 0 は無し扱い"],
+      [{ manual_units: 1000 }, D1, H, "planned", 1000, "単価・予定 1月 / 実績 半月 の予定側"],
+      [{ manual_units: 1000 }, D1, H, "actual", 500, "単価・予定 1月 / 実績 半月 の実績側"],
+    ];
+    const run = (fn: (r: RentalRowLike, ym: string, k: "planned" | "actual") => number) =>
+      rc.filter(([row, p, a, k, want]) => fn({ ...row, planned: p, actual: a }, YM, k) !== want);
+    const bad = run(rentalMonthlyUnits);
+    for (const [row, , , k, want, label] of bad) console.error(`✗ rentalMonthlyUnits(${JSON.stringify(row)}, ${k}) 期待 ${want} (${label})`);
+    if (bad.length) { console.error("✗ FAIL: 貸与の月計 rentalMonthlyUnits の境界が崩れている"); process.exit(1); }
+    // 負のコントロール: 実額を見る分岐を壊す 2 通り。どちらも境界で鳴らなければ、この境界は効いていない
+    const brokenIgnore = run((r, ym, k) => rentalMonthlyUnits({ ...r, rental_month_actual_units: null }, ym, k));
+    const brokenProrate = run((r, ym, k) => rentalMonthlyUnits({ ...r, manual_units: Number(r.manual_units) > 0 ? r.manual_units : r.rental_month_actual_units, rental_month_actual_units: null }, ym, k));
+    if (!brokenIgnore.length || !brokenProrate.length) { console.error(`✗ FAIL: 負のコントロールが鳴らない (実額を無視 ${brokenIgnore.length} / 実額を按分 ${brokenProrate.length})`); process.exit(1); }
+    console.log(`rentalMonthlyUnits: 境界 ${rc.length} 件 OK / 負のコントロール 実額を無視→${brokenIgnore.length} 件・実額を按分→${brokenProrate.length} 件 落ちる ✓`);
+  }
 }
 
 const docs = await loadDocs();
@@ -445,6 +481,12 @@ if (UPDATE) {
 if (!existsSync(BASELINE)) { console.error("\n✗ 基準値ファイルが無い。--update で作る"); process.exit(1); }
 const base = JSON.parse(readFileSync(BASELINE, "utf8")) as Baseline;
 const fails: string[] = [];
+// ★ 用具の実績取込 (ImportEquipmentRecordModal) は manual_units に monthly_rental_fee をそのまま入れる。
+//   order-app はこの値を円 (¥) として送っており、ServiceSelector は ÷10 しているので、単位が 10 倍になる疑い (2026-11-13・未確認)。
+//   本番で使われた利用票は 0 件 (= 未発火)。使われたら落とす: order-app 側の値の意味を確かめてから基準を見直すこと
+const eqDocs = docs.filter((d) => Array.isArray(d.content?.equipment_records) && d.content!.equipment_records!.length > 0);
+console.log(`用具の実績取込 (equipment_records) を使った利用票 ${eqDocs.length} 件 (0 であること。×10 疑いの経路)`);
+if (eqDocs.length) fails.push(`用具の実績取込が使われた利用票 ${eqDocs.length} 件 (${eqDocs.slice(0, 3).map((d) => d.id).join(",")}) — manual_units が円のまま (単位の 10 倍) の疑い。ImportEquipmentRecordModal.tsx:149/190 を確かめる`);
 if (!negOk) fails.push("負のコントロールが鳴らない");
 if (!negDedupeOk) fails.push("負のコントロール 3 (複数行を畳む) が鳴らない = dedupeMonthlyCounts が効いていない");
 if (!negMonthlyOk) fails.push("負のコントロール 2 (月 1 回の扱い) が鳴らない = rowMonthlyUnitsOf の月 1 回が効いていない");

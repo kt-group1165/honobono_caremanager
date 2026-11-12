@@ -1,5 +1,6 @@
 // ============================================================================
-// 利用票 (service-usage) の福祉用具貸与行の manual_units を、別表 (第7表) PDF の単位で埋める
+// 利用票 (service-usage) の福祉用具貸与行の rental_month_actual_units (その月の実額) を、別表 (第7表) PDF の単位で埋める
+//   ★ 2026-11-13 から manual_units (単価) には書かない。意味の違う値を同じ列に入れないため (src/lib/rental-units.ts)
 //
 //   node migrations/fill_rental_units_from_betsuhyou.mjs --pdf "<別表.pdf>" [--pdf ...]            # DRY RUN
 //   node migrations/fill_rental_units_from_betsuhyou.mjs --pdf "<別表.pdf>" [--pdf ...] --execute  # 本番 (H 判断)
@@ -20,20 +21,18 @@
 //   C 多重異値  利用票 n 行・別表 n 行 で 別表の単位が違う              → ★ 埋めない。どの商品がいくらかが
 //              入れ替わったまま固定され、合計は合うので検算で気づけない
 //   D 行数違い  利用票 n 行・別表 m 行 (n≠m) / 事業所が当たらない      → 埋めない
-//   E 月途中    A/B でも、行の印が「1 か月まるごと」と言えない            → 埋めない
-//      別表の単位はその月に実際にかかった額 (半月なら半額)。画面 (rentalMonthlyUnits) は印から 1月/半月 を判定して
-//      manual_units を半分にするので、半月の行に半額を入れると二重に半分になる。
-//      ★ 「1 か月まるごと」と言えるのは 印が 0 個 / 1 日目だけ / その月の全日 のときだけとする (画面の判定より狭い。安全側)
-//   既に manual_units がある行は触らない (別掲)
+//   (旧 E 月途中 は 2026-11-13 に廃止)
+//      以前は manual_units に入れていたので、画面が印で半月と判定すると半額をさらに半分にした。それを避けるため
+//      「印が 1 か月まるごと」の行だけ埋めていた。★ しかし印は根拠にならない: 行を貸与に切り替えた瞬間に画面が
+//      1 日に印を自動で付けるので、「1 日目だけ」は既定値にすぎない (既存の食い違い 8 行のうち 4 行は印が 1 月なのに別表が半額)。
+//      ★ rental_month_actual_units は印で按分しないので、半月の行でも実額がそのまま正しく出る。弾く理由が無くなった
+//   既に manual_units (単価) か rental_month_actual_units (実額) がある行は触らない (別掲)
 //
 // ── 書くもの (--execute) ────────────────────────────────────────────────────
-//   services[i].manual_units = 別表の service_units / services[i]._units_source = "betsuhyou_<提供年月>"
+//   services[i].rental_month_actual_units = 別表の service_units / services[i]._units_source = "betsuhyou_<提供年月>"
 //   (H の fukuyogu_meisai_202606 と区別できるように)。content._betsuhyou_fill = { at, n } を立てる。
-//   services[i]._units_period = "month_actual" (その月の実額。半月なら半額が入りうる)。
-//     fukuyogu_meisai 由来は「月額の単価 (按分前)」で意味が違う ("monthly_rate"。既存行への付与は H が行う)。
-//     ★ 今は画面の表示月計が合うので実害なし。危ないのは誰かが日付の印を編集したとき
-//       (印から 1月/半月 を判定し直すので、実額の半額をさらに半分にしうる)。
-//   既に manual_units がある行は触らない。1 対 1 で別表と食い違うものは一覧に出す (上書きしない)。
+//   ★ manual_units は触らない。_units_period は書かない (意味は列で表す)
+//   既に単位がある行は触らない。1 対 1 で別表と食い違うものは一覧に出す (上書きしない)。
 //   --execute の前に対象帳票の content を JSON に退避 (migrations/_backup_fill_rental_betsuhyou_<時刻>.json・commit しない)。
 //   更新は帳票ごとに id 指定で、読み直した content が想定どおりかを確かめる。
 // ============================================================================
@@ -70,15 +69,11 @@ async function fetchAllRows(build) {
   return out;
 }
 
-/** 印が「1 か月まるごと」と言えるか (0 個 / 1 日目だけ / 全日)。画面の判定より狭い安全側の判定 */
-function wholeMonthMarks(marks, ym) {
-  const days = new Date(Number(ym.slice(0, 4)), Number(ym.slice(5, 7)), 0).getDate();
-  const on = (marks ?? []).slice(0, days).map((v, i) => (v ? i + 1 : 0)).filter(Boolean);
-  return on.length === 0 || (on.length === 1 && on[0] === 1) || on.length === days;
-}
+const hasUnits = (r) => Number(r.manual_units) > 0 || Number(r.rental_month_actual_units) > 0;
+const existingUnits = (r) => (Number(r.manual_units) > 0 ? { v: Number(r.manual_units), kind: "単価" } : { v: Number(r.rental_month_actual_units), kind: "実額" });
 
 async function main() {
-  console.log(`=== 別表 → 利用票の貸与 manual_units ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} ===\n`);
+  console.log(`=== 別表 → 利用票の貸与 rental_month_actual_units ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} ===\n`);
   const persons = PDF_PATHS.flatMap((p) => parseBundles(p).map((b, i) => ({ ...b, file: path.basename(p), idx: i + 1 })));
   console.log(`PDF ${PDF_PATHS.length} 本 / 人 ${persons.length}`);
 
@@ -99,9 +94,9 @@ async function main() {
       if (!c.deleted_at) names.set(c.id, c.name ?? "");
 
   const st = { 人: persons.length, 特定できない: 0, 別表の行が読めない: 0, 別表に貸与なし: 0, 別表の警告あり: 0, 利用票なし: 0, 利用票に貸与行なし: 0 };
-  const cls = { A: 0, B: 0, C: 0, D: 0, E: 0, 投入済み: 0 };
+  const cls = { A: 0, B: 0, C: 0, D: 0, 投入済み: 0 };
   const plans = []; // { docId, content, fills: [{ i, units }] }
-  const examples = { C: [], D: [], E: [] };
+  const examples = { C: [], D: [] };
   const existingMismatch = [];
   for (const b of persons) {
     const key = `${b.file}#${b.idx}`;
@@ -139,19 +134,20 @@ async function main() {
       const [prov, content] = [k.slice(0, k.indexOf("|")), k.slice(k.indexOf("|") + 1)];
       const its = items.filter((it) => it.service_content === content && prov && normProv(it.provider_name).startsWith(prov));
       const label = `${names.get(clientId) ?? b.betsuhyouHeader?.name ?? ""} ${ym} ${content} @${prov}`;
-      if (rs.every((r) => Number(r.s.manual_units) > 0)) {
+      if (rs.every((r) => hasUnits(r.s))) {
         cls.投入済み += rs.length;
         // 既に単位がある行は触らない。1 対 1 で別表と食い違うものだけ一覧に出す (事業所をまたぐ不整合の材料)
-        if (rs.length === 1 && its.length === 1 && Number(rs[0].s.manual_units) !== Number(its[0].service_units))
-          existingMismatch.push(`${label}  既存 ${rs[0].s.manual_units} (${rs[0].s._units_source ?? "出どころ不明"}) / 別表 ${its[0].service_units}${Number(its[0].service_units) * 2 === Number(rs[0].s.manual_units) ? "  ← 別表がちょうど半額 (半月)" : ""}`);
+        if (rs.length === 1 && its.length === 1 && existingUnits(rs[0].s).v !== Number(its[0].service_units)) {
+          const ex = existingUnits(rs[0].s);
+          existingMismatch.push(`${label}  既存 ${ex.v} (${ex.kind}・${rs[0].s._units_source ?? "出どころ不明"}) / 別表 ${its[0].service_units}${ex.kind === "単価" && Number(its[0].service_units) * 2 === ex.v ? "  ← 別表がちょうど半額 (半月)" : ""}`);
+        }
         continue;
       }
       if (its.length !== rs.length || !its.length) { cls.D += rs.length; if (examples.D.length < 6) examples.D.push(`${label} 利用票 ${rs.length} 行 / 別表 ${its.length} 行`); continue; }
       const unitsSet = new Set(its.map((it) => Number(it.service_units)));
       if (rs.length > 1 && unitsSet.size > 1) { cls.C += rs.length; if (examples.C.length < 6) examples.C.push(`${label} ${rs.length} 行 単位 ${its.map((it) => it.service_units).join("/")}`); continue; }
       for (const [j, r] of rs.entries()) {
-        if (Number(r.s.manual_units) > 0) { cls.投入済み++; continue; }
-        if (!wholeMonthMarks(r.s.actual?.some(Boolean) ? r.s.actual : r.s.planned, ym)) { cls.E++; if (examples.E.length < 6) examples.E.push(`${label} 印 ${(r.s.planned ?? []).map((v) => (v ? 1 : 0)).join("")}`); continue; }
+        if (hasUnits(r.s)) { cls.投入済み++; continue; }
         fills.push({ i: r.i, units: Number(its[j].service_units) });
         cls[rs.length === 1 ? "A" : "B"]++;
       }
@@ -166,9 +162,8 @@ async function main() {
   console.log(`  B 多重・単位同じ → 埋める ${cls.B}`);
   console.log(`  C 多重・単位違う (並び順に頼る) → 埋めない ${cls.C}`);
   console.log(`  D 行数違い・事業所が当たらない → 埋めない ${cls.D}`);
-  console.log(`  E 月途中の可能性 (半月按分) → 埋めない ${cls.E}`);
-  console.log(`  既に manual_units あり (触らない) ${cls.投入済み}`);
-  for (const t of ["C", "D", "E"]) if (examples[t].length) { console.log(`  ${t} の例:`); for (const x of examples[t]) console.log(`    ${x}`); }
+  console.log(`  既に単位あり (単価 or 実額・触らない) ${cls.投入済み}`);
+  for (const t of ["C", "D"]) if (examples[t].length) { console.log(`  ${t} の例:`); for (const x of examples[t]) console.log(`    ${x}`); }
   console.log(`\n■ 既に単位がある行で 別表と食い違う (1 対 1・上書きしない) ${existingMismatch.length} 行`);
   for (const x of existingMismatch) console.log(`    ${x}`);
   console.log(`\n埋める帳票 ${plans.length} 件 / 行 ${plans.reduce((s, p) => s + p.fills.length, 0)}`);
@@ -182,8 +177,8 @@ async function main() {
   for (const p of plans) {
     const services = p.content.services.map((s, i) => {
       const f = p.fills.find((x) => x.i === i);
-      // _units_period: 別表の単位は「その月の実額」(半月なら半額)。fukuyogu_meisai 由来の「月額の単価」と意味が違う
-      return f ? { ...s, manual_units: f.units, _units_source: `betsuhyou_${p.ym}`, _units_period: "month_actual" } : s;
+      // 別表の単位は「その月の実額」(半月なら半額)。単価 (manual_units) とは別の列に入れる。画面は按分しない
+      return f ? { ...s, rental_month_actual_units: f.units, _units_source: `betsuhyou_${p.ym}` } : s;
     });
     const content = { ...p.content, services, _betsuhyou_fill: { at: new Date().toISOString().slice(0, 10), n: p.fills.length } };
     const { data, error } = await sb.from("kaigo_report_documents").update({ content, updated_at: new Date().toISOString() }).eq("id", p.docId).select("id, content");
