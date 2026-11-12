@@ -5,6 +5,7 @@ import { Loader2, Download } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import type { SharedDocumentRow } from "@/lib/notifications";
 import { fetchTargetDoc, type TargetDoc } from "./ImportServiceRecordModal";
+import { recordMonthActualUnits, splitInsuranceRecords } from "@/lib/equipment-record-units";
 
 // ─── 型 ───────────────────────────────────────────────────────────────────────
 
@@ -18,8 +19,13 @@ export type EquipmentRecord = {
   date_range_end: string;   // YYYY-MM-DD
   equipment_name: string;
   tais_code?: string | null;
+  /** ★ 円・按分前・1 個あたり (単位ではない。÷10 は src/lib/equipment-record-units.ts) */
   monthly_rental_fee: number;
   category?: string | null;
+  /** 数量。null / 0 / 未設定は 1 (order-app 46819a4 から送られる) */
+  quantity?: number | null;
+  /** orders の生の値 "介護" / "自費" / "特価自費" / null。"介護" だけを入れる。未設定 (古い payload) は従来どおり入れる */
+  payment_type?: string | null;
 };
 
 /** content.equipment_records に保存する形式 (provider 名等を補完) */
@@ -39,6 +45,8 @@ export type RentalSvcRow = {
   category: string;
   units?: number;
   manual_units?: number | null;
+  /** その月の実額 (date_range から半月按分済み・× 数量)。画面は印で按分しない (src/lib/rental-units.ts) */
+  rental_month_actual_units?: number | null;
   rental_period_type?: "1month" | "half_month" | "daily" | null;
   rental_days?: number | null;
   tais_code?: string | null; // 将来 TAIS 表示対応用
@@ -146,7 +154,9 @@ function generateRentalServicesPerEquipment(
       planned: [...marks],
       actual: [...marks],
       category: "17",
-      manual_units: r.monthly_rental_fee,
+      // ★ 単価 (manual_units) ではなく その月の実額。円 ÷10・date_range で半月按分・× 数量
+      manual_units: null,
+      rental_month_actual_units: recordMonthActualUnits(r, yearMonth),
       tais_code: r.tais_code ?? null,
     };
   });
@@ -167,7 +177,9 @@ function generateRentalServicesPerCategory(
   return Array.from(groups.entries()).map(([key, list]) => {
     const [cat, provider] = key.split("__");
     const serviceName = CATEGORY_TO_SERVICE_NAME[cat] ?? `${cat}貸与`;
-    const totalFee = list.reduce((s, r) => s + (Number(r.monthly_rental_fee) || 0), 0);
+    // ★ 1 台ずつ その月の実額 (円 ÷10・date_range で半月按分・× 数量) にしてから足す。
+    //   印の和集合で按分すると、期間の違う用具が混ざったときに 1 台ごとの期間が失われる
+    const totalUnits = list.reduce((s, r) => s + recordMonthActualUnits(r, yearMonth), 0);
     // 各 record の marks を union (= 期間カバー範囲の合算)
     const planned = Array<boolean>(31).fill(false);
     const actual = Array<boolean>(31).fill(false);
@@ -187,7 +199,8 @@ function generateRentalServicesPerCategory(
       planned,
       actual,
       category: "17",
-      manual_units: totalFee,
+      manual_units: null,
+      rental_month_actual_units: totalUnits,
     };
   });
 }
@@ -198,9 +211,12 @@ export function generateRentalServicesFromRecords(
   yearMonth: string,
   mode: AggregationMode,
 ): RentalSvcRow[] {
+  // ★ 介護保険のもの (payment_type === "介護") だけを利用票の行にする。自費・不明は入れない
+  //   (equipment_records には全部残す。入れなかった件数は モーダルが表示する)
+  const { insured } = splitInsuranceRecords(records);
   return mode === "per_category"
-    ? generateRentalServicesPerCategory(records, yearMonth)
-    : generateRentalServicesPerEquipment(records, yearMonth);
+    ? generateRentalServicesPerCategory(insured, yearMonth)
+    : generateRentalServicesPerEquipment(insured, yearMonth);
 }
 
 // ─── persist ─────────────────────────────────────────────────────────────────
@@ -329,7 +345,8 @@ export function ImportEquipmentRecordModal({
             typeof (r as { equipment_name?: unknown }).equipment_name === "string",
         )
       : [];
-    return { clientId, clientName, yearMonth, incoming };
+    const { skipped } = splitInsuranceRecords(incoming);
+    return { clientId, clientName, yearMonth, incoming, skipped };
   }, [shared]);
 
   useEffect(() => {
@@ -406,8 +423,12 @@ export function ImportEquipmentRecordModal({
         shared.id,
       );
       const modeLabel = mode === "per_equipment" ? "用具ごと" : "種別ごとに集約";
+      const sk = extracted.skipped;
+      const skippedTotal = sk.自費 + sk.支払区分不明 + sk.その他;
+      if (skippedTotal) console.warn("福祉用具の取込: 介護保険でない明細を利用票に入れなかった", sk);
       onSuccess(
-        `利用票に取り込みました (${modeLabel}・追加 ${diff.added.length} 件 / 上書き ${diff.replaced.length} 件)`,
+        `利用票に取り込みました (${modeLabel}・追加 ${diff.added.length} 件 / 上書き ${diff.replaced.length} 件)` +
+          (skippedTotal ? ` ※ 利用票に入れなかった明細 ${skippedTotal} 件 (自費 ${sk.自費} / 支払区分不明 ${sk.支払区分不明}${sk.その他 ? ` / その他 ${sk.その他}` : ""})` : ""),
       );
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -435,6 +456,13 @@ export function ImportEquipmentRecordModal({
               {extracted.clientName || "—"} 様 / {extracted.yearMonth ?? "—"} / 受信{" "}
               {extracted.incoming.length} 件 / 送信元: {sourceOfficeName || "—"}
             </p>
+            {extracted.skipped.自費 + extracted.skipped.支払区分不明 + extracted.skipped.その他 > 0 && (
+              <p className="text-xs text-amber-700 mt-1">
+                介護保険でない明細は利用票に入れません: 自費 {extracted.skipped.自費} 件 / 支払区分不明{" "}
+                {extracted.skipped.支払区分不明} 件
+                {extracted.skipped.その他 > 0 ? ` / その他 ${extracted.skipped.その他} 件` : ""}
+              </p>
+            )}
           </div>
           <button
             type="button"

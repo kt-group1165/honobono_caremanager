@@ -61,6 +61,7 @@ import { fileURLToPath } from "node:url";
 import { findKyFiles, readKy8222Lines } from "./_ky-parse.mjs";
 import { rowMonthlyUnitsOf, isMonthlyUnitType, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
 import { rentalMonthlyUnits, type RentalRowLike } from "@/lib/rental-units";
+import { recordMonthActualUnits, splitInsuranceRecords, type EquipmentRecordLike } from "@/lib/equipment-record-units";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
@@ -371,6 +372,47 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
     if (!brokenIgnore.length || !brokenProrate.length) { console.error(`✗ FAIL: 負のコントロールが鳴らない (実額を無視 ${brokenIgnore.length} / 実額を按分 ${brokenProrate.length})`); process.exit(1); }
     console.log(`rentalMonthlyUnits: 境界 ${rc.length} 件 OK / 負のコントロール 実額を無視→${brokenIgnore.length} 件・実額を按分→${brokenProrate.length} 件 落ちる ✓`);
   }
+
+  // 用具の実績取込 (order-app → ImportEquipmentRecordModal) の単位 (src/lib/equipment-record-units.ts・2026-11-13)。
+  // ★ 本番の取込は 0 件 = 実データ未投入のため境界テストのみ (合格とは言わない)
+  {
+    const YM = "2026-06"; // 30 日
+    const R = (o: Partial<EquipmentRecordLike>): EquipmentRecordLike => ({ date_range_start: "2026-06-01", date_range_end: "2026-06-30", monthly_rental_fee: 10000, ...o });
+    const uc: [EquipmentRecordLike, number, string][] = [
+      [R({}), 1000, "円 ÷10・まるごと 1 か月"],
+      [R({ quantity: 2 }), 2000, "数量 2"],
+      [R({ quantity: null }), 1000, "数量 null は 1"],
+      [R({ quantity: 0 }), 1000, "数量 0 は 1"],
+      [R({ date_range_start: "2026-05-20", date_range_end: "2026-07-10" }), 1000, "月をまたぐ (前後とも外) は満額"],
+      [R({ date_range_start: "2026-06-16" }), 500, "月途中開始 (後半だけ) は半額"],
+      [R({ date_range_start: "2026-06-15" }), 1000, "15 日開始は前半にかかるので満額"],
+      [R({ date_range_end: "2026-06-15" }), 500, "月途中終了 (前半だけ) は半額"],
+      [R({ date_range_start: "2026-06-05", date_range_end: "2026-06-25" }), 1000, "月の中だけでも両方の半月なら満額 (order-app と同じ。画面の 16 日ルールとは違う)"],
+      [R({ monthly_rental_fee: 3330, date_range_start: "2026-06-16" }), 167, "1 個 333 単位の半額は round(166.5)=167"],
+      [R({ monthly_rental_fee: 3330, quantity: 2, date_range_start: "2026-06-16" }), 334, "半額は 1 個ずつ丸めてから × 数量"],
+      [R({ date_range_start: "2026-07-01", date_range_end: "2026-07-31" }), 0, "当月に貸与日が無ければ 0"],
+    ];
+    const pc: [Partial<EquipmentRecordLike>, boolean][] = [
+      [{ payment_type: "介護" }, true], [{ payment_type: " 介護 " }, true], [{ payment_type: "自費" }, false],
+      [{ payment_type: "特価自費" }, false], [{ payment_type: null }, false], [{ payment_type: "" }, false], [{}, true],
+    ];
+    const runU = (fn: (r: EquipmentRecordLike, ym: string) => number) => uc.filter(([r, want]) => fn(r, YM) !== want);
+    const runP = (fn: (rs: EquipmentRecordLike[]) => EquipmentRecordLike[]) => pc.filter(([o, want]) => fn([R(o)]).length !== (want ? 1 : 0));
+    const badU = runU(recordMonthActualUnits);
+    const badP = runP((rs) => splitInsuranceRecords(rs).insured);
+    for (const [r, want, label] of badU) console.error(`✗ recordMonthActualUnits(${JSON.stringify(r)}) = ${recordMonthActualUnits(r, YM)} / 期待 ${want} (${label})`);
+    for (const [o, want] of badP) console.error(`✗ splitInsuranceRecords(${JSON.stringify(o)}) 入れる=${!want} / 期待 ${want}`);
+    const sk = splitInsuranceRecords([R({ payment_type: "自費" }), R({ payment_type: "特価自費" }), R({ payment_type: null }), R({ payment_type: "介護" })]).skipped;
+    const skOk = sk.自費 === 2 && sk.支払区分不明 === 1 && sk.その他 === 0;
+    if (!skOk) console.error(`✗ 入れなかった件数の内訳 ${JSON.stringify(sk)} / 期待 自費 2・不明 1`);
+    if (badU.length || badP.length || !skOk) { console.error("✗ FAIL: 用具の実績取込の単位・絞り込みの境界が崩れている"); process.exit(1); }
+    // 負のコントロール: ÷10 を外す / 特価自費を通す (includes("介護") 等の緩い判定) / 数量を掛けない
+    const negNoDiv = runU((r, ym) => recordMonthActualUnits({ ...r, monthly_rental_fee: r.monthly_rental_fee * 10 }, ym));
+    const negLoose = runP((rs) => rs.filter((r) => r.payment_type === undefined || !String(r.payment_type ?? "").startsWith("自費")));
+    const negNoQty = runU((r, ym) => recordMonthActualUnits({ ...r, quantity: 1 }, ym));
+    if (!negNoDiv.length || !negLoose.length || !negNoQty.length) { console.error(`✗ FAIL: 負のコントロールが鳴らない (÷10 を外す ${negNoDiv.length} / 特価自費を通す ${negLoose.length} / 数量なし ${negNoQty.length})`); process.exit(1); }
+    console.log(`用具の実績取込: 境界 単位 ${uc.length} 件・支払区分 ${pc.length} 件 OK / 負のコントロール ÷10 を外す→${negNoDiv.length}・特価自費を通す→${negLoose.length}・数量なし→${negNoQty.length} 件 落ちる ✓ (★ 実データ未投入のため境界テストのみ)`);
+  }
 }
 
 const docs = await loadDocs();
@@ -483,10 +525,11 @@ const base = JSON.parse(readFileSync(BASELINE, "utf8")) as Baseline;
 const fails: string[] = [];
 // ★ 用具の実績取込 (ImportEquipmentRecordModal) は manual_units に monthly_rental_fee をそのまま入れる。
 //   order-app はこの値を円 (¥) として送っており、ServiceSelector は ÷10 しているので、単位が 10 倍になる疑い (2026-11-13・未確認)。
-//   本番で使われた利用票は 0 件 (= 未発火)。使われたら落とす: order-app 側の値の意味を確かめてから基準を見直すこと
+//   2026-11-13 に ÷10・数量・支払区分を直した (src/lib/equipment-record-units.ts)。ただし本番の取込は 0 件で、実データでは一度も確かめていない。
+//   初めて使われたら落とす: その帳票の単位を order-app の請求 (伝送) と突き合わせてから、この判定を外すこと
 const eqDocs = docs.filter((d) => Array.isArray(d.content?.equipment_records) && d.content!.equipment_records!.length > 0);
-console.log(`用具の実績取込 (equipment_records) を使った利用票 ${eqDocs.length} 件 (0 であること。×10 疑いの経路)`);
-if (eqDocs.length) fails.push(`用具の実績取込が使われた利用票 ${eqDocs.length} 件 (${eqDocs.slice(0, 3).map((d) => d.id).join(",")}) — manual_units が円のまま (単位の 10 倍) の疑い。ImportEquipmentRecordModal.tsx:149/190 を確かめる`);
+console.log(`用具の実績取込 (equipment_records) を使った利用票 ${eqDocs.length} 件 (0 であること。実データ未検証の経路)`);
+if (eqDocs.length) fails.push(`用具の実績取込が使われた利用票 ${eqDocs.length} 件 (${eqDocs.slice(0, 3).map((d) => d.id).join(",")}) — 実データで未検証の取込経路。単位を order-app の請求と突き合わせる (src/lib/equipment-record-units.ts)`);
 if (!negOk) fails.push("負のコントロールが鳴らない");
 if (!negDedupeOk) fails.push("負のコントロール 3 (複数行を畳む) が鳴らない = dedupeMonthlyCounts が効いていない");
 if (!negMonthlyOk) fails.push("負のコントロール 2 (月 1 回の扱い) が鳴らない = rowMonthlyUnitsOf の月 1 回が効いていない");
