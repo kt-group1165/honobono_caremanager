@@ -5,8 +5,13 @@
 //   service_type名/provider_名は事業所別請求額から補完 (表示用。伝送出力は
 //   service_kind_code + provider_number を使うので必須ではない)。
 //   突合キー = 被保番+保険者 (_kyotaku_office_map_<TAG>.json)。
-//   OFFICE_ID=<uuid> TAG=<略称> KY=<KYファイルパス> \
-//     node migrations/import_kyotaku_benefit_from_ky.mjs [--execute] [--only-ky-users]
+//   TARGET_MONTH=<YYYY-MM> OFFICE_ID=<uuid> TAG=<略称> KY=<KYファイルパス> \
+//     node migrations/import_kyotaku_benefit_from_ky.mjs [--execute] [--only-ky-users] [--allow-shrink]
+//   ★ TARGET_MONTH は必須 (既定値なし)。削除は billing_month = TARGET_MONTH の行だけ。
+//   ★ --execute は 退避 (migrations/_backup_benefit_<TAG>_<YYYYMM>_<時刻>.json) → 削除 → 投入 の順。
+//     入れる行が消す行の 8 割未満なら止める (--allow-shrink で続行)。
+//   ⚠ KY を取込元にすると、給付管理と KY を突き合わせる検査 (kyotaku-k-diff 等) はその月について循環になる
+//     (import_kyotaku_benefit_from_jisseki.mjs の冒頭参照)。ケアマネの限度額調整が KY にしか無いので KY を使っている
 //
 //   ⚠ 既定は **対応表 (_kyotaku_office_map_<TAG>.json) の全員の対象月を消してから** KY の行を入れる
 //     (= その月の正本 KY を丸ごと流す用途)。翌月送信の修正版 KY (作成区分2・月遅れ) のように
@@ -15,7 +20,7 @@
 //   --only-ky-users : 消す範囲を **この KY に載っている人だけ**にする (修正版・月遅れの差し替え用)。
 //     未突合の人がいたら 1 行も書かずに止める。
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -24,8 +29,13 @@ const ONLY_KY_USERS = process.argv.includes("--only-ky-users");
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 const OFFICE_ID = process.env.OFFICE_ID, TAG = process.env.TAG, KY = process.env.KY;
 if (!OFFICE_ID || !TAG || !KY) { console.error("OFFICE_ID / TAG / KY が必要"); process.exit(1); }
-const BILLING_MONTH = process.env.TARGET_MONTH || "2026-06";
+// ★ TARGET_MONTH は必須 (2026-11-13)。以前は既定が "2026-06" で、7 月の KY (KY260801) で付け忘れると
+//   その中の 6 月の月遅れ数票だけを読み、対応表全員の 6 月分を消すところだった (2026-10-06 の 520 行消失と同じ型)
+const BILLING_MONTH = process.env.TARGET_MONTH;
+if (!/^\d{4}-\d{2}$/.test(BILLING_MONTH ?? "")) { console.error("TARGET_MONTH=YYYY-MM が必要 (既定値は持たない)"); process.exit(1); }
 const YM = BILLING_MONTH.replace("-", "");
+// --allow-shrink: 入れる行が消す行の 8 割未満でも続ける (既定は止める)
+const ALLOW_SHRINK = process.argv.includes("--allow-shrink");
 
 function loadEnv() { const t = readFileSync(path.join(KAIGO, ".env.local"), "utf8"); const e = {}; for (const l of t.split(/\r?\n/)) { const m = /^([A-Z0-9_]+)=(.*)$/.exec(l.trim()); if (m) e[m[1]] = m[2].replace(/^["']|["']$/g, ""); } return e; }
 const env = loadEnv();
@@ -89,9 +99,42 @@ async function main() {
     if (error) { console.error("削除対象の件数取得失敗:", error.message); process.exit(1); }
     willDelete += count || 0;
   }
-  console.log(`消す範囲: ${ONLY_KY_USERS ? "この KY に載っている人" : "対応表の全員"} ${ids.length} 名 / 対象月の既存 ${willDelete} 行を消して ${rows.length} 行を入れる`);
+  console.log(`消す範囲: ${ONLY_KY_USERS ? "この KY に載っている人" : "対応表の全員"} ${ids.length} 名 / 対象月 (billing_month = ${BILLING_MONTH}) の既存 ${willDelete} 行を消して ${rows.length} 行を入れる`);
+  // 削除は billing_month = TARGET_MONTH の行だけ。他の月は消さない (件数を出して見えるようにする)
+  {
+    let other = 0;
+    for (let i = 0; i < ids.length; i += 200) {
+      const { count, error } = await sb.from("kaigo_benefit_management").select("id", { count: "exact", head: true })
+        .neq("billing_month", BILLING_MONTH).in("user_id", ids.slice(i, i + 200));
+      if (error) { console.error("他の月の件数取得失敗:", error.message); process.exit(1); }
+      other += count || 0;
+    }
+    console.log(`  消さない: 同じ人の他の月の行 ${other} 行 (削除条件 billing_month = ${BILLING_MONTH} に当たらない)`);
+  }
   if (ONLY_KY_USERS && unmatched.size) { console.error("✗ --only-ky-users で未突合の人がいるため止めます (対応表に足してから再実行)"); process.exit(2); }
-  if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で投入。"); return; }
+  // 入れる行が消す行より大幅に少ない = KY の月を取り違えている / 一部しか載っていない KY の疑い
+  const shrink = willDelete > 0 && rows.length < willDelete * 0.8;
+  if (shrink) console.log(`⚠ 入れる ${rows.length} 行が 消す ${willDelete} 行の 8 割未満。KY の月の取り違えか、一部の人しか載っていない KY の疑い`);
+  if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で 退避 → 削除 → 投入。"); return; }
+  if (shrink && !ALLOW_SHRINK) { console.error("✗ 止めます (確認のうえ続けるなら --allow-shrink。一部の人だけ差し替えるなら --only-ky-users)"); process.exit(2); }
+
+  // ★ 削除の前に、消す行を JSON に退避する (commit しない。migrations/_backup_*.json)
+  if (willDelete > 0) {
+    const backup = [];
+    for (let i = 0; i < ids.length; i += 200) {
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await sb.from("kaigo_benefit_management").select("*")
+          .eq("billing_month", BILLING_MONTH).in("user_id", ids.slice(i, i + 200)).order("id").range(from, from + 999);
+        if (error) { console.error("退避の読み出し失敗:", error.message); process.exit(1); }
+        backup.push(...data);
+        if (data.length < 1000) break;
+      }
+    }
+    if (backup.length !== willDelete) { console.error(`✗ 退避 ${backup.length} 行が 消す ${willDelete} 行と違う`); process.exit(1); }
+    const file = path.join(KAIGO, "migrations", `_backup_benefit_${TAG}_${YM}_${new Date().toISOString().replace(/[-:]/g, "").slice(0, 13)}.json`);
+    writeFileSync(file, JSON.stringify(backup, null, 1));
+    console.log(`退避: ${file} (${backup.length} 行)`);
+  }
 
   let del = 0;
   for (let i = 0; i < ids.length; i += 200) {
