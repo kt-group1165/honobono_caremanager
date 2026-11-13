@@ -41,7 +41,7 @@ import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
-import { resolveClients } from "./_client_resolve.mjs";
+import { resolveClients, resolveByBetsuhyouHeader } from "./_client_resolve.mjs";
 import { normName } from "./_name_normalize.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
@@ -58,17 +58,6 @@ const RENTAL = new Set(["17", "67"]);
 const normProv = (s) => (s ?? "").normalize("NFKC").replace(/[\s　]/g, "");
 const isRentalCode = (c) => /^(17|67)\d{4}$/.test(c ?? "");
 
-async function fetchAllRows(build) {
-  const out = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await build().range(from, from + 999);
-    if (error) throw new Error(error.message);
-    out.push(...data);
-    if (data.length < 1000) break;
-  }
-  return out;
-}
-
 const hasUnits = (r) => Number(r.manual_units) > 0 || Number(r.rental_month_actual_units) > 0;
 const existingUnits = (r) => (Number(r.manual_units) > 0 ? { v: Number(r.manual_units), kind: "単価" } : { v: Number(r.rental_month_actual_units), kind: "実額" });
 
@@ -83,15 +72,9 @@ async function main() {
     people.set(`${b.file}#${b.idx}`, { insurer: b.riyouhyouIdentity.insurer, insured: b.riyouhyouIdentity.insured, nameKey: normName(b.riyouhyouIdentity.name ?? "") });
   const { byPair } = people.size ? await resolveClients(sb, people, { normalizeName: normName }) : { byPair: new Map() };
   const headerOnly = persons.filter((b) => !people.has(`${b.file}#${b.idx}`) && b.betsuhyouHeader?.insured && b.betsuhyouHeader?.name);
-  const insureds = [...new Set(headerOnly.map((b) => b.betsuhyouHeader.insured))];
-  const recs = [];
-  for (let i = 0; i < insureds.length; i += 150)
-    recs.push(...await fetchAllRows(() => sb.from("client_insurance_records").select("id, client_id, insured_number").in("insured_number", insureds.slice(i, i + 150)).order("id")));
-  const cids = [...new Set(recs.map((r) => r.client_id))];
-  const names = new Map();
-  for (let i = 0; i < cids.length; i += 150)
-    for (const c of await fetchAllRows(() => sb.from("clients").select("id, name, deleted_at").in("id", cids.slice(i, i + 150)).order("id")))
-      if (!c.deleted_at) names.set(c.id, c.name ?? "");
+  // 処理本体は _client_resolve.mjs の resolveByBetsuhyouHeader (import_care_plan3_usage_detail_from_pdf.mjs と共通)
+  const { resolved: headerResolved, names } = await resolveByBetsuhyouHeader(sb,
+    headerOnly.map((b) => ({ key: `${b.file}#${b.idx}`, insured: b.betsuhyouHeader.insured, name: b.betsuhyouHeader.name, officeNumber: b.betsuhyouOfficeNumber })), { normalizeName: normName });
 
   const st = { 人: persons.length, 特定できない: 0, 別表の行が読めない: 0, 別表に貸与なし: 0, 別表の警告あり: 0, 利用票なし: 0, 利用票に貸与行なし: 0 };
   const cls = { A: 0, B: 0, C: 0, D: 0, 投入済み: 0 };
@@ -105,10 +88,7 @@ async function main() {
       const p = people.get(key); const ids = byPair.get(`${p.insurer}|${p.insured}`);
       if (ids?.size === 1) clientId = [...ids][0];
     } else if (b.betsuhyouHeader) {
-      const h = b.betsuhyouHeader;
-      const hit = [...new Set(recs.filter((r) => r.insured_number === h.insured).map((r) => r.client_id))]
-        .filter((id) => names.has(id) && normName(names.get(id)) === normName(h.name));
-      if (hit.length === 1) clientId = hit[0];
+      clientId = headerResolved.get(key)?.clientId ?? null;
     }
     if (!clientId) { st.特定できない++; continue; }
     // 行が 1 行も読めない別表 (利用票別表・全CM の出し方。列の位置が違う) を「貸与なし」と取り違えない
@@ -164,6 +144,11 @@ async function main() {
   console.log(`  D 行数違い・事業所が当たらない → 埋めない ${cls.D}`);
   console.log(`  既に単位あり (単価 or 実額・触らない) ${cls.投入済み}`);
   for (const t of ["C", "D"]) if (examples[t].length) { console.log(`  ${t} の例:`); for (const x of examples[t]) console.log(`    ${x}`); }
+  const officeNotes = [...headerResolved.values()].filter((r) => r.warn || r.note);
+  if (officeNotes.length) {
+    console.log(`\n■ 別表の居宅支援事業者番号 (引き当ては成立・書く) ${officeNotes.length} 人`);
+    for (const r of officeNotes) console.log(`    ${r.name}: ${r.warn ?? r.note}`);
+  }
   console.log(`\n■ 既に単位がある行で 別表と食い違う (1 対 1・上書きしない) ${existingMismatch.length} 行`);
   for (const x of existingMismatch) console.log(`    ${x}`);
   console.log(`\n埋める帳票 ${plans.length} 件 / 行 ${plans.reduce((s, p) => s + p.fills.length, 0)}`);

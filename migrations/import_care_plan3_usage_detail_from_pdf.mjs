@@ -60,7 +60,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { resolveClients } from "./_client_resolve.mjs";
+import { resolveClients, resolveByBetsuhyouHeader } from "./_client_resolve.mjs";
 import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
 import { normName } from "./_name_normalize.mjs";
 
@@ -250,28 +250,10 @@ async function main() {
   // ── 別表ヘッダだけの人: 保険者番号が印字されないので (被保番, 氏名) の両方が一致する人が 1 人のときだけ使う ──
   //   被保番は保険者の中でしか一意でない (別人衝突の実例 28 件)。氏名だけの引き当ても禁止
   //   (memory feedback_name_based_lookup_collision_risk)。両方そろって 1 人に決まるときだけ
-  const headerResolved = new Map(); // b.path -> { clientId, name } | { reason }
-  if (byBetsuhyouHeader.length) {
-    const insureds = [...new Set(byBetsuhyouHeader.map((b) => b.betsuhyouHeader.insured))];
-    const recs = [];
-    for (let i = 0; i < insureds.length; i += 150) {
-      recs.push(...await fetchAllRows(() => sb.from("client_insurance_records").select("id, client_id, insured_number")
-        .in("insured_number", insureds.slice(i, i + 150)).order("id")));
-    }
-    const cids = [...new Set(recs.map((r) => r.client_id))];
-    const names = new Map();
-    for (let i = 0; i < cids.length; i += 150) {
-      const rows = await fetchAllRows(() => sb.from("clients").select("id, name, deleted_at").in("id", cids.slice(i, i + 150)).order("id"));
-      for (const c of rows) if (!c.deleted_at) names.set(c.id, c.name ?? "");
-    }
-    for (const b of byBetsuhyouHeader) {
-      const h = b.betsuhyouHeader;
-      const cand = [...new Set(recs.filter((r) => r.insured_number === h.insured).map((r) => r.client_id))].filter((id) => names.has(id));
-      const hit = cand.filter((id) => normName(names.get(id)) === normName(h.name));
-      if (hit.length === 1) headerResolved.set(b.path, { clientId: hit[0], name: names.get(hit[0]) });
-      else headerResolved.set(b.path, { reason: `別表ヘッダ 被保番${h.insured}「${h.name}」→ 被保番の一致 ${cand.length} 人 / うち氏名も一致 ${hit.length} 人 (1 人に決まらない)` });
-    }
-  }
+  //   処理本体は _client_resolve.mjs の resolveByBetsuhyouHeader (fill_rental_units_from_betsuhyou.mjs と共通)
+  const headerResolved = byBetsuhyouHeader.length // b.path -> { clientId, name } | { reason }
+    ? (await resolveByBetsuhyouHeader(sb, byBetsuhyouHeader.map((b) => ({ key: b.path, insured: b.betsuhyouHeader.insured, name: b.betsuhyouHeader.name, officeNumber: b.betsuhyouOfficeNumber })), { normalizeName: normName })).resolved
+    : new Map();
 
   // 番号が全く読めない (利用票ページ自体が無い) ファイルは、週間計画の氏名だけで
   // ★参考情報として★ 1名に絞れるか見る。書込には使わない (氏名だけの引き当ては
@@ -330,6 +312,7 @@ async function main() {
   }
 
   let ok = 0, unresolved = noIdentity.length, nameMismatch = 0, care3Written = 0, detailWritten = 0, skipped = 0;
+  let officeWarn = 0, officeNarrowed = 0; // 別表ヘッダの居宅支援事業者番号 (resolveByBetsuhyouHeader)
   let detailSkippedWarn = 0, detailSkippedMismatch = 0, detailSkippedEmpty = 0;
   for (const b of parsed) {
     if (noIdentity.includes(b)) continue;
@@ -343,6 +326,8 @@ async function main() {
       if (!hr.clientId) { console.log(`  ✗ 引き当て失敗: ${hr.reason}`); unresolved++; continue; }
       clientId = hr.clientId; dbName = hr.name;
       console.log(`  → ${dbName} (client_id=${clientId}) ※利用票ページが無いため別表ヘッダの被保番+氏名で特定`);
+      if (hr.note) { console.log(`  ※ ${hr.note}`); officeNarrowed++; }
+      if (hr.warn) { console.log(`  ⚠ ${hr.warn} → 書く (warn のみ)`); officeWarn++; }
     } else {
       const p = people.get(b.path);
       const ids = byPair.get(`${p.insurer}|${p.insured}`);
@@ -505,6 +490,7 @@ async function main() {
   console.log(`  利用者引き当て成功     ${ok} 件`);
   console.log(`  引き当て失敗           ${unresolved} 件 (うち利用票ページ自体が無い: ${noIdentity.length} 件)`);
   console.log(`  氏名不一致でskip       ${nameMismatch} 件`);
+  if (officeWarn || officeNarrowed) console.log(`  別表の居宅支援事業者番号: 割当なしの warn ${officeWarn} 件 (書く) / 割当で同姓同名を絞った ${officeNarrowed} 件`);
   console.log(`  対象月不明でskip       ${skipped} 件`);
   console.log(`  第3表 ${EXECUTE ? "書込完了" : "書込予定"}       ${care3Written} 件`);
   console.log(`  第7表 ${EXECUTE ? "書込完了" : "書込予定"}       ${detailWritten} 件`);

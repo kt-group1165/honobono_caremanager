@@ -560,11 +560,19 @@ export function parseBetsuhyouHeader(text) {
   return { month: `${2018 + Number(m[1])}-${String(Number(m[2])).padStart(2, "0")}`, insured: m[3], name: m[4].trim() };
 }
 
+/** 別表ページ上部の「居宅介護支援事業者番号：1278600406」→ "1278600406"。読めなければ null。
+ *  ★ 2026-11-13 実測: 本文の文言は「居宅**介護**支援事業者番号」(pdfplumber の切れ目では「居宅支援事業者番号」に見える)。両方受ける。
+ *  人の切れ目には使わない (hKey は変えない)。引き当てで同姓同名を絞るのと、割当の欠落を warn に出すのに使う */
+export function parseBetsuhyouOfficeNumber(text) {
+  const m = /居宅(?:介護)?支援事業者番号[\s　]*[：:][\s　]*(\d{10})/.exec(text);
+  return m ? m[1] : null;
+}
+
 function emptyPerson() {
   return {
     weekly: null, riyouhyouIdentity: null, riyouhyouGrid: null, riyouhyouMonth: null,
     betsuhyouItems: null, betsuhyouWarn: [], betsuhyouPublicExpense: [], betsuhyouMonth: null, betsuhyouName: null,
-    betsuhyouLimitAmount: null, betsuhyouHeader: null, betsuhyouPages: 0, pages: [],
+    betsuhyouLimitAmount: null, betsuhyouHeader: null, betsuhyouOfficeNumber: null, betsuhyouPages: 0, pages: [],
   };
 }
 
@@ -631,6 +639,7 @@ export function parseBundles(pdfPath) {
       const cont = out.betsuhyouItems != null; // 同じ人の 2 ページ目以降
       out.betsuhyouPages++;
       out.betsuhyouHeader ??= header;
+      out.betsuhyouOfficeNumber ??= parseBetsuhyouOfficeNumber(texts[i]);
       out.betsuhyouItems = cont ? [...out.betsuhyouItems, ...items] : items;
       out.betsuhyouWarn = cont ? [...out.betsuhyouWarn, ...warn.map((w) => `(${out.betsuhyouPages} ページ目) ${w}`)] : warn;
       out.betsuhyouPublicExpense = cont ? [...out.betsuhyouPublicExpense, ...(publicExpenseByProvider ?? [])] : (publicExpenseByProvider ?? []);

@@ -59,6 +59,8 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { dirname, join, basename } from "node:path";
 import { fileURLToPath } from "node:url";
 import { findKyFiles, readKy8222Lines } from "./_ky-parse.mjs";
+import { resolveByBetsuhyouHeader } from "../migrations/_client_resolve.mjs";
+import { normName } from "../migrations/_name_normalize.mjs";
 import { rowMonthlyUnitsOf, isMonthlyUnitType, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
 import { rentalMonthlyUnits, type RentalRowLike } from "@/lib/rental-units";
 import { recordMonthActualUnits, splitInsuranceRecords, type EquipmentRecordLike } from "@/lib/equipment-record-units";
@@ -463,6 +465,70 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
     const nW = runM(negWipeAll).length, nS = runM(negNoStop).length;
     if (!nW || !nS) { console.error(`✗ FAIL: 負のコントロールが鳴らない (全部消す ${nW} / 停止を外す ${nS})`); process.exit(1); }
     console.log(`取込の貸与行の入れ替え: 境界 ${mc.length} 件 + 印の無い取込行 + 出どころ別件数 OK / 負のコントロール 全部消す→${nW}・停止を外す→${nS} 件 落ちる ✓ (★ 実データ未検証のため境界テストのみ)`);
+  }
+
+  // 別表ヘッダだけで client を引く resolveByBetsuhyouHeader (migrations/_client_resolve.mjs・2026-11-13 H 指示)。
+  // 第7表の取込と貸与の単位埋めの両方が使う。DB は使わず、表を模した在メモリの sb で境界を見る
+  {
+    type T = Record<string, unknown>;
+    const db: Record<string, T[]> = {
+      client_insurance_records: [
+        { id: "r1", client_id: "c1", insured_number: "1111111111" }, { id: "r2", client_id: "c2", insured_number: "2222222222" },
+        { id: "r3", client_id: "c3", insured_number: "3333333333" }, { id: "r4", client_id: "c4", insured_number: "3333333333" },
+        { id: "r5", client_id: "c5", insured_number: "5555555555" },
+        { id: "r6", client_id: "c6", insured_number: "4444444444" }, { id: "r7", client_id: "c7", insured_number: "4444444444" },
+      ],
+      clients: [
+        { id: "c1", name: "山田 太郎", deleted_at: null }, { id: "c2", name: "佐藤 花子", deleted_at: null },
+        { id: "c3", name: "鈴木 一郎", deleted_at: null }, { id: "c4", name: "鈴木　一郎", deleted_at: null },
+        { id: "c5", name: "田中 春子", deleted_at: "2026-01-01" },
+        { id: "c6", name: "高橋 次郎", deleted_at: null }, { id: "c7", name: "伊藤 三郎", deleted_at: null },
+      ],
+      offices: [{ id: "o1", business_number: "1270000001" }],
+      client_office_assignments: [{ id: "a1", client_id: "c1", office_id: "o1" }, { id: "a3", client_id: "c3", office_id: "o1" }],
+    };
+    const mockSb = {
+      from(table: string) {
+        const filters: [string, unknown[]][] = [];
+        const q = {
+          select() { return q; }, order() { return q; },
+          in(col: string, vals: unknown[]) { filters.push([col, vals]); return q; },
+          range(from: number, to: number) {
+            const rows = (db[table] ?? []).filter((r) => filters.every(([c, v]) => v.includes(r[c])));
+            return Promise.resolve({ data: rows.slice(from, to + 1), error: null });
+          },
+        };
+        return q;
+      },
+    };
+    type E = { key: string; insured: string; name: string; officeNumber?: string | null };
+    type BC = [E, string, string]; // 期待: "c1" / "c1!warn" / "c3~note" / "x" (引き当て不能)
+    const bc: BC[] = [
+      [{ key: "ok", insured: "1111111111", name: "山田 太郎", officeNumber: "1270000001" }, "c1", "被保番+氏名+割当 → 引く"],
+      [{ key: "ins", insured: "1111111112", name: "山田 太郎", officeNumber: "1270000001" }, "x", "★ 負: 被保番が 1 桁違う → 引けない"],
+      [{ key: "nm", insured: "1111111111", name: "山田 太朗", officeNumber: "1270000001" }, "x", "★ 負: 氏名が 1 文字違う → 引けない"],
+      [{ key: "noasg", insured: "2222222222", name: "佐藤 花子", officeNumber: "1270000001" }, "c2!warn", "割当なし → 引くが warn (必須条件にしない)"],
+      [{ key: "nooff", insured: "1111111111", name: "山田 太郎", officeNumber: "9999999999" }, "c1!warn", "事業所番号が offices に無い → 引くが warn"],
+      [{ key: "noNum", insured: "1111111111", name: "山田 太郎" }, "c1", "事業所番号なし → 従来どおり 2 点で引く"],
+      [{ key: "dup", insured: "3333333333", name: "鈴木 一郎", officeNumber: "1270000001" }, "c3~note", "同姓同名 2 人 → 割当で 1 人に絞る"],
+      [{ key: "dupNoNum", insured: "3333333333", name: "鈴木 一郎" }, "x", "同姓同名 2 人・事業所番号なし → 引けない"],
+      [{ key: "del", insured: "5555555555", name: "田中 春子" }, "x", "削除済みの client → 引けない"],
+      [{ key: "coll", insured: "4444444444", name: "高橋 次郎" }, "c6", "同じ被保番の別人がいても氏名で 1 人"],
+    ];
+    type RB = (sb: never, e: E[], o: { normalizeName: (s: string) => string }) => Promise<{ resolved: Map<string, { clientId?: string; warn?: string; note?: string; reason?: string }> }>;
+    const runB = async (fn: RB, norm: (s: string) => string) => {
+      const { resolved } = await fn(mockSb as never, bc.map(([e]) => e), { normalizeName: norm });
+      const got = (k: string) => { const r = resolved.get(k); return !r?.clientId ? "x" : `${r.clientId}${r.warn ? "!warn" : ""}${r.note ? "~note" : ""}`; };
+      return bc.filter(([e, want]) => got(e.key) !== want).map(([e, want, label]) => `${e.key}: ${got(e.key)} / 期待 ${want} (${label})`);
+    };
+    const rb = resolveByBetsuhyouHeader as unknown as RB;
+    const badB = await runB(rb, normName);
+    for (const x of badB) console.error(`✗ resolveByBetsuhyouHeader ${x}`);
+    if (badB.length) { console.error("✗ FAIL: 別表ヘッダの引き当ての境界が崩れている"); process.exit(1); }
+    // 負のコントロール: 氏名を見ない (= 被保番だけで引く) と、氏名 1 文字違い・同姓同名の境界で鳴ること
+    const negNoName = await runB(rb, () => "");
+    if (!negNoName.some((x) => x.startsWith("nm:"))) { console.error(`✗ FAIL: 負のコントロールが鳴らない (氏名を見ない → ${negNoName.length} 件)`); process.exit(1); }
+    console.log(`別表ヘッダの引き当て: 境界 ${bc.length} 件 OK (被保番違い・氏名 1 文字違いは引けない / 割当なしは warn) / 負のコントロール 氏名を見ない→${negNoName.length} 件 落ちる ✓`);
   }
 }
 

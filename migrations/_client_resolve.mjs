@@ -111,6 +111,85 @@ export async function resolveClients(sb, people, opts = {}) {
   return { byPair, nameById };
 }
 
+/**
+ * 別表 (第7表) ページ先頭のヘッダだけで client を引き当てる (2026-11-13。H 指示で
+ * import_care_plan3_usage_detail_from_pdf.mjs と fill_rental_units_from_betsuhyou.mjs の同じ処理を寄せた)。
+ *
+ * ヘッダには保険者番号が印字されないので、(被保番, 氏名) の **両方が一致する client が 1 人**のときだけ引き当てる。
+ *   ・被保番だけでは引かない (保険者の中でしか一意でない。別人衝突の実例 28 件)
+ *   ・氏名だけでも引かない (memory feedback_name_based_lookup_collision_risk)
+ *
+ * 居宅支援事業者番号 (officeNumber) が渡されたとき (H 指示 2026-11-13):
+ *   ・★ 必須条件にはしない。client_office_assignments は実際に欠けていることがある既知の穴で
+ *     (市原 鈴木浩隆・大網あい は割当が居宅にしか無く実績 0 件になっていた)、必須にすると本来入る人が静かに落ちる
+ *   ・(被保番, 氏名) で 2 人以上残ったときだけ、その事業所に割当がある人で絞る (1 人に決まれば引き当てる)
+ *   ・1 人に決まったが その事業所に割当が無い / 番号が offices に無い → 引き当てたうえで warn を付ける
+ *     (割当の欠落そのものが別の不具合の兆候なので、見えるようにする)
+ *
+ * @param {import("@supabase/supabase-js").SupabaseClient} sb
+ * @param {Array<{key: string, insured: string, name: string, officeNumber?: string | null}>} entries  key は呼出側が決める (1 人 1 つ)
+ * @param {{normalizeName: (s: string) => string}} opts  氏名の正規化 (呼出側と同じ関数を渡す)
+ * @returns {Promise<{resolved: Map<string, {clientId: string, name: string, warn?: string, note?: string} | {reason: string}>, names: Map<string, string>}>}
+ *          names は 被保番が一致した client (削除済みを除く) の id → 氏名
+ */
+export async function resolveByBetsuhyouHeader(sb, entries, opts) {
+  const norm = opts.normalizeName;
+  const CH = 150;
+  const insureds = [...new Set(entries.map((e) => e.insured))];
+  const recs = [];
+  for (let i = 0; i < insureds.length; i += CH)
+    recs.push(...await fetchAll(sb, (c) => c.from("client_insurance_records").select("id, client_id, insured_number")
+      .in("insured_number", insureds.slice(i, i + CH)).order("id")));
+  const cids = [...new Set(recs.map((r) => r.client_id))];
+  const names = new Map();
+  for (let i = 0; i < cids.length; i += CH)
+    for (const c of await fetchAll(sb, (q) => q.from("clients").select("id, name, deleted_at").in("id", cids.slice(i, i + CH)).order("id")))
+      if (!c.deleted_at) names.set(c.id, c.name ?? "");
+  const hitsOf = (e) => {
+    const cand = [...new Set(recs.filter((r) => r.insured_number === e.insured).map((r) => r.client_id))].filter((id) => names.has(id));
+    return { cand, hit: cand.filter((id) => norm(names.get(id)) === norm(e.name)) };
+  };
+
+  // ── 居宅支援事業者番号 → offices.id、(client, office) の割当 ──
+  const officeNumbers = [...new Set(entries.map((e) => e.officeNumber).filter(Boolean))];
+  const officeIdsByNumber = new Map(); // 番号 -> Set(office_id)
+  const assigned = new Set(); // `${client_id}|${office_id}`
+  if (officeNumbers.length) {
+    for (const o of await fetchAll(sb, (q) => q.from("offices").select("id, business_number").in("business_number", officeNumbers).order("id")))
+      (officeIdsByNumber.get(o.business_number) ?? officeIdsByNumber.set(o.business_number, new Set()).get(o.business_number)).add(o.id);
+    const hitIds = [...new Set(entries.filter((e) => e.officeNumber).flatMap((e) => hitsOf(e).hit))];
+    const oids = [...new Set([...officeIdsByNumber.values()].flatMap((s) => [...s]))];
+    for (let i = 0; i < hitIds.length && oids.length; i += CH)
+      for (const a of await fetchAll(sb, (q) => q.from("client_office_assignments").select("id, client_id, office_id")
+        .in("client_id", hitIds.slice(i, i + CH)).in("office_id", oids).order("id")))
+        assigned.add(`${a.client_id}|${a.office_id}`);
+  }
+  const isAssigned = (clientId, num) => [...(officeIdsByNumber.get(num) ?? [])].some((oid) => assigned.has(`${clientId}|${oid}`));
+
+  const resolved = new Map();
+  for (const e of entries) {
+    const { cand, hit } = hitsOf(e);
+    if (hit.length === 1) {
+      const r = { clientId: hit[0], name: names.get(hit[0]) };
+      if (e.officeNumber && !officeIdsByNumber.has(e.officeNumber)) r.warn = `居宅支援事業者番号 ${e.officeNumber} が offices に無い (割当を確かめられない)`;
+      else if (e.officeNumber && !isAssigned(hit[0], e.officeNumber)) r.warn = `居宅支援事業者番号 ${e.officeNumber} の事業所に client_office_assignments が無い (引き当ては 被保番+氏名 で成立。割当の欠落を確かめる)`;
+      resolved.set(e.key, r);
+      continue;
+    }
+    if (hit.length > 1 && e.officeNumber) {
+      const narrowed = hit.filter((id) => isAssigned(id, e.officeNumber));
+      if (narrowed.length === 1) {
+        resolved.set(e.key, { clientId: narrowed[0], name: names.get(narrowed[0]), note: `被保番+氏名で ${hit.length} 人 → 居宅支援事業者番号 ${e.officeNumber} の割当で 1 人に絞った` });
+        continue;
+      }
+      resolved.set(e.key, { reason: `別表ヘッダ 被保番${e.insured}「${e.name}」→ 被保番の一致 ${cand.length} 人 / うち氏名も一致 ${hit.length} 人 / うち事業所 ${e.officeNumber} の割当あり ${narrowed.length} 人 (1 人に決まらない)` });
+      continue;
+    }
+    resolved.set(e.key, { reason: `別表ヘッダ 被保番${e.insured}「${e.name}」→ 被保番の一致 ${cand.length} 人 / うち氏名も一致 ${hit.length} 人 (1 人に決まらない)` });
+  }
+  return { resolved, names };
+}
+
 // nameKey は呼出側 (normRiyouName 等) で既に正規化済みの前提。ここでは
 // DB 側の生の氏名を同じ土俵に上げるためだけに使う最小限の正規化に留める
 // (空白除去のみ。異体字正規化などは呼出側の normRiyouName に任せる)。
