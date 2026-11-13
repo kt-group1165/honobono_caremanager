@@ -18,8 +18,15 @@
 // キー = (事業所, 品目名)。事業所は 利用票側が 10 文字ほどで切れているので「別表の事業所名が利用票の事業所名で始まる」で当てる。
 //   A 一意     そのキーが 利用票 1 行・別表 1 行                      → 埋める
 //   B 多重同値  利用票 n 行・別表 n 行 で 別表の単位が全部同じ          → 埋める (並び順が違っても結果が同じ)
-//   C 多重異値  利用票 n 行・別表 n 行 で 別表の単位が違う              → ★ 埋めない。どの商品がいくらかが
-//              入れ替わったまま固定され、合計は合うので検算で気づけない
+//   C 多重異値  利用票 n 行・別表 n 行 で 別表の単位が違う  (2026-11-13 H 指示で C1/C2 に分けた)
+//     C1 行を見分けられない: グループ内の全行で 印 (予定・実績) が同じ・どれも未投入 → 値の集合を入れる
+//        _units_source = "betsuhyou_set_<月>"。品目名・事業所・印が同じなので、どの行にどの額を入れても
+//        行の見た目も月計 (rental_month_actual_units は按分しない) も変わらない = 並び順に頼っていない
+//        ★ 書くのは 人ごとに ① グループ合計 = 別表のグループ合計 ② 別表の貸与合計 = KY 8222 の種類 17/67 合計
+//          (居宅事業所番号・被保番・月で引く) の両方が通ったときだけ。KY に居ない人は書かない
+//        ⚠ H の指示は「autoRentalPeriodType の結果が同じ」だが、node から TS を呼べないので「印が全行同じ」で判定する。
+//          こちらのほうが厳しい (印が同じなら按分区分も同じ)。印が違うが区分が同じ行は C2 に倒れる (書かない側)
+//     C2 行を見分けられる (印が行ごとに違う / 一部投入済み) → ★ 埋めない。全件を出力に残す
 //   D 行数違い  利用票 n 行・別表 m 行 (n≠m) / 事業所が当たらない      → 埋めない
 //   (旧 E 月途中 は 2026-11-13 に廃止)
 //      以前は manual_units に入れていたので、画面が印で半月と判定すると半額をさらに半分にした。それを避けるため
@@ -43,6 +50,7 @@ import { fileURLToPath } from "node:url";
 import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
 import { resolveClients, resolveByBetsuhyouHeader } from "./_client_resolve.mjs";
 import { normName } from "./_name_normalize.mjs";
+import { findKyFiles, readKy8222Lines } from "../scripts/_ky-parse.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
 const PDF_PATHS = process.argv.flatMap((a, i, arr) => (a === "--pdf" ? [arr[i + 1]] : []));
@@ -59,6 +67,26 @@ const normProv = (s) => (s ?? "").normalize("NFKC").replace(/[\s　]/g, "");
 const isRentalCode = (c) => /^(17|67)\d{4}$/.test(c ?? "");
 
 const hasUnits = (r) => Number(r.manual_units) > 0 || Number(r.rental_month_actual_units) > 0;
+/** 行を見分ける材料は印 (予定・実績) だけ (品目名・事業所は同じグループ内で同じ)。印が全行同じなら行は見分けられない */
+const marksKey = (s) => JSON.stringify([s.planned ?? [], s.actual ?? []]);
+
+// KY 8222 の 貸与 (種類 17/67) の合計: `${居宅事業所番号}|${被保番}|${YYYYMM}` → 単位。
+// 同じ月の KY が当初 (KY2607xx) と修正 (KY2608xx) の 2 本にあることがある (岡本 ふみ子)。人ごとに ★ 後のファイルの行で置き換える
+const kyCache = new Map();
+function kyRentalTotals(ymCompact) {
+  if (kyCache.has(ymCompact)) return kyCache.get(ymCompact);
+  const tot = new Map();
+  for (const f of findKyFiles(path.join(KAIGO, "伝送データ"), ymCompact)) { // sort 済み = 送信順
+    const inFile = new Map();
+    for (const l of readKy8222Lines(f, ymCompact)) {
+      const k = `${l.kyotakuOffice}|${l.insured}|${l.ym}`;
+      inFile.set(k, (inFile.get(k) ?? 0) + (["17", "67"].includes(l.serviceKind) ? l.plannedUnits : 0));
+    }
+    for (const [k, v] of inFile) tot.set(k, v);
+  }
+  kyCache.set(ymCompact, tot);
+  return tot;
+}
 const existingUnits = (r) => (Number(r.manual_units) > 0 ? { v: Number(r.manual_units), kind: "単価" } : { v: Number(r.rental_month_actual_units), kind: "実額" });
 
 async function main() {
@@ -77,9 +105,11 @@ async function main() {
     headerOnly.map((b) => ({ key: `${b.file}#${b.idx}`, insured: b.betsuhyouHeader.insured, name: b.betsuhyouHeader.name, officeNumber: b.betsuhyouOfficeNumber })), { normalizeName: normName });
 
   const st = { 人: persons.length, 特定できない: 0, 別表の行が読めない: 0, 別表に貸与なし: 0, 別表の警告あり: 0, 利用票なし: 0, 利用票に貸与行なし: 0 };
-  const cls = { A: 0, B: 0, C: 0, D: 0, 投入済み: 0 };
+  const cls = { A: 0, B: 0, C1: 0, C1_KY無し: 0, C1_KY不一致: 0, C2: 0, D: 0, 投入済み: 0 };
+  const c2List = []; // C2 は全件出す (H 指示: 件数と氏名・品目を残す)
+  const c1Out = []; // C1 を KY 検算で書かなかった人
   const plans = []; // { docId, content, fills: [{ i, units }] }
-  const examples = { C: [], D: [] };
+  const examples = { D: [] };
   const existingMismatch = [];
   for (const b of persons) {
     const key = `${b.file}#${b.idx}`;
@@ -110,6 +140,7 @@ async function main() {
     const groups = new Map();
     for (const r of rows) { const k = `${normProv(r.s.provider)}|${r.s.content}`; (groups.get(k) ?? groups.set(k, []).get(k)).push(r); }
     const fills = [];
+    const setGroups = []; // C1 の候補 (人ごとの KY 検算の後で書く)
     for (const [k, rs] of groups) {
       const [prov, content] = [k.slice(0, k.indexOf("|")), k.slice(k.indexOf("|") + 1)];
       const its = items.filter((it) => it.service_content === content && prov && normProv(it.provider_name).startsWith(prov));
@@ -125,11 +156,37 @@ async function main() {
       }
       if (its.length !== rs.length || !its.length) { cls.D += rs.length; if (examples.D.length < 6) examples.D.push(`${label} 利用票 ${rs.length} 行 / 別表 ${its.length} 行`); continue; }
       const unitsSet = new Set(its.map((it) => Number(it.service_units)));
-      if (rs.length > 1 && unitsSet.size > 1) { cls.C += rs.length; if (examples.C.length < 6) examples.C.push(`${label} ${rs.length} 行 単位 ${its.map((it) => it.service_units).join("/")}`); continue; }
+      if (rs.length > 1 && unitsSet.size > 1) {
+        // C1 (行を見分けられない = 印が全行同じ・どれも未投入): 値の集合を入れるだけで、どの順でも行の見た目も月計も同じ
+        // C2 (印が行ごとに違う / 一部投入済み): どの行にどの額が対応するかで意味が変わる → 埋めない
+        if (rs.every((r) => !hasUnits(r.s)) && new Set(rs.map((r) => marksKey(r.s))).size === 1) setGroups.push({ rs, its, label });
+        else { cls.C2 += rs.length; c2List.push(`${label} ${rs.length} 行 単位 ${its.map((it) => it.service_units).join("/")}${rs.some((r) => hasUnits(r.s)) ? " (一部投入済み)" : " (印が行ごとに違う)"}`); }
+        continue;
+      }
       for (const [j, r] of rs.entries()) {
         if (hasUnits(r.s)) { cls.投入済み++; continue; }
-        fills.push({ i: r.i, units: Number(its[j].service_units) });
+        fills.push({ i: r.i, units: Number(its[j].service_units), src: `betsuhyou_${ym}` });
         cls[rs.length === 1 ? "A" : "B"]++;
+      }
+    }
+    // C1 を書くのは 人ごとの検算 2 つが通ったときだけ (H 指示 2026-11-13)
+    //   ① グループの合計 = 別表のそのグループの合計 (値の集合をそのまま入れるので必ず成り立つが、明示して確かめる)
+    //   ② その人の別表の貸与合計 = KY 8222 の種類 17/67 の合計 (居宅事業所番号・被保番・月で引く)
+    if (setGroups.length) {
+      const insured = b.betsuhyouHeader?.insured ?? b.riyouhyouIdentity?.insured;
+      const kyTot = b.betsuhyouOfficeNumber && insured ? kyRentalTotals(ym.replace("-", "")).get(`${b.betsuhyouOfficeNumber}|${insured}|${ym.replace("-", "")}`) : undefined;
+      const mine = items.reduce((s, it) => s + Number(it.service_units), 0);
+      const n = setGroups.reduce((s, g) => s + g.rs.length, 0);
+      const who = names.get(clientId) ?? b.betsuhyouHeader?.name ?? "";
+      if (kyTot === undefined) { cls.C1_KY無し += n; c1Out.push(`${who} ${ym}: KY 8222 に居ない (居宅事業所 ${b.betsuhyouOfficeNumber ?? "不明"}) → C1 ${n} 行を書かない`); }
+      else if (kyTot !== mine) { cls.C1_KY不一致 += n; c1Out.push(`${who} ${ym}: 別表の貸与合計 ${mine} ≠ KY ${kyTot} → C1 ${n} 行を書かない`); }
+      else {
+        for (const g of setGroups) {
+          const add = g.rs.map((r, j) => ({ i: r.i, units: Number(g.its[j].service_units), src: `betsuhyou_set_${ym}` }));
+          if (add.reduce((s, f) => s + f.units, 0) !== g.its.reduce((s, it) => s + Number(it.service_units), 0)) throw new Error(`グループ合計の検算が合わない: ${g.label}`);
+          fills.push(...add);
+          cls.C1 += add.length;
+        }
       }
     }
     if (fills.length) plans.push({ docId: doc.id, ym, content: doc.content, fills, name: names.get(clientId) ?? "" });
@@ -140,10 +197,14 @@ async function main() {
   console.log("\n■ 利用票の貸与行の分類 (行数)");
   console.log(`  A 一意 → 埋める          ${cls.A}`);
   console.log(`  B 多重・単位同じ → 埋める ${cls.B}`);
-  console.log(`  C 多重・単位違う (並び順に頼る) → 埋めない ${cls.C}`);
+  console.log(`  C1 多重・単位違う・行を見分けられない (印が全行同じ) → 値の集合を埋める ${cls.C1}`);
+  console.log(`     うち KY 検算で書かない: KY に居ない ${cls.C1_KY無し} / 貸与合計が KY と違う ${cls.C1_KY不一致}`);
+  console.log(`  C2 多重・単位違う・行を見分けられる (印が違う / 一部投入済み) → 埋めない ${cls.C2}`);
   console.log(`  D 行数違い・事業所が当たらない → 埋めない ${cls.D}`);
   console.log(`  既に単位あり (単価 or 実額・触らない) ${cls.投入済み}`);
-  for (const t of ["C", "D"]) if (examples[t].length) { console.log(`  ${t} の例:`); for (const x of examples[t]) console.log(`    ${x}`); }
+  if (c1Out.length) { console.log("  C1 を書かなかった人:"); for (const x of c1Out) console.log(`    ${x}`); }
+  if (c2List.length) { console.log("  C2 (全件):"); for (const x of c2List) console.log(`    ${x}`); }
+  if (examples.D.length) { console.log("  D の例:"); for (const x of examples.D) console.log(`    ${x}`); }
   const officeNotes = [...headerResolved.values()].filter((r) => r.warn || r.note);
   if (officeNotes.length) {
     console.log(`\n■ 別表の居宅支援事業者番号 (引き当ては成立・書く) ${officeNotes.length} 人`);
@@ -163,12 +224,14 @@ async function main() {
     const services = p.content.services.map((s, i) => {
       const f = p.fills.find((x) => x.i === i);
       // 別表の単位は「その月の実額」(半月なら半額)。単価 (manual_units) とは別の列に入れる。画面は按分しない
-      return f ? { ...s, rental_month_actual_units: f.units, _units_source: `betsuhyou_${p.ym}` } : s;
+      return f ? { ...s, rental_month_actual_units: f.units, _units_source: f.src } : s;
     });
     const content = { ...p.content, services, _betsuhyou_fill: { at: new Date().toISOString().slice(0, 10), n: p.fills.length } };
     const { data, error } = await sb.from("kaigo_report_documents").update({ content, updated_at: new Date().toISOString() }).eq("id", p.docId).select("id, content");
     if (error || (data ?? []).length !== 1) { console.error(`✗ 更新失敗 ${p.name} ${p.ym}: ${error?.message ?? "件数≠1"} (ここまでは退避ファイルから戻せる)`); process.exit(1); }
-    const got = data[0].content.services.filter((s) => s._units_source === `betsuhyou_${p.ym}`).length;
+    // 書いた行だけを位置で確かめる (以前の実行で埋めた行が同じ帳票にあっても数え違えない)
+    const back = data[0].content.services;
+    const got = p.fills.filter((f) => back[f.i]?._units_source === f.src && Number(back[f.i]?.rental_month_actual_units) === f.units).length;
     if (got !== p.fills.length) { console.error(`✗ 検算失敗 ${p.name}: ${got} / ${p.fills.length}`); process.exit(1); }
     done++;
   }
