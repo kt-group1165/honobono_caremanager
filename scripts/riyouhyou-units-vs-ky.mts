@@ -363,6 +363,7 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
       [5000, [it("身体介護１", 9549), it("訪問介護同一建物減算１", -955)], 9549, "service-usage-detail", "同一建物減算は対象外 (KY 4/4)"],
       [5000, [it("通所介護送迎減算", -846), it("通所介護Ⅰ１１", 5106)], 4260, "service-usage-detail", "送迎減算は対象 (KY と一致)"],
       [5000, [it("居宅療養小規模事業所加算", 26), it("緊急時訪問看護加算Ⅱ１", 574), it("訪看Ⅰ３", 823)], 823, "service-usage-detail", "居宅療養・緊急時訪問看護は対象外"],
+      [5000, [it("通所リハ提供体制加算４", 336), it("通所リハサービス提供体制加算Ⅰ", 308), it("通所リハⅢ２６３", 981)], 1317, "service-usage-detail", "★ 通所リハ提供体制加算は対象 / サービス提供体制は対象外 (岩見 幸一・KY)"],
     ];
     type LF = (u: number, d: { service_content: string; service_units: number }[] | null) => { units: number; source: string };
     const runL = (fn: LF) => lc.filter(([u, d, want, src]) => { const r = fn(u, d); return r.units !== want || r.source !== src; });
