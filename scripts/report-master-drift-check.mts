@@ -44,6 +44,47 @@ for (const l of readFileSync(join(__dirname, "..", ".env.local"), "utf8").split(
 }
 const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
+// ── 別掲: 月の途中で認定が切り替わった帳票 (2026-11-14 H 判断) ─────────────────────
+//   対象月に期間が重なる認定 (status を問わない。申請中も含む) に 要介護度が 2 種類以上あると、
+//   「対象月に有効な認定」が 1 つに決まらず、どれを選んでも残りと原理的に食い違う。
+//   例: 2026-07 の利用票 — 要支援2 (〜07-22) / 要介護4 認定済み (07-23〜) / 要介護5 申請中 (07-23〜)。
+//   ほのぼのは 申請中の 要介護5 で刷り、検査は 要介護4 を選んで食い違いになった。
+//   ★ 合否から外すのは「保存値が 月内に重なる認定のどれかと一致する」ものだけ。どれとも一致しなければ従来どおり食い違い。
+//   ★ certification_id で認定を名指ししている帳票は外さない (選び方の問題ではないため)。
+//   ★ 外した件数と内訳は必ず出力する (分母が見えないまま減らさない)。基準値は上げない。
+type CertLike = { care_level: string | null; certification_start_date: string | null; certification_end_date: string | null };
+export function midMonthAsideLevels(saved: string | null, linkedId: string | null, rows: CertLike[], reportMonth: string | null): string[] | null {
+  if (!saved || linkedId) return null;
+  const ym = parseYearMonth(reportMonth);
+  if (!ym) return null;
+  const { from, to } = monthRange(ym.year, ym.month);
+  const inMonth = rows.filter((r) => r.certification_start_date && r.certification_start_date <= to && (!r.certification_end_date || r.certification_end_date >= from));
+  // ★ 月の中に切れ目 (2 日以降に始まる / 月末より前に終わる) がある月だけ。申請中と認定済みが月を通して並んでいるだけの月は外さない
+  const hasBoundary = inMonth.some((r) => r.certification_start_date! > from || (!!r.certification_end_date && r.certification_end_date < to));
+  const levels = [...new Set(inMonth.map((r) => r.care_level).filter((l): l is string => !!l))].sort();
+  return hasBoundary && levels.length >= 2 && levels.includes(saved) ? levels : null;
+}
+{ // 境界 (DB 不要)。外しすぎない・外し漏れない を確かめる
+  const c = (care_level: string, s: string, e: string | null) => ({ care_level, certification_start_date: s, certification_end_date: e });
+  const mid = [c("要支援2", "2026-06-01", "2026-07-22"), c("要介護4", "2026-07-23", "2027-07-31"), c("要介護5", "2026-07-23", null)];
+  const cases: [string, string | null, string | null, CertLike[], string, boolean][] = [
+    ["月途中切替・保存値が月内の 1 つ", "要介護5", null, mid, "2026-07", true],
+    ["月途中切替・保存値がどれとも違う", "要介護1", null, mid, "2026-07", false],
+    ["翌月 (申請中と認定済みが月を通して並ぶだけ・切れ目なし)", "要介護5", null, mid, "2026-08", false],
+    ["前月 (月内は 1 種類)", "要支援2", null, mid, "2026-06", false],
+    ["認定を名指ししている帳票", "要介護5", "x", mid, "2026-07", false],
+    ["月外で終わった認定は数えない", "要介護1", null, [c("要介護1", "2025-01-01", "2026-06-30"), c("要介護2", "2026-07-01", null)], "2026-07", false],
+    ["月末の 1 日だけ重なる", "要介護3", null, [c("要介護2", "2026-01-01", "2026-07-30"), c("要介護3", "2026-07-31", null)], "2026-07", true],
+  ];
+  const bad = cases.filter(([, s, l, r, m, want]) => (midMonthAsideLevels(s, l, r, m) !== null) !== want);
+  // 負のコントロール: 「保存値が月内のどれかと一致」を見ないと、どれとも違う帳票まで外してしまう
+  const loose = (s: string | null, l: string | null, r: CertLike[], m: string | null) => { const v = midMonthAsideLevels(r.find((x) => x.care_level)?.care_level ?? null, l, r, m); return s ? v : null; };
+  const negBad = cases.filter(([, s, l, r, m, want]) => (loose(s, l, r, m) !== null) !== want).length;
+  if (bad.length || negBad === 0) { console.error(`✗ 別掲の判定 midMonthAsideLevels: 境界 ${bad.map((b) => b[0]).join(" / ") || "OK"} / 負のコントロール ${negBad ? "鳴った" : "鳴らない"}`); process.exit(1); }
+  console.log(`別掲の判定 midMonthAsideLevels: 境界 ${cases.length} 件 OK / 負のコントロール 保存値を見ない→${negBad} 件 落ちる ✓`);
+  if (process.env.SELFTEST_ONLY === "1") process.exit(0); // DB を読まずに境界だけ確かめる
+}
+
 const REPORT_TYPES = ["care-plan-1", "care-plan-3", "yobo-care-plan", "service-usage", "service-usage-detail"];
 const PAGE = 1000;
 
@@ -115,6 +156,7 @@ async function main() {
 
   const byType = new Map<string, { comparable: number; mismatch: number }>();
   const serviceUsageDetail: { doc_id: string; user_id: string; report_month: string | null; saved_care_level: string; current_care_level: string }[] = [];
+  const asideByType = new Map<string, { doc_id: string; report_month: string | null; saved: string; picked: string; levels: string[] }[]>();
 
   for (const d of docs) {
     const rows = certByUser.get(d.user_id) ?? [];
@@ -126,7 +168,12 @@ async function main() {
     t.comparable++;
     const saved = typeof d.content.care_level === "string" ? d.content.care_level : null;
     const mismatch = !!saved && saved !== "" && saved !== cert.care_level;
-    if (mismatch) {
+    const asideLevels = mismatch ? midMonthAsideLevels(saved, d.certification_id, rows, d.report_month) : null;
+    if (asideLevels) {
+      const a = asideByType.get(d.report_type) ?? [];
+      a.push({ doc_id: d.id, report_month: d.report_month, saved: saved!, picked: cert.care_level ?? "", levels: asideLevels });
+      asideByType.set(d.report_type, a);
+    } else if (mismatch) {
       t.mismatch++;
       if (d.report_type === "service-usage") {
         serviceUsageDetail.push({ doc_id: d.id, user_id: d.user_id, report_month: d.report_month, saved_care_level: saved!, current_care_level: cert.care_level ?? "" });
@@ -151,6 +198,14 @@ async function main() {
   }
   const totalMismatch = [...byType.values()].reduce((s, v) => s + v.mismatch, 0);
   console.log(`  合計: ${totalMismatch}件`);
+  const asideTotal = [...asideByType.values()].reduce((s, v) => s + v.length, 0);
+  console.log(`\n=== 別掲 (合否に入れない): 月の途中で認定が切り替わった帳票 ${asideTotal} 件 ===`);
+  console.log(`  対象月に重なる認定に要介護度が 2 種類以上あり、保存値はそのどれかと一致する (= 有効な認定が 1 つに決まらない)。`);
+  console.log(`  ★ 上の「食い違い件数」には入れていない。保存値が月内のどれとも違うものは従来どおり食い違いに数える`);
+  for (const [t, v] of asideByType) {
+    console.log(`  ${t}: ${v.length} 件`);
+    for (const a of v.slice(0, 20)) console.log(`    ${a.report_month} 保存 ${a.saved} / 検査が選んだ ${a.picked} / 月内の要介護度 ${a.levels.join("・")}  doc ${a.doc_id}`);
+  }
 
   // ── ついでに測ったもの: 認定済みなのに期限切れの件数 (直さない・報告のみ) ──
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -193,6 +248,12 @@ async function main() {
         "  要支援2 (2026-04〜) と 要介護2 (2026-06-01〜) が重なり、開始日が新しい 要介護2 を採る",
         "  (請求と同じ)。利用票は 8/31 04:58 保存、要介護2 の認定行は同日 15:54 登録 = 認定更新による自然な差。",
         "  負のコントロール: NEG_CONTROL=1 で わざと月外の認定を選ばせると service-usage 1175 件で FAIL する。",
+        "",
+        "■ 2026-11-14 月の途中で認定が切り替わった帳票は別掲 (合否から外す・件数と内訳は出力に出す)",
+        "  対象月に重なる認定に要介護度が 2 種類以上あると、有効な認定が 1 つに決まらず原理的に食い違う。",
+        "  基準値を上げると、月途中切替の人が増えるたびに上げ続けることになり検査が効かなくなるので、上げずに別掲にした。",
+        "  外すのは「月の中に認定の切れ目があり、保存値が月内に重なる認定のどれかと一致し、certification_id が無い」帳票だけ。",
+        "  実例: 2026-07 の利用票 1 件 (要支援2 → 要介護4 認定済み / 要介護5 申請中。ほのぼのは申請中の要介護5 で印字)。",
         "",
         "■ 0を目指さない",
         "  表示・印刷はsrc/lib/report-master-fields.tsで既にマスタ優先に是正済み",
