@@ -72,6 +72,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const BASELINE = join(HERE, "riyouhyou-units-baseline.json");
 const UPDATE = process.argv.includes("--update");
+// ★ CHECK_MONTH=2026-07 で その月だけを読み、基準値と比べずに結果だけ出す (2026-11-14 H 依頼: 2 か月目の一致率を 1 か月目と比べる)
+const CHECK_MONTH = process.env.CHECK_MONTH ?? "";
+if (CHECK_MONTH && !/^\d{4}-\d{2}$/.test(CHECK_MONTH)) { console.error("CHECK_MONTH は YYYY-MM"); process.exit(1); }
+if (CHECK_MONTH && UPDATE) { console.error("CHECK_MONTH と --update は同時に使わない (基準値を 1 か月ぶんで上書きしてしまう)"); process.exit(1); }
 const DETAIL = process.argv.includes("--detail");
 
 type Svc = {
@@ -99,11 +103,11 @@ function restGet(): (q: string) => Promise<unknown[]> {
   };
 }
 async function loadDocs(): Promise<Doc[]> {
-  if (process.env.DOCS_CACHE) return JSON.parse(readFileSync(process.env.DOCS_CACHE, "utf8")) as Doc[];
+  if (process.env.DOCS_CACHE) return (JSON.parse(readFileSync(process.env.DOCS_CACHE, "utf8")) as Doc[]).filter((d) => !CHECK_MONTH || d.report_month === CHECK_MONTH);
   const get = restGet();
   const out: Doc[] = [];
   for (let off = 0; ; off += 1000) {
-    const d = await get(`kaigo_report_documents?select=id,user_id,report_month,content&report_type=eq.service-usage&order=id.asc&limit=1000&offset=${off}`) as Doc[];
+    const d = await get(`kaigo_report_documents?select=id,user_id,report_month,content&report_type=eq.service-usage${CHECK_MONTH ? `&report_month=eq.${CHECK_MONTH}` : ""}&order=id.asc&limit=1000&offset=${off}`) as Doc[];
     out.push(...d);
     if (d.length < 1000) break;
   }
@@ -249,7 +253,7 @@ type Result = {
 // ★ 基準値の対象の月 (2026-11-13)。基準値の合計は月を分けていないので、新しい月の利用票が入ると
 //   それだけで不一致が増えて FAIL する。基準値に無い月は別掲にして件数だけ出し、中身を確かめてから --update で取り込む
 const baselineMonths: Set<string> | null = (() => {
-  if (UPDATE || !existsSync(BASELINE)) return null;
+  if (UPDATE || CHECK_MONTH || !existsSync(BASELINE)) return null;
   const m = (JSON.parse(readFileSync(BASELINE, "utf8")) as { months?: string[] }).months;
   return m ? new Set(m) : null;
 })();
@@ -741,6 +745,11 @@ console.log(`
 console.log("  畳むかどうかで結果が変わったキー (畳まないとき → 今):");
 printTransitions(transDedupe);
 
+if (CHECK_MONTH) {
+  console.log(`
+★ CHECK_MONTH=${CHECK_MONTH} (この月だけ・基準値とは比べない): 分母 ${res.denomKeys} キー / 一致 ${res.match} (${res.denomKeys ? (res.match / res.denomKeys * 100).toFixed(1) : "-"}%) / 不一致 ${res.mismatches.length} / 脇に置いたもの ${JSON.stringify(res.aside)}`);
+  process.exit(negOk ? 0 : 1);
+}
 // ── 基準値 ──
 type Baseline = { _readme: string[]; months?: string[]; denomKeys: number; match: number; mismatch: number; byArea: Record<string, number>; byType: Record<string, number> };
 const cur = { months: [...new Set(docs.map((d) => d.report_month))].sort(), denomKeys: res.denomKeys, match: res.match, mismatch: res.mismatches.length, byArea: areaMis, byType };
