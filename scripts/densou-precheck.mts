@@ -334,7 +334,8 @@ async function main(): Promise<void> {
   //   判定不能 (その日に有効な認定が 0 件 / 区分の違う認定が 2 件以上) も見張る。増えたら判定そのものが怪しい
   const SYSTEM_CARE_LEVEL_KNOWN: Record<string, { sougouButKaigo: number; kaigoButShien: number; undecidable: number }> = {
     // 東城 宏三 4 回 / 市川 博義 2 回 / 荻野 秀之 1 回 (全社・全月で数えてこの 7 回だけ。2026-11-12)
-    "2026-06": { sougouButKaigo: 7, kaigoButShien: 0, undecidable: 0 },
+    // → 2026-11-13 に fix_sougou_to_kaigo_after_care_level_change_202606.mjs --execute で是正 (7/7 行・検算一致)。0 に下げた
+    "2026-06": { sougouButKaigo: 0, kaigoButShien: 0, undecidable: 0 },
   };
   const gateFails: string[] = [];
   {
