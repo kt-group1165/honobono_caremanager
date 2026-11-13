@@ -3,6 +3,11 @@
 //
 //   node migrations/import_riyouhyou_bundle.mjs --month 2026-06 --area いすみ --pdf "<束.pdf>" [--pdf ...]            # DRY RUN
 //   node migrations/import_riyouhyou_bundle.mjs --month 2026-06 --area いすみ --pdf "<束.pdf>" [--pdf ...] --execute  # 本番 (H 判断)
+//   node migrations/import_riyouhyou_bundle.mjs --month 2026-06 --area いすみ --dir "<フォルダ>" [--match <文字列>]       # フォルダの PDF 全部
+//
+// ── 2026-11-13 実物: 「利用者毎に印刷」は ★ 1 人 1 ファイル (「利用者毎印刷 _ 氏名.pdf」・第6表 → 別表 の 2 ページ〜) で出る ──
+//   1 拠点 300 名なら 300 本。--dir でフォルダごと渡す。同じ内容のファイル (ほのぼのが「(1)」「(2)」を付けて
+//   出し直したもの) は ★ 中身のハッシュで 1 本にまとめる (2 回読むと 第7表 を 2 回数えるため)
 //
 // ── 出し方 (2026-11-13 H 確定) ────────────────────────────────────────────
 //   ほのぼの ケアマネ → 利用・提供票 → 印刷 → 「利用者毎に印刷する帳票」で
@@ -33,7 +38,8 @@
 //   ③ では「利用票なし」に数えられる。--execute では ① の後に ③ を回すので埋まる
 // ============================================================================
 import { spawnSync } from "node:child_process";
-import { existsSync, statSync } from "node:fs";
+import { existsSync, statSync, readdirSync } from "node:fs";
+import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,10 +49,42 @@ const EXECUTE = argv.includes("--execute");
 const arg = (k) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : null; };
 const MONTH = arg("--month");
 const AREA = arg("--area") ?? "";
-const PDFS = argv.flatMap((a, i, arr) => (a === "--pdf" ? [arr[i + 1]] : []));
-
+const DIR = arg("--dir");
+const MATCH = arg("--match");
+const RAW_PDFS = [
+  ...argv.flatMap((a, i, arr) => (a === "--pdf" ? [arr[i + 1]] : [])),
+  ...(DIR && existsSync(DIR) ? readdirSync(DIR).filter((n) => /\.pdf$/i.test(n) && (!MATCH || n.includes(MATCH))).sort().map((n) => path.join(DIR, n)) : []),
+];
+if (DIR && !existsSync(DIR)) { console.error(`✗ フォルダが無い: ${DIR}`); process.exit(1); }
 if (!MONTH || !/^\d{4}-\d{2}$/.test(MONTH)) { console.error("--month YYYY-MM を指定する (例 --month 2026-06)"); process.exit(1); }
-if (!PDFS.length) { console.error("--pdf <束.pdf> を最低 1 つ指定する"); process.exit(1); }
+// ── 同じ人の出し直しは 1 本にまとめる ─────────────────────────────────────────────
+// ほのぼのは同じ人を出し直すと「(1)」「(2)」を付けて別ファイルにする。中身のハッシュは毎回違う
+// (2026-11-13 実測: 和田 和久 の 3 本はサイズまで違う) ので、ハッシュでは除けない。
+// ★ 2 回読むと 利用票の行が二重に足される (① は人ごとに行を継ぎ足す) ので、
+//   1 人 1 ファイルのものは (保険者, 被保番, 提供年月) ごとに ★ 更新時刻の新しい 1 本だけ残す。
+// 人が 2 人以上入っている束・人を読めないファイルはそのまま渡す (各 script が人ごとに扱う)。
+// 提供年月が --month と違うファイルは渡さない (件数と名前を出す)。
+const dupes = [];
+const otherMonth = [];
+const byPerson = new Map();
+const passThrough = [];
+for (const p of RAW_PDFS) {
+  if (!existsSync(p) || statSync(p).size === 0) { passThrough.push(p); continue; } // 下でまとめて止める
+  const ps = parseBundles(p);
+  const id = ps.length === 1 ? ps[0].riyouhyouIdentity : null;
+  const month = ps.length === 1 ? (ps[0].riyouhyouMonth ?? ps[0].betsuhyouHeader?.month ?? null) : null;
+  if (!id?.insurer || !id?.insured || !month) { passThrough.push(p); continue; }
+  if (month !== MONTH) { otherMonth.push(`${path.basename(p)} (${month})`); continue; }
+  const key = `${id.insurer}|${id.insured}|${month}`;
+  const cur = byPerson.get(key);
+  if (!cur) { byPerson.set(key, p); continue; }
+  const [keep, drop] = statSync(p).mtimeMs > statSync(cur).mtimeMs ? [p, cur] : [cur, p];
+  byPerson.set(key, keep);
+  dupes.push(`${path.basename(drop)} → ${path.basename(keep)} を使う (同じ人・同じ月。新しいほう)`);
+}
+const PDFS = [...passThrough, ...byPerson.values()];
+
+if (!PDFS.length) { console.error("--pdf <束.pdf> か --dir <フォルダ> で PDF を最低 1 つ指定する"); process.exit(1); }
 for (const p of PDFS) {
   if (!existsSync(p)) { console.error(`✗ PDF が無い: ${p}`); process.exit(1); }
   if (statSync(p).size === 0) { console.error(`✗ PDF が 0 バイト (出力失敗): ${p}`); process.exit(1); }
@@ -68,7 +106,11 @@ const PICK = {
 };
 
 console.log(`=== 居宅 束 PDF 取込 runner ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"}  ${AREA || "(拠点名なし)"} ${MONTH} / PDF ${PDFS.length} 本 ===`);
-for (const p of PDFS) console.log(`  ${p}`);
+if (PDFS.length <= 10) for (const p of PDFS) console.log(`  ${p}`);
+else console.log(`  ${path.dirname(PDFS[0])} ほか (${PDFS.length} 本)`);
+console.log(`  読んだ PDF ${RAW_PDFS.length} 本 → 渡す ${PDFS.length} 本 (同じ人の出し直し ${dupes.length} 本 / 提供年月が ${MONTH} でない ${otherMonth.length} 本 を除いた)`);
+if (dupes.length) { console.log("  同じ人の出し直し (古いほうを使わない):"); for (const d of dupes) console.log(`    ${d}`); }
+if (otherMonth.length) { console.log(`  提供年月が ${MONTH} でない (渡さない):`); for (const d of otherMonth) console.log(`    ${d}`); }
 
 const summary = [];
 for (const st of STEPS) {

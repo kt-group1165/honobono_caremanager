@@ -62,6 +62,10 @@ const LIMIT = (() => {
 const MONTH = process.env.MONTH || "2026-06";
 const PDF_PATHS = process.argv.flatMap((a, i, arr) => (a === "--pdf" ? [arr[i + 1]] : []));
 const ONLY_NEW = process.argv.includes("--only-new");
+// 検査用 (DRY RUN 専用): 既存の利用票が無いものとみなす。--only-new の「新規なら怪しい行で止める」を、
+// 既存しかいない PDF でも確かめるため。--execute と一緒には使えない
+const ASSUME_NO_EXISTING = process.env.ASSUME_NO_EXISTING === "1";
+if (ASSUME_NO_EXISTING && process.argv.includes("--execute")) { console.error("✗ ASSUME_NO_EXISTING=1 は DRY RUN 専用"); process.exit(1); }
 const AREA = process.env.AREA || "";
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 const YYYYMM = MONTH.replace("-", "");
@@ -271,6 +275,20 @@ function buildContent(prev, person, cert) {
   };
 }
 
+/** サービス名のうち、対象月に有効な 介護/総合事業 のマスタに実在するもの (25 件ずつ引く。多いと応答ヘッダが溢れる) */
+async function masterNamesFor(names) {
+  const uniq = [...new Set(names)];
+  const out = new Set();
+  const first = `${MONTH}-01`;
+  for (let i = 0; i < uniq.length; i += 25) {
+    const { data, error } = await sb.from("kaigo_service_codes").select("service_name, valid_from, valid_until")
+      .in("system", ["介護", "総合事業"]).in("service_name", uniq.slice(i, i + 25)).lte("valid_from", first);
+    if (error) throw new Error(`サービスコードの取得に失敗: ${error.message}`);
+    for (const r of data ?? []) if (!r.valid_until || r.valid_until >= first) out.add(r.service_name);
+  }
+  return out;
+}
+
 /** 予定/実績が 1 つでも入っているか (= 人が入力した可能性) */
 function hasAnyMark(content) {
   const svcs = Array.isArray(content?.services) ? content.services : [];
@@ -295,11 +313,12 @@ async function main() {
   }
 
   const total = { people: 0, resolved: 0, unresolved: 0, ambiguous: 0, rows: 0, warnRows: 0,
-                  inserted: 0, updated: 0, skipped: 0, skippedExisting: 0, over9: 0, nameMismatch: 0, failed: 0,
+                  inserted: 0, updated: 0, skipped: 0, skippedExisting: 0, skippedWarnNew: 0, skippedUnknownNameNew: 0, over9: 0, nameMismatch: 0, failed: 0,
                   droppedPages: 0 };
   const unresolvedList = [];
   const nameMismatchList = [];
   const warnList = [];
+  const skipNewList = [];
 
   for (const { area, dir, files } of areas) {
     const { people, skipped, dropped, fileCount } = readArea(dir, files);
@@ -346,6 +365,10 @@ async function main() {
     total.resolved += resolved.length;
 
     const targets = LIMIT ? resolved.slice(0, LIMIT) : resolved;
+    // --only-new で新規に入れる人の サービス名がマスタに実在するか (2026-11-13)。
+    // 「利用者毎に印刷」の PDF は長いサービス名がセル内で 2 行に折り返され、grid が後半しか読めない
+    // (実例「認知症通所介護Ⅰⅱ４３」→「４３」)。壊れた名前で入れると単位が引けず、黙って欠ける
+    const knownNames = ONLY_NEW ? await masterNamesFor(targets.flatMap((t) => t.p.rows.map((r) => r.content).filter(Boolean))) : null;
     const certs = await fetchCerts(targets.map((t) => t.clientId));
 
     // 既存帳票をまとめて取る
@@ -374,9 +397,16 @@ async function main() {
       }
       if (p.rows.length > 9) total.over9++;
 
-      const prev = existing.get(clientId);
+      const prev = ASSUME_NO_EXISTING ? undefined : existing.get(clientId);
       const prevContent = prev?.content ?? null;
       if (prev && ONLY_NEW) { total.skippedExisting++; continue; }
+      if (ONLY_NEW && !prev) {
+        // ★ 新規に入れる人は 1 行でも怪しければ書かない (既存の帳票が無い = 後から人が直すまで画面に出ないより、
+        //   壊れた行が入るほうが悪い)。件数と例を必ず出す
+        if (w.length) { total.skippedWarnNew++; if (skipNewList.length < 20) skipNewList.push(`${area} ${p.name}: 警告のある行 ${w.length} (${w[0].content || "(空)"} — ${w[0].warn.join(" / ")})`); continue; }
+        const unknown = p.rows.map((r) => r.content).filter((n) => n && n !== "(その他)" && !knownNames.has(n));
+        if (unknown.length) { total.skippedUnknownNameNew++; if (skipNewList.length < 20) skipNewList.push(`${area} ${p.name}: マスタに無いサービス名 ${unknown.length} (${[...new Set(unknown)].slice(0, 3).join(" / ")})`); continue; }
+      }
       const mine = prevContent?._import_source?.kind === "riyouhyou-pdf";
       if (prev && !mine && hasAnyMark(prevContent) && !FORCE) {
         total.skipped++;
@@ -423,7 +453,11 @@ async function main() {
   console.log(`  ${EXECUTE ? "INSERT" : "INSERT 予定"}          ${total.inserted} 件`);
   console.log(`  ${EXECUTE ? "UPDATE" : "UPDATE 予定"}          ${total.updated} 件`);
   console.log(`  skip (人が入力済)     ${total.skipped} 件  ← --force で上書き`);
-  if (ONLY_NEW) console.log(`  skip (既に利用票あり) ${total.skippedExisting} 件  ← --only-new`);
+  if (ONLY_NEW) {
+    console.log(`  skip (既に利用票あり) ${total.skippedExisting} 件  ← --only-new`);
+    console.log(`  skip (新規・警告のある行) ${total.skippedWarnNew} 件  ← --only-new では書かない`);
+    console.log(`  skip (新規・マスタに無いサービス名) ${total.skippedUnknownNameNew} 件  ← 折り返しで名前が切れた疑い。書かない`);
+  }
   if (total.failed) console.log(`  ✗ 失敗                ${total.failed} 件`);
 
   if (unresolvedList.length) {
@@ -435,6 +469,10 @@ async function main() {
     console.log("\n--- 氏名の食い違い (番号は一致) ---");
     for (const l of nameMismatchList.slice(0, 20)) console.log("  " + l);
     if (nameMismatchList.length > 20) console.log(`  … 他 ${nameMismatchList.length - 20} 名`);
+  }
+  if (skipNewList.length) {
+    console.log("\n--- 新規だが書かなかった人 (--only-new) ---");
+    for (const l of skipNewList) console.log("  " + l);
   }
   if (warnList.length) {
     console.log("\n--- 合計が合わない行 ---");

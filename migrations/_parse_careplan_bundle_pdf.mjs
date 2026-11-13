@@ -1,5 +1,6 @@
 import { extractPages } from "./_pdf_words.mjs";
 import { extractGrid, pickIdentity } from "./_riyouhyou_grid.mjs";
+import { parseRiyouhyouPages } from "./_riyouhyou_pdf.mjs";
 // ============================================================================
 // 「計画書一括印刷（利用者単位）」PDF (第1表→第2表→週間計画→利用票→別表 を
 // 1ファイルに束ねたもの) を読む共通パーサ。
@@ -597,7 +598,15 @@ export function parseBundles(pdfPath) {
     let riyouId = null;
     if (kind === "riyouhyou") {
       riyouId = pickIdentity(words[i]);
-      if ((cur.riyouhyouIdentity && idKey(cur.riyouhyouIdentity) !== idKey(riyouId)) || cur.betsuhyouItems) startNew();
+      // ★ 座標読みで番号が取れないページは 本文テキストから読む (import_riyouhyou_service_usage.mjs の
+      //   `id.insurer ?? who?.insurer` と同じ補い方。2026-11-13: 保険者が千葉市中央区の 太田 一恵・和田 和久 などで
+      //   pickIdentity が null を返し、第7表・貸与の取込で「人を特定できない」になっていた)
+      if (!riyouId?.insured) {
+        const w = parseRiyouhyouPages([texts[i]], [words[i]])[0];
+        if (w?.insurer && w?.insured) riyouId = { ...(riyouId ?? {}), insurer: w.insurer, insured: w.insured, name: riyouId?.name ?? w.name ?? null };
+      }
+      // 番号の無い利用票ページ (2 ページ目以降) は 前のページと同じ人として扱う (番号無しを別人と見なさない)
+      if ((cur.riyouhyouIdentity && riyouId?.insured && idKey(cur.riyouhyouIdentity) !== idKey(riyouId)) || cur.betsuhyouItems) startNew();
     }
     let header = null;
     if (kind === "betsuhyou") {
@@ -609,7 +618,8 @@ export function parseBundles(pdfPath) {
     out.pages.push(kind);
     if (kind === "weekly") out.weekly = extractWeeklySchedule(words[i]);
     if (kind === "riyouhyou") {
-      out.riyouhyouIdentity = riyouId;
+      // 2 ページ目以降で番号が読めないときに、1 ページ目で読めた人を null で上書きしない
+      if (riyouId?.insured || !out.riyouhyouIdentity) out.riyouhyouIdentity = riyouId;
       out.riyouhyouGrid = extractGrid(words[i]);
       // ★ 対象月の唯一の正しいソース (2026-09-14 H指摘)。週間計画のヘッダ月は
       // 「計画作成月」であって提供月ではないため使わない。
