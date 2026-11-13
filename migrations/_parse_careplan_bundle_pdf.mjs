@@ -90,6 +90,8 @@ const LAYOUTS = {
     units: [295, 322], count: [360, 385], serviceUnits: [393, 412], serviceUnits2: [414, 442],
     withinLimitBracket: [583, 601], unitPrice: [605, 622], totalCost: [623, 663], benefitRate: [668, 683],
     insuranceClaim: [683, 716], userCopay: [750, 786],
+    // 利用者負担 (全額負担分)。30 日超の短期入所など 給付率 0% の行は 金額がこの列 (x≈808) にだけ出る (2026-11-13 いすみ 市原 よし ほか)
+    userFullPay: [795, 830],
     kohiName: [395, 500], kohiClaim: [495, 545], kohiHonnin: [545, 580],
   },
   zencm: {
@@ -144,6 +146,7 @@ function readMoneyAt(words, y, tol, L) {
     benefitRate: numAt(words, y, ...L.benefitRate, tol),
     insuranceClaim: numAt(words, y, ...L.insuranceClaim, tol),
     userCopay: numAt(words, y, ...L.userCopay, tol),
+    userFullPay: L.userFullPay ? numAt(words, y, ...L.userFullPay, tol) : null,
     withinLimitBracket: numAt(words, y, ...L.withinLimitBracket, tol),
   };
 }
@@ -319,7 +322,15 @@ export function extractWeeklySchedule(words) {
  * 直接使える形で返す (事業所名/番号/内容/コードに加え、単位数・回数・金額まで)。
  * @returns {{items: object[], warn: string[]}}
  */
-export function extractBetsuhyouRows(words) {
+/**
+ * @param words  1 ページの語
+ * @param carryIn 同じ人の前のページで「◯◯合計」行を待ったまま終わった行 (raw)。2026-11-13 追加
+ *   別表が 2 ページ以上の人で、事業所の行がページの最下部にあり その小計行が次のページの先頭に出ることがある
+ *   (いすみ 峯島 貞子・相馬 清治 ほか)。以前はページごとに読んでいたので「合計行が見つからない」警告で書けなかった
+ * @returns carryOut に このページの終わりで合計行を待っている行を返す (呼出側 parseBundles が次のページに渡す。
+ *   人の最後のページでも残っていれば、呼出側が以前と同じ警告と規定値の行にする)
+ */
+export function extractBetsuhyouRows(words, carryIn = []) {
   const layoutKey = detectBetsuhyouLayout(words);
   if (!layoutKey) return { items: [], warn: ["見出しから別表の出し方を判定できない (列の位置が分からないので読まない)"], publicExpenseByProvider: [], layout: null };
   const L = LAYOUTS[layoutKey];
@@ -402,7 +413,7 @@ export function extractBetsuhyouRows(words) {
 
   const warn = [];
   const items = [];
-  let pendingGroup = []; // 金額がまだ無い行 (①でない行) を溜めておく
+  let pendingGroup = [...carryIn]; // 金額がまだ無い行 (①でない行) を溜めておく。前のページから持ち越した行から始める
   const flushGroup = (subtotalY) => {
     if (!pendingGroup.length) return;
     const providerNum = pendingGroup[0].provider_number;
@@ -435,14 +446,34 @@ export function extractBetsuhyouRows(words) {
       // 給付率から計算した値のままにする
     }
     for (const it of lineItems) it.user_copay = it.total_cost - it.insurance_claim;
+    // 給付率 0% のグループ (30 日超など): 合計行の金額は「全額負担分」の列にだけ出る → 利用者負担ではなく全額負担に置く
+    if (money.benefitRate === 0 && money.userFullPay != null) {
+      for (const it of lineItems) { it.user_full_pay = it.total_cost; it.user_copay = 0; }
+      const lastFp = lineItems[lineItems.length - 1];
+      lastFp.user_full_pay += money.userFullPay - lineItems.reduce((s, it) => s + it.user_full_pay, 0);
+    }
     for (const it of lineItems) items.push(it);
     pendingGroup = [];
   };
 
+  // 前のページから持ち越した行の小計が このページの先頭 (最初の明細行より上) にあれば、そこで確定する
+  if (pendingGroup.length) {
+    const firstY = raw.length ? raw[0].y : Infinity;
+    // ★ 金額 (単価) が読める行だけ。最終ページの「種類別支給限度管理」の表の見出しにも「合計」があり、それを掴んでいた (積田 秋夫)
+    const topSub = subtotalYs.find((sy) => sy < firstY && isSubtotalRow(words, sy, L) && readMoneyAt(words, sy, 8, L).unitPrice != null);
+    if (topSub != null) flushGroup(topSub);
+  }
   for (const r of raw) {
     if (r.totalCost != null && r.benefitRate != null) {
       // ① 単独で金額が出ている行 — そのまま確定
       items.push(finalizeItem(r, { unitPrice: r.unitPrice, totalCost: r.totalCost, benefitRate: r.benefitRate, insuranceClaim: r.insuranceClaim, userCopay: r.userCopay }));
+      continue;
+    }
+    // ①' 給付率 0% で 金額が「全額負担分」の列にだけ出ている行 (30 日超の短期入所の加算など)。総額 = 全額負担
+    if (r.totalCost == null && r.benefitRate === 0 && r.userFullPay != null && r.unitPrice != null) {
+      const it = finalizeItem(r, { unitPrice: r.unitPrice, totalCost: r.userFullPay, benefitRate: 0, insuranceClaim: 0, userCopay: 0 });
+      it.user_full_pay = r.userFullPay;
+      items.push(it);
       continue;
     }
     // ② 金額なし — 直後の「◯◯合計」行を待つ。合計行が単独の金額付き行の直後に
@@ -458,52 +489,13 @@ export function extractBetsuhyouRows(words) {
       flushGroup(nextSubtotalY);
     }
   }
-  if (pendingGroup.length) {
-    warn.push(`最後まで「◯◯合計」行が見つからなかった行が ${pendingGroup.length} 件残った (事業所番号 ${pendingGroup[0].provider_number ?? "不明"})`);
-    for (const r of pendingGroup) items.push(finalizeItem(r, null));
-  }
+  // 合計行を待ったまま終わった行は 次のページへ持ち越す (呼出側が渡す)。人の最後なら呼出側の finishPendingBetsuhyou が警告にする
+  const carryOut = pendingGroup;
 
-  // ── 公費適用 (2026-09-14 H指摘で追加) ──────────────────────────────────
-  //   法別番号を持つ利用者は「公費適用事業所／公費額／本人負担」の別表が
-  //   ページ下部に別途印字される (実測: 生活保護単独の新井秀雄のみ。他5本は
-  //   セクションごと印字されない=対象外の人には出ない)。事業所番号までは
-  //   印字されず、事業所名の先頭一致で items の事業所番号グループに対応付ける。
-  //   本人負担を「合計行と同じ最終行で差額吸収」方式で items[].user_copay に
-  //   反映する (介護保険の給付率だけでは公費適用者の利用者負担がわからず、
-  //   全額が利用者負担に見えてしまうため)。
+  // 公費の欄は 人のページを全部読んでから その人の全明細に当てる (applyKohiToItems・parseBundles の finishPerson)。
+  //   公費の欄は人の最終ページに出て、明細は前のページにあることがある (2026-11-13 いすみ (b) 型 7 名)
   const kohi = extractKohiTable(words, L);
-  const publicExpenseByProvider = [];
-  if (kohi) {
-    for (const row of kohi.rows) {
-      const matched = items.filter((it) => it.provider_name && it.provider_name.includes(row.providerNamePrefix));
-      if (!matched.length) {
-        warn.push(`公費適用事業所「${row.providerNamePrefix}」に対応する items 行が見つからない (公費額 ${row.kohiClaim})`);
-        continue;
-      }
-      // 各行の user_copay を「総額に比例配分、最終行で差額吸収」で置き換える
-      let remaining = row.honninFutan;
-      const totalCostSum = matched.reduce((s, it) => s + it.total_cost, 0);
-      for (let i = 0; i < matched.length; i++) {
-        if (i === matched.length - 1) { matched[i].user_copay = remaining; continue; }
-        const share = totalCostSum !== 0 ? Math.round(row.honninFutan * (matched[i].total_cost / totalCostSum)) : 0;
-        matched[i].user_copay = share;
-        remaining -= share;
-      }
-      publicExpenseByProvider.push({
-        provider_name_prefix: row.providerNamePrefix,
-        kohi_claim: row.kohiClaim,
-        honnin_futan: row.honninFutan,
-      });
-    }
-    if (kohi.total && kohi.total.kohiClaim != null) {
-      const sumKohi = publicExpenseByProvider.reduce((s, r) => s + r.kohi_claim, 0);
-      if (sumKohi !== kohi.total.kohiClaim) {
-        warn.push(`公費額合計の印字値 ${kohi.total.kohiClaim} と行ごとの合計 ${sumKohi} が一致しない — 要確認`);
-      }
-    }
-  }
-
-  return { items, warn, publicExpenseByProvider, layout: layoutKey };
+  return { items, warn, kohi, carryOut, layout: layoutKey };
 }
 
 /**
@@ -533,6 +525,66 @@ function extractKohiTable(words, L) {
     ? { kohiClaim: numAt(words, totalLabel.y, ...L.kohiClaim, 3), honninFutan: numAt(words, totalLabel.y, ...L.kohiHonnin, 3) }
     : null;
   return { rows, total };
+}
+
+/** 公費の欄 (extractKohiTable の結果) を 人の全明細に当てる。元は extractBetsuhyouRows の中にあった処理 (中身は同じ)。
+ * @returns {{warn: string[], publicExpenseByProvider: object[]}} */
+export function applyKohiToItems(items, kohi) {
+  const warn = [];
+  const publicExpenseByProvider = [];
+  if (!kohi) return { warn, publicExpenseByProvider };
+  // ── 公費適用 (2026-09-14 H指摘で追加) ──────────────────────────────────
+  //   法別番号を持つ利用者は「公費適用事業所／公費額／本人負担」の別表が
+  //   ページ下部に別途印字される (実測: 生活保護単独の新井秀雄のみ。他5本は
+  //   セクションごと印字されない=対象外の人には出ない)。事業所番号までは
+  //   印字されず、事業所名の先頭一致で items の事業所番号グループに対応付ける。
+  //   本人負担を「合計行と同じ最終行で差額吸収」方式で items[].user_copay に
+  //   反映する (介護保険の給付率だけでは公費適用者の利用者負担がわからず、
+  //   全額が利用者負担に見えてしまうため)。
+  {
+    let subtotalKohi = 0; // 「公費額他小計」のような小計のラベル行 (事業所ではない。合計の検算にだけ入れる)
+    for (const row of kohi.rows) {
+      if (/小計$/.test(row.providerNamePrefix)) { subtotalKohi += row.kohiClaim; continue; }
+      let matched = items.filter((it) => it.provider_name && it.provider_name.includes(row.providerNamePrefix));
+      // ★ 公費の欄の事業所名は略称のことがある (2026-11-13 いすみ 6 名): 「リンクスいすみ」= リンクスヘルパーステーションいすみ /
+      //   「エスポ大原・通所リハ」= エスポワール大原・通所リハビリ / 「デイサービスいすみ苑」= デイサービス　いすみ苑 (空白)。
+      //   空白を除いて含む、または 先頭 2 文字が同じで 文字が順に全部現れる (部分列) 事業所が ★ その人の明細で 1 つに決まるときだけ当てる
+      if (!matched.length) {
+        const nk = (v) => String(v ?? "").normalize("NFKC").replace(/[\s　]/g, "");
+        const a = nk(row.providerNamePrefix);
+        const subseq = (p) => { let j = 0; for (const ch of p) if (ch === a[j]) j++; return j === a.length; };
+        const cands = [...new Set(items.map((it) => it.provider_name).filter(Boolean))]
+          .filter((p) => nk(p).includes(a) || (nk(p).slice(0, 2) === a.slice(0, 2) && subseq(nk(p))));
+        if (cands.length === 1) matched = items.filter((it) => it.provider_name === cands[0]);
+      }
+      if (!matched.length) {
+        warn.push(`公費適用事業所「${row.providerNamePrefix}」に対応する items 行が見つからない (公費額 ${row.kohiClaim})`);
+        continue;
+      }
+      // 各行の user_copay を「総額に比例配分、最終行で差額吸収」で置き換える
+      let remaining = row.honninFutan;
+      const totalCostSum = matched.reduce((s, it) => s + it.total_cost, 0);
+      for (let i = 0; i < matched.length; i++) {
+        if (i === matched.length - 1) { matched[i].user_copay = remaining; continue; }
+        const share = totalCostSum !== 0 ? Math.round(row.honninFutan * (matched[i].total_cost / totalCostSum)) : 0;
+        matched[i].user_copay = share;
+        remaining -= share;
+      }
+      publicExpenseByProvider.push({
+        provider_name_prefix: row.providerNamePrefix,
+        kohi_claim: row.kohiClaim,
+        honnin_futan: row.honninFutan,
+      });
+    }
+    if (kohi.total && kohi.total.kohiClaim != null) {
+      const sumKohi = publicExpenseByProvider.reduce((s, r) => s + r.kohi_claim, 0) + subtotalKohi;
+      if (sumKohi !== kohi.total.kohiClaim) {
+        warn.push(`公費額合計の印字値 ${kohi.total.kohiClaim} と行ごとの合計 ${sumKohi} が一致しない — 要確認`);
+      }
+    }
+  }
+
+  return { warn, publicExpenseByProvider };
 }
 
 /** raw行 + 金額(直接 or 合計行由来) → EditFormUsageDetail の items[] 1行分 */
@@ -589,6 +641,7 @@ function emptyPerson() {
     weekly: null, riyouhyouIdentity: null, riyouhyouGrid: null, riyouhyouMonth: null,
     betsuhyouItems: null, betsuhyouWarn: [], betsuhyouPublicExpense: [], betsuhyouMonth: null, betsuhyouName: null,
     betsuhyouLimitAmount: null, betsuhyouHeader: null, betsuhyouOfficeNumber: null, betsuhyouHasEnd: false, betsuhyouPages: 0, pages: [],
+    betsuhyouCarry: [], betsuhyouKohi: [], // 人を閉じるまでの作業用 (finishPerson で片付ける)
   };
 }
 
@@ -616,6 +669,25 @@ export function parseBundles(pdfPath) {
   // 事業所ごとの小計は合うので、行の検算だけでは気づけない (2026-11-13 いすみを 4/5 ページで割って実証: 1 ページ目だけで「完全」に見えた)。
   // 既存の束 26 本・336 人では 0 人 (割ったファイルだけが当たる)
   const finishPerson = (p) => {
+    if (p.betsuhyouItems != null) {
+      // 人の最後まで小計が見つからなかった行 (以前のページ単位の警告と同じ文言・同じ規定値の行)
+      // 今月 0 回 (サービス単位 0) の行は 小計が印字されない (送迎加算・処遇改善など。いすみ 山口 智子・積田 秋夫)。
+      //   金額 0 の行として出し、警告にしない (合計は変わらない)
+      const zero = p.betsuhyouCarry.filter((r) => !Number(r.service_units ?? (Number(r.units ?? 0) * Number(r.count ?? 0))));
+      const rest = p.betsuhyouCarry.filter((r) => !zero.includes(r));
+      if (zero.length) p.betsuhyouItems = [...p.betsuhyouItems, ...zero.map((r) => ({ ...finalizeItem(r, { unitPrice: 10, benefitRate: 90, totalCost: 0, insuranceClaim: 0, userCopay: 0 }), _money_source: "zero-count" }))];
+      if (rest.length) {
+        p.betsuhyouWarn = [...p.betsuhyouWarn, `最後まで「◯◯合計」行が見つからなかった行が ${rest.length} 件残った (事業所番号 ${rest[0].provider_number ?? "不明"})`];
+        p.betsuhyouItems = [...p.betsuhyouItems, ...rest.map((r) => finalizeItem(r, null))];
+      }
+      // 公費の欄は 人の全明細に当てる
+      for (const k of p.betsuhyouKohi) {
+        const { warn, publicExpenseByProvider } = applyKohiToItems(p.betsuhyouItems, k);
+        p.betsuhyouWarn = [...p.betsuhyouWarn, ...warn];
+        p.betsuhyouPublicExpense = [...p.betsuhyouPublicExpense, ...publicExpenseByProvider];
+      }
+    }
+    delete p.betsuhyouCarry; delete p.betsuhyouKohi;
     if (p.betsuhyouItems != null && !p.betsuhyouHasEnd)
       p.betsuhyouWarn = [...p.betsuhyouWarn, "別表の最終ページ (種類別支給限度管理の欄) が無い — ページ境界で割れたかけらの疑い"];
     return p;
@@ -659,8 +731,11 @@ export function parseBundles(pdfPath) {
       if (mm) out.riyouhyouMonth = `${2018 + Number(mm[1])}-${String(Number(mm[2])).padStart(2, "0")}`;
     }
     if (kind === "betsuhyou") {
-      const { items, warn, publicExpenseByProvider } = extractBetsuhyouRows(words[i]);
       const cont = out.betsuhyouItems != null; // 同じ人の 2 ページ目以降
+      // 前のページで小計を待っている行を渡す (小計が次のページの先頭に出ることがある)
+      const { items, warn, kohi, carryOut } = extractBetsuhyouRows(words[i], cont ? out.betsuhyouCarry : []);
+      out.betsuhyouCarry = carryOut;
+      if (kohi) out.betsuhyouKohi = [...out.betsuhyouKohi, kohi];
       out.betsuhyouPages++;
       out.betsuhyouHeader ??= header;
       out.betsuhyouOfficeNumber ??= parseBetsuhyouOfficeNumber(texts[i]);
@@ -669,7 +744,6 @@ export function parseBundles(pdfPath) {
       if (texts[i].includes("種類別支給限度管理")) out.betsuhyouHasEnd = true;
       out.betsuhyouItems = cont ? [...out.betsuhyouItems, ...items] : items;
       out.betsuhyouWarn = cont ? [...out.betsuhyouWarn, ...warn.map((w) => `(${out.betsuhyouPages} ページ目) ${w}`)] : warn;
-      out.betsuhyouPublicExpense = cont ? [...out.betsuhyouPublicExpense, ...(publicExpenseByProvider ?? [])] : (publicExpenseByProvider ?? []);
       if (cont) continue; // 限度額・年月・氏名は 1 ページ目のものを使う
       // 「区分支給限度基準額(単位)」の直後に出る数字 (要介護度から機械的に決まる値。
       // _riyouhyou_pdf.mjs の LIMIT_TO_CARE_LEVEL と同じ値だが、印字を直接読むほうが

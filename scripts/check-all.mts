@@ -187,17 +187,20 @@ async function measureNotCovered(): Promise<string[]> {
   return [
     `訪問入浴の ★ 実データ — 実績 ${bathVisit} 行 / 予定 ${bathSched} 行 (check:bath-fixture はモック。★ 実データでは一度も通っていない)`,
     `介護予防支援(46) — ★ レセプト ${yobo46} 件 (居宅のレセプト全体 ${claimsAll} 件中)`,
+    // ★ 無い事業所の名前を決め打ちで書かない (2026-11-13 に誉田 = Hanaムツミ の分が届き、「4 事業所は無い」が古くなった)
     `福祉用具 — order-app 側。★ ほのぼの実出力があるのは ${fukuyoguFiles()} だけ。` +
-      "高品・Hanaムツミ・リンクス・花見川 の 4 事業所は無い (請求規模 月 ¥17,527,920 は order-app fukuyogu-coverage-check の記載)",
+      "福祉用具 5 事業所 (ケアサポ・高品・誉田・茂原・花見川) のうち ここに出ない事業所は実出力が無い (請求規模は order-app fukuyogu-coverage-check を見る)",
     "住宅改修 — 請求はシステムの外 (2026-10-15 に決着。DECISIONS_PENDING B-2h/B-2j)。書類・進捗・原価は order-app 側",
     "payroll-app の給与本体 — ★ 別アプリ。apps/payroll-app 側で回す",
     "国保連からの通知取込 — ★ 実ファイルで一度も検証していない (check:kokuho-tsuchi はモック fixture のみ。" +
       "実ファイルは repo 内のどこにも見つからず (2026-11-13 にも 伝送データ・サービス実績データ・Box の出力先を探して 0 本)、初回取込時のプレビュー目視確認が必須。" +
       "また過誤決定(取消)通知は仕様書上も専用フィールドが無く、マイナス金額の通常通知と構造上区別できない)",
     `利用票 (第6表) の検証の月 — ★ 利用票は ${usage}。伝送 KY は 2026-06・2026-07 がある (check:riyouhyou-units が突き合わせられるのは両方そろう月だけ)`,
-    `利用票 (第7表 別表 service-usage-detail) — ★ ${detail} 件しか無い (別表の画面・限度額の割り振りは給付管理から作る)`,
-    "利用票の福祉用具貸与の単位数 — ★ 9,006 行中 1,491 行 (16.6%) しか入っていない (2026-11-13 実測・H の報告。" +
-      "残りは利用票別表 (全CM) を出して migrations/fill_rental_units_from_betsuhyou.mjs で埋める)",
+    `利用票 (第7表 別表 service-usage-detail) — ★ ${detail} 件 (別表を出した拠点の分だけ。` +
+      "請求に効く限度額超過の割り振りは 第7表画面の GendoAllocationPanel が第7表の items から計算する)",
+    // ★ 件数を書かない (2026-11-13 にここへ書いた「9,006 行中 1,491 行」が同じ日のうちに古くなった)。数は検査が毎回出す
+    "利用票の福祉用具貸与の単位数 — ★ まだ全部は入っていない。件数は `npm run check:rental-units` (事業所別・出どころ別・基準値方式) を見ること。" +
+      "残りは各拠点の別表を出して migrations/import_riyouhyou_bundle.mjs で埋める",
   ];
 }
 
