@@ -8,6 +8,10 @@
 //   --force  … 人が手を入れた帳票も上書きする (既定は触らない)
 //   --allow-name-mismatch … 番号は一致だが氏名が別人の分も取り込む (既定は skip)
 //   --limit N… 先頭 N 名だけ (動作確認用)
+//   --pdf <path> [--pdf ...] … フォルダを探さず、指定した PDF だけ読む (import_riyouhyou_bundle.mjs から使う。AREA は表示名)
+//   --only-new … ★ 既に利用票 (同じ月) がある人は 由来を問わず触らない。新規の人だけ入れる (2026-11-13)
+//                既存の利用票には 単位数 (manual_units / rental_month_actual_units / backfill の units) が後から入っている。
+//                この script は services を丸ごと作り直すので、上書きするとそれが消える
 //
 // ── なぜ要るか ──────────────────────────────────────────────────────────
 //   居宅の利用票・提供票は **ほのぼのが CSV で出せない** (ケアマネ→CSV タブは
@@ -39,7 +43,7 @@
 //     以前は 9 行固定で 10 行目以降が黙って消えていた (2026-08-31 に是正済)
 // ============================================================================
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { findRiyouhyouPdfs, parseRiyouhyouPages, normRiyouName, LIMIT_TO_CARE_LEVEL } from "./_riyouhyou_pdf.mjs";
@@ -56,6 +60,8 @@ const LIMIT = (() => {
   return i >= 0 ? Number(process.argv[i + 1]) : 0;
 })();
 const MONTH = process.env.MONTH || "2026-06";
+const PDF_PATHS = process.argv.flatMap((a, i, arr) => (a === "--pdf" ? [arr[i + 1]] : []));
+const ONLY_NEW = process.argv.includes("--only-new");
 const AREA = process.env.AREA || "";
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 const YYYYMM = MONTH.replace("-", "");
@@ -102,6 +108,7 @@ const fmtReiwa = (iso) => {
 
 /** 対象拠点のフォルダを決める */
 function targetAreas() {
+  if (PDF_PATHS.length) return [{ area: AREA || "(PDF 指定)", files: PDF_PATHS }];
   const base = path.join(KAIGO, "利用者データ");
   const areas = AREA ? [AREA] : readdirSync(base);
   return areas
@@ -128,11 +135,13 @@ const fixInsurer = (n) => (n && INSURER_FIX[n]) || n;
  * @returns Map<string, {name, insurer, insured, careLevel, officeName, insurerName, staffName, rows, sources}>
  *          キーは 保険者番号|被保険者番号
  */
-function readArea(dir) {
+function readArea(dir, explicitFiles) {
   const people = new Map();
   const skipped = { monthMismatch: 0, notRiyouhyou: 0 };
   const dropped = [];        // 取りこぼしたページは黙って捨てず必ず出す
-  const { files, empty } = findRiyouhyouPdfs(dir);
+  const { files, empty } = explicitFiles
+    ? { files: explicitFiles.filter((f) => statSync(f).size > 0), empty: explicitFiles.filter((f) => statSync(f).size === 0) }
+    : findRiyouhyouPdfs(dir);
   for (const f of empty) console.log(`  ⚠ 0 バイト (出力失敗): ${path.basename(f)}`);
 
   for (const f of files) {
@@ -275,23 +284,25 @@ async function main() {
   console.log(`=== 居宅 利用票 PDF → 帳票 service-usage 取込 (${MONTH}) ===`);
   console.log(EXECUTE ? "*** 本番実行 ***" : "*** DRY RUN (--execute で反映) ***");
   if (FORCE) console.log("*** --force: 人が入力した帳票も上書きする ***");
+  if (ONLY_NEW) console.log("*** --only-new: 既に利用票がある人は触らない (新規の人だけ入れる) ***");
+  if (FORCE && ONLY_NEW) { console.error("✗ --force と --only-new は同時に使えない"); process.exit(1); }
   console.log("");
 
   const areas = targetAreas();
   if (!areas.length) {
-    console.error(`✗ 利用者データ/<拠点>/${YYYYMM}/居宅/ が見つからない (AREA=${AREA || "全拠点"})`);
+    console.error(PDF_PATHS.length ? "✗ --pdf のファイルが見つからない" : `✗ 利用者データ/<拠点>/${YYYYMM}/居宅/ が見つからない (AREA=${AREA || "全拠点"})`);
     process.exit(1);
   }
 
   const total = { people: 0, resolved: 0, unresolved: 0, ambiguous: 0, rows: 0, warnRows: 0,
-                  inserted: 0, updated: 0, skipped: 0, over9: 0, nameMismatch: 0, failed: 0,
+                  inserted: 0, updated: 0, skipped: 0, skippedExisting: 0, over9: 0, nameMismatch: 0, failed: 0,
                   droppedPages: 0 };
   const unresolvedList = [];
   const nameMismatchList = [];
   const warnList = [];
 
-  for (const { area, dir } of areas) {
-    const { people, skipped, dropped, fileCount } = readArea(dir);
+  for (const { area, dir, files } of areas) {
+    const { people, skipped, dropped, fileCount } = readArea(dir, files);
     console.log(`── ${area}  PDF ${fileCount} 本 / 利用者 ${people.size} 名`);
     if (skipped.monthMismatch) console.log(`   提供年月が ${MONTH} でないページ: ${skipped.monthMismatch} (取り込まない)`);
     for (const d of dropped) {
@@ -365,6 +376,7 @@ async function main() {
 
       const prev = existing.get(clientId);
       const prevContent = prev?.content ?? null;
+      if (prev && ONLY_NEW) { total.skippedExisting++; continue; }
       const mine = prevContent?._import_source?.kind === "riyouhyou-pdf";
       if (prev && !mine && hasAnyMark(prevContent) && !FORCE) {
         total.skipped++;
@@ -411,6 +423,7 @@ async function main() {
   console.log(`  ${EXECUTE ? "INSERT" : "INSERT 予定"}          ${total.inserted} 件`);
   console.log(`  ${EXECUTE ? "UPDATE" : "UPDATE 予定"}          ${total.updated} 件`);
   console.log(`  skip (人が入力済)     ${total.skipped} 件  ← --force で上書き`);
+  if (ONLY_NEW) console.log(`  skip (既に利用票あり) ${total.skippedExisting} 件  ← --only-new`);
   if (total.failed) console.log(`  ✗ 失敗                ${total.failed} 件`);
 
   if (unresolvedList.length) {
