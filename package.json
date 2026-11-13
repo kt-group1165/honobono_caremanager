@@ -20,6 +20,7 @@
     "check:kyotaku-matrix": "tsx scripts/kyotaku-matrix-verify.mts",
     "check:service-code-gap": "tsx scripts/service-code-gap-check.mts",
     "check:riyouhyou-units": "tsx scripts/riyouhyou-units-vs-ky.mts",
+    "check:ky-caresapo-units": "tsx scripts/ky-caresapo-units-check.mts",
     "check:rental-limit-over": "tsx scripts/rental-limit-over-check.mts",
     "check:rental-units": "tsx scripts/rental-units-check.mts",
     "check:teikyohyo-diff": "tsx scripts/teikyohyo-diff.mts",
