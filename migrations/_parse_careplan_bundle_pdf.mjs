@@ -90,6 +90,9 @@ const LAYOUTS = {
     units: [295, 322], count: [360, 385], serviceUnits: [393, 412], serviceUnits2: [414, 442],
     withinLimitBracket: [583, 601], unitPrice: [605, 622], totalCost: [623, 663], benefitRate: [668, 683],
     insuranceClaim: [683, 716], userCopay: [750, 786],
+    // 「区分支給限度基準を超える単位数」(2026-11-13 段1)。限度を超えた人の行・事業所の合計行・人の合計行にだけ出る (x≈553〜561)。
+    //   超えていない行には何も印字されない。基準内単位数はその右 (x≈588〜596 = withinLimitBracket の帯)
+    overLimit: [535, 580],
     // 利用者負担 (全額負担分)。30 日超の短期入所など 給付率 0% の行は 金額がこの列 (x≈808) にだけ出る (2026-11-13 いすみ (氏名は DB で引く) ほか)
     userFullPay: [795, 830],
     kohiName: [395, 500], kohiClaim: [495, 545], kohiHonnin: [545, 580],
@@ -148,6 +151,7 @@ function readMoneyAt(words, y, tol, L) {
     userCopay: numAt(words, y, ...L.userCopay, tol),
     userFullPay: L.userFullPay ? numAt(words, y, ...L.userFullPay, tol) : null,
     withinLimitBracket: numAt(words, y, ...L.withinLimitBracket, tol),
+    overLimit: L.overLimit ? numAt(words, y, ...L.overLimit, tol) : null,
   };
 }
 
@@ -452,6 +456,11 @@ export function extractBetsuhyouRows(words, carryIn = []) {
       const lastFp = lineItems[lineItems.length - 1];
       lastFp.user_full_pay += money.userFullPay - lineItems.reduce((s, it) => s + it.user_full_pay, 0);
     }
+    // ★ 段1: 事業所の合計行に出た超過のうち、行に印字されていない分 (= どの行に割り振るか印字から決められない分) は
+    //   行の over_limit_units に入れず、最後の行に _over_limit_unallocated として持つ (下流は読まない。検査が人の合計と突き合わせる)
+    const groupOver = Number(money.overLimit) > 0 ? Number(money.overLimit) : 0;
+    const itemOver = lineItems.reduce((s, it) => s + it.over_limit_units, 0);
+    if (groupOver > itemOver) lineItems[lineItems.length - 1]._over_limit_unallocated = groupOver - itemOver;
     for (const it of lineItems) items.push(it);
     pendingGroup = [];
   };
@@ -622,7 +631,11 @@ function finalizeItem(r, money) {
   const benefitRate = money?.benefitRate ?? 90;
   // 金額を直接読めた行はそれを優先し、合計行由来のときは呼出側と同じ式で計算する
   const hasDirect = money?.totalCost != null;
-  const withinLimitUnits = serviceUnits; // ⚠ 限度超過は実データ6本に無く未対応 (モジュール冒頭コメント参照)
+  // ★ 2026-11-13 段1: 行に「区分支給限度基準を超える単位数」が印字されていれば読む (新しい出し方 ikkatsu だけ。全CM は列を確かめていないので 0 のまま)。
+  //   基準内 = サービス単位 − 超過。印字された基準内と合わなければ _over_check_ng を付ける (検査が数える。取込の警告にはしない)
+  const overLimitUnits = Number(r.overLimit) > 0 ? Number(r.overLimit) : 0;
+  const withinLimitUnits = serviceUnits - overLimitUnits;
+  const overCheckNg = overLimitUnits > 0 && r.withinLimitBracket != null && Number(r.withinLimitBracket) !== withinLimitUnits;
   const totalCost = hasDirect ? money.totalCost : Math.floor(withinLimitUnits * unitPrice);
   const insuranceClaim = hasDirect && money.insuranceClaim != null ? money.insuranceClaim : Math.floor(totalCost * benefitRate / 100);
   const userCopay = hasDirect && money.userCopay != null ? money.userCopay : totalCost - insuranceClaim;
@@ -633,7 +646,8 @@ function finalizeItem(r, money) {
     service_code: r.service_code ?? "",
     units, discount_units: units, count,
     service_units: serviceUnits,
-    over_type_units: 0, over_limit_units: 0, within_limit_units: withinLimitUnits,
+    over_type_units: 0, over_limit_units: overLimitUnits, within_limit_units: withinLimitUnits,
+    ...(overCheckNg ? { _over_check_ng: { printed_within: Number(r.withinLimitBracket) } } : {}),
     unit_price: unitPrice, total_cost: totalCost, benefit_rate: benefitRate, insurance_claim: insuranceClaim,
     fixed_copay: 0, user_copay: userCopay, user_full_pay: 0,
     _money_source: money ? (hasDirect ? "direct" : "group-total") : "default",
@@ -645,7 +659,7 @@ function finalizeItem(r, money) {
 
 // ── 束ね PDF を人ごとに切る (2026-11-13。import_care_plan3_usage_detail_from_pdf.mjs から移した。
 //    別表から利用票の manual_units を埋める手順でも同じ切り方を使うため) ──
-/** 別表ページ先頭のヘッダ「令和 8年 6月   0000375402   秋葉 法昌 様」→ {month, insured, name}。読めなければ null。
+/** 別表ページ先頭のヘッダ「令和 8年 6月   (被保番)   (氏名) 様」→ {month, insured, name}。読めなければ null。
  *  ★ 計画書一括印刷・利用票別表(全CM) の出し方では全ページに印字される (2026-11-13 実測: 高品 178/178・
  *  木更津 177/177・計画書一括印刷 7/7)。CM 別に出した高品の 5 本 (例: 高品利用票別表佐藤CM.pdf) では 0/40 で読めない */
 export function parseBetsuhyouHeader(text) {
@@ -666,7 +680,7 @@ function emptyPerson() {
   return {
     weekly: null, riyouhyouIdentity: null, riyouhyouGrid: null, riyouhyouMonth: null,
     betsuhyouItems: null, betsuhyouWarn: [], betsuhyouPublicExpense: [], betsuhyouMonth: null, betsuhyouName: null,
-    betsuhyouLimitAmount: null, betsuhyouHeader: null, betsuhyouOfficeNumber: null, betsuhyouHasEnd: false, betsuhyouPages: 0, pages: [],
+    betsuhyouLimitAmount: null, betsuhyouOverLimitTotal: null, betsuhyouHeader: null, betsuhyouOfficeNumber: null, betsuhyouHasEnd: false, betsuhyouPages: 0, pages: [],
     betsuhyouCarry: [], betsuhyouKohi: [], // 人を閉じるまでの作業用 (finishPerson で片付ける)
   };
 }
@@ -769,6 +783,15 @@ export function parseBundles(pdfPath) {
       // これが無いまま人が終わったら ページ境界で割れたかけら (下の finishPerson で警告にする)
       if (texts[i].includes("種類別支給限度管理")) out.betsuhyouHasEnd = true;
       out.betsuhyouItems = cont ? [...out.betsuhyouItems, ...items] : items;
+      // ★ 段1: 人の合計行 (「区分支給限度基準額(単位)」の行) の「超える単位数」(x 535〜580)。最終ページに出るので どのページでも見る。
+      //   新しい出し方 (ikkatsu) だけ。検査が 行ごとの超過 + 割り振れなかった超過 と突き合わせる
+      {
+        const lab = words[i].find((w) => w.t.includes("区分支給限度基準額"));
+        if (lab && detectBetsuhyouLayout(words[i]) === "ikkatsu") {
+          const ov = words[i].find((w) => Math.abs(w.y - lab.y) <= 3 && w.x >= 535 && w.x < 580 && /^\d+$/.test(w.t));
+          out.betsuhyouOverLimitTotal = ov ? Number(ov.t) : 0;
+        }
+      }
       out.betsuhyouWarn = cont ? [...out.betsuhyouWarn, ...warn.map((w) => `(${out.betsuhyouPages} ページ目) ${w}`)] : warn;
       if (cont) continue; // 限度額・年月・氏名は 1 ページ目のものを使う
       // 「区分支給限度基準額(単位)」の直後に出る数字 (要介護度から機械的に決まる値。
@@ -782,7 +805,7 @@ export function parseBundles(pdfPath) {
           && w.x > limitLabel.x && w.x < limitLabel.x + 200 && /^\d{4,6}$/.test(w.t));
         if (near) out.betsuhyouLimitAmount = Number(near.t);
       }
-      // 別表ヘッダー「令和 8年 6月   0000375402   秋葉 法昌 様」から提供年月と氏名を拾う
+      // 別表ヘッダー「令和 8年 6月   (被保番)   (氏名) 様」から提供年月と氏名を拾う
       // (週間計画の対象月欄が空欄のときのフォールバック用)
       const m = /令和[\s　]*(\d+)[\s　]*年[\s　]*(\d+)[\s　]*月/.exec(texts[i]);
       if (m) out.betsuhyouMonth = `${2018 + Number(m[1])}-${String(Number(m[2])).padStart(2, "0")}`;
