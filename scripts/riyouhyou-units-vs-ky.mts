@@ -62,6 +62,7 @@ import { findKyFiles, readKy8222Lines } from "./_ky-parse.mjs";
 import { resolveByBetsuhyouHeader } from "../migrations/_client_resolve.mjs";
 import { normName } from "../migrations/_name_normalize.mjs";
 import { selectBundlePersons } from "../migrations/_parse_careplan_bundle_pdf.mjs";
+import { usageLimitUnits } from "@/lib/usage-limit-total";
 import { rowMonthlyUnitsOf, isMonthlyUnitType, dedupeMonthlyCounts, riyouhyouRowKey, markedCountOf, dayCountOf } from "@/lib/riyouhyou-row-units";
 import { rentalMonthlyUnits, type RentalRowLike } from "@/lib/rental-units";
 import { recordMonthActualUnits, splitInsuranceRecords, type EquipmentRecordLike } from "@/lib/equipment-record-units";
@@ -349,6 +350,31 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
     const nM = runC(negMarks).length, nS = runC(negSumAll).length;
     if (!nM || !nS) { console.error(`✗ FAIL: 負のコントロールが鳴らない (印の日数 ${nM} / 配列を全部足す ${nS})`); process.exit(1); }
     console.log(`画面・印刷の回数 markedCountOf: 境界 ${cc.length} 件 OK / 負のコントロール 印の日数で数える→${nM}・配列を印と無関係に足す→${nS} 件 落ちる ✓`);
+  }
+  // 利用票画面の区分支給限度の判定 usageLimitUnits (案 A・2026-11-13): 第7表があれば第7表の限度額対象の合計、無ければ利用票の行
+  {
+    type LC = [number, { service_content: string; service_units: number }[] | null, number, string, string];
+    const it = (c: string, u: number) => ({ service_content: c, service_units: u });
+    const lc: LC[] = [
+      [5000, null, 5000, "services", "第7表が無い → 利用票の行"],
+      [5000, [], 5000, "services", "第7表が空 → 利用票の行"],
+      [5000, [it("手すり貸与", 1150), it("身体介護１", 4880)], 6030, "service-usage-detail", "第7表がある → 第7表の合計 (まとめ行の貸与も入る)"],
+      [5000, [it("身体介護１", 4880), it("訪問介護処遇改善加算Ⅱ２", 1328)], 4880, "service-usage-detail", "処遇改善は対象外"],
+      [5000, [it("身体介護１", 9549), it("訪問介護同一建物減算１", -955)], 9549, "service-usage-detail", "同一建物減算は対象外 (KY 4/4)"],
+      [5000, [it("通所介護送迎減算", -846), it("通所介護Ⅰ１１", 5106)], 4260, "service-usage-detail", "送迎減算は対象 (KY と一致)"],
+      [5000, [it("居宅療養小規模事業所加算", 26), it("緊急時訪問看護加算Ⅱ１", 574), it("訪看Ⅰ３", 823)], 823, "service-usage-detail", "居宅療養・緊急時訪問看護は対象外"],
+    ];
+    type LF = (u: number, d: { service_content: string; service_units: number }[] | null) => { units: number; source: string };
+    const runL = (fn: LF) => lc.filter(([u, d, want, src]) => { const r = fn(u, d); return r.units !== want || r.source !== src; });
+    const badL = runL(usageLimitUnits);
+    for (const [u, d, want, src, label] of badL) { const r = usageLimitUnits(u, d); console.error(`✗ usageLimitUnits = ${r.units}/${r.source} / 期待 ${want}/${src} (${label})`); }
+    if (badL.length) { console.error("✗ FAIL: 利用票画面の限度額の判定 usageLimitUnits の境界が崩れている"); process.exit(1); }
+    // 負のコントロール: 第7表を見ない (従来) / 対象外を除かない
+    const negIgnore: LF = (u) => ({ units: u, source: "services" });
+    const negNoExempt: LF = (u, d) => (d && d.length ? { units: d.reduce((t, x) => t + x.service_units, 0), source: "service-usage-detail" } : { units: u, source: "services" });
+    const nI = runL(negIgnore).length, nE = runL(negNoExempt).length;
+    if (!nI || !nE) { console.error(`✗ FAIL: 負のコントロールが鳴らない (第7表を見ない ${nI} / 対象外を除かない ${nE})`); process.exit(1); }
+    console.log(`利用票画面の限度額の判定 usageLimitUnits: 境界 ${lc.length} 件 OK / 負のコントロール 第7表を見ない→${nI}・対象外を除かない→${nE} 件 落ちる ✓`);
   }
   // 帳票の合計で月 1 回コードの複数行を畳む dedupeMonthlyCounts
   type R = { provider: string; content: string; n: number; ut: string | null };

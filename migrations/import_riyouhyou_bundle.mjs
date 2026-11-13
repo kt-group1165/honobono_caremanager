@@ -48,7 +48,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, statSync, readdirSync, readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
 import { AREA_OFFICES } from "./_area_offices.mjs";
-import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
+import { parseBundles, classifyPage, parseBetsuhyouHeader } from "./_parse_careplan_bundle_pdf.mjs";
 import { extractPages } from "./_pdf_words.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -81,8 +81,19 @@ const otherMonth = [];
 //   読み取り (_riyouhyou_grid.mjs) はいつもの出し方の列位置で作ってあるので、ずれたファイルは数えて警告する
 //   (利用票取込の --only-new は、そういう人を「警告のある行 / マスタに無い名前」で書かない)
 const shiftedLayout = [];
+// ★ ページ単位の検品 (2026-11-13 H 依頼)。人として認識されなかったページは「取り込めなかった人」に出ないので、
+//   別表のページごとに ヘッダ (提供年月・被保番・氏名) が読めたかを数える。被保番は英字で始まることがある (四街道 H551079091 新井 秀雄 ほか。
+//   この 2 名はヘッダの行だけ 110 ほど左にずれ、末尾に空欄の「: 令和 年 月 日」が付く。明細の列は通常どおり)
+const pageAudit = { betsuhyouPages: 0, noHeader: [], labelXs: new Map() };
 const labelX = (p) => {
-  const { words } = extractPages(p);
+  const { words, texts } = extractPages(p);
+  for (const [i, t] of texts.entries()) {
+    if (classifyPage(t) !== "betsuhyou") continue;
+    pageAudit.betsuhyouPages++;
+    if (!parseBetsuhyouHeader(t)) pageAudit.noHeader.push(`${path.basename(p)} p${i + 1}`);
+    const lab = words[i].find((x) => x.t === "サービス利用票別表");
+    if (lab) { const k = Math.round(lab.x); pageAudit.labelXs.set(k, (pageAudit.labelXs.get(k) ?? 0) + 1); }
+  }
   for (const w of words) {
     const lab = w.find((x) => x.t === "予定" && x.x > 300 && x.x < 360);
     if (lab) return lab.x;
@@ -137,6 +148,9 @@ console.log(`  読んだ PDF ${RAW_PDFS.length} 本 → 渡す ${PDFS.length} �
 if (dupes.length) { console.log("  同じ人の出し直し (古いほうを使わない):"); for (const d of dupes) console.log(`    ${d}`); }
 if (shiftedLayout.length) { console.log(`  ⚠ 印刷設定の違うファイル ${shiftedLayout.length} 本 (列がずれている。利用票の新規取込は怪しい人を書かない。第7表・貸与は別表の自己検算に従う):`); for (const d of shiftedLayout.slice(0, 20)) console.log(`    ${d}`); if (shiftedLayout.length > 20) console.log(`    … 他 ${shiftedLayout.length - 20} 本`); }
 if (otherMonth.length) { console.log(`  提供年月が ${MONTH} でない (渡さない):`); for (const d of otherMonth) console.log(`    ${d}`); }
+console.log(`  ★ ページ単位の検品: 別表のページ ${pageAudit.betsuhyouPages} / ヘッダの番号が読めなかったページ ${pageAudit.noHeader.length}` +
+  ` / 「サービス利用票別表」ラベルの x ${[...pageAudit.labelXs].map(([x, n]) => `${x}:${n}`).join(" ") || "なし"}${pageAudit.labelXs.size > 1 ? " ← ★ 2 種類以上 = 印刷設定の違うページが混ざっている" : ""}`);
+for (const d of pageAudit.noHeader.slice(0, 20)) console.log(`    ヘッダが読めない: ${d}`);
 
 const summary = [];
 for (const st of STEPS) {

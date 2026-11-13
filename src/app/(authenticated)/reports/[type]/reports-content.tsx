@@ -15,6 +15,7 @@ import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { validInMonth } from "@/lib/service-code-valid";
 import { rowMonthlyUnitsOf, dedupeMonthlyCounts, riyouhyouRowKey, dayCountOf, markedCountOf } from "@/lib/riyouhyou-row-units";
+import { usageLimitUnits, type DetailItemLike } from "@/lib/usage-limit-total";
 import { daysInMonthOf, autoRentalPeriodType, rentalMonthlyUnits, rentalUnitsKind } from "@/lib/rental-units";
 import { planEquipmentImport, isImportRow, type MergeRow } from "@/lib/equipment-import-merge";
 import { selectCurrentPlanForReports, isExpired, type CarePlanForSelection } from "@/lib/careplan-selection";
@@ -1827,6 +1828,25 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
   const ymYear = Number.isFinite(ymParts[0]) ? ymParts[0] : new Date().getFullYear();
   const ymMonth = Number.isFinite(ymParts[1]) ? ymParts[1] : new Date().getMonth() + 1;
   const daysInMonth = daysInMonthOf(selectedYearMonth);
+  // 案 A (2026-11-13 H 承認): 同じ人・同じ月の第7表 (service-usage-detail) の items。集計サマリの区分支給限度の判定に使う
+  //   (src/lib/usage-limit-total.ts の usageLimitUnits)。無い・2 件以上あるときは null = 従来どおり利用票の行から積む
+  //   読んだ値は「誰の・何月の分か」のキーと一緒に持ち、表示時にキーが今の帳票と同じときだけ使う (人や月を切り替えた直後に前の値を使わない)
+  const detailKey = userId ? `${userId}|${selectedYearMonth}` : null;
+  const [detailLoaded, setDetailLoaded] = useState<{ key: string; items: DetailItemLike[] | null } | null>(null);
+  const detailItems = detailKey && detailLoaded?.key === detailKey ? detailLoaded.items : null;
+  useEffect(() => {
+    if (!userId || !detailKey) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase.from("kaigo_report_documents").select("content")
+        .eq("user_id", userId).eq("report_type", "service-usage-detail").eq("report_month", selectedYearMonth).limit(2);
+      if (cancelled) return;
+      if (error) { console.error("第7表 (service-usage-detail) の読み込みに失敗:", error.message); setDetailLoaded({ key: detailKey, items: null }); return; }
+      const docs = data ?? [];
+      setDetailLoaded({ key: detailKey, items: docs.length === 1 ? (((docs[0].content as { items?: DetailItemLike[] } | null)?.items) ?? null) : null });
+    })();
+    return () => { cancelled = true; };
+  }, [supabase, userId, selectedYearMonth, detailKey]);
   // ServiceSelector へ渡す対象月 (再レンダリングでの無限 refetch 防止に memo)
   // 集計サマリの金額用: 提供事業所名 → 地域区分。
   //   ⚠ 2026-09-03 まで単価を 10 円固定にしていた (TODO のまま放置)。
@@ -2684,7 +2704,10 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
         // 区分支給限度基準額 (= 単位)。content.limit_amount は文字列の場合があるので Number() で正規化
         const limitUnits = Number(content.limit_amount ?? 0) || 0;
         // 限度比較は実績 (= 実際の請求対象)。実績無ければ予定で代用。
-        const usedUnits = actualUnitsSum > 0 ? actualUnitsSum : plannedUnitsSum;
+        const usedUnitsFromRows = actualUnitsSum > 0 ? actualUnitsSum : plannedUnitsSum;
+        // 案 A: 第7表がある月は 第7表の限度額対象の合計で判定する (利用票の行は表示用。src/lib/usage-limit-total.ts)
+        const limitBase = usageLimitUnits(usedUnitsFromRows, detailItems);
+        const usedUnits = limitBase.units;
         const withinLimitUnits = limitUnits > 0 ? Math.min(usedUnits, limitUnits) : usedUnits;
         const overLimitUnits = limitUnits > 0 ? Math.max(0, usedUnits - limitUnits) : 0;
         // 単価は **提供事業所の地域区分 × サービス内容** で決まる。
@@ -2749,6 +2772,11 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                   <span className="text-gray-500">限度額</span>
                   <span className="font-mono text-gray-500">{limitUnits > 0 ? limitUnits.toLocaleString() : "—"}</span>
                 </div>
+                {limitBase.source === "service-usage-detail" && (
+                  <div className="mt-0.5 text-[9px] text-gray-400" title="第7表 (利用票別表) の限度額対象の単位の合計で判定しています。処遇改善加算などの対象外は除きます">
+                    第7表の合計 {usedUnits.toLocaleString()} で判定
+                  </div>
+                )}
               </div>
               {/* 利用者負担額 (= 保険分 / 全額分) */}
               <div className="rounded border border-gray-200 bg-white p-2">
