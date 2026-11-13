@@ -167,7 +167,7 @@ const plannedCount = (s: Svc) =>
 const actualCount = (s: Svc) =>
   Array.isArray(s.actual_counts) ? sum(s.actual_counts) : (s.actual ?? []).filter(Boolean).length;
 
-type OurKind = { planned: number; actual: number; over30: number; over30Actual: number; plannedMonthly1: number; actualMonthly1: number; aside: string | null; rows: number };
+type OurKind = { planned: number; actual: number; over30: number; over30Actual: number; plannedMonthly1: number; actualMonthly1: number; aside: string | null; rows: number; nullUnits: number };
 type OurDoc = { doc: Doc; ym: string; insurer: string; insured: string; kinds: Map<string, OurKind>; limit: number | null };
 
 /**
@@ -187,10 +187,11 @@ function buildOurs(docs: Doc[], unitShift?: (s: Svc) => number, capMonthly = tru
     const aEff = dedupe ? dedupeMonthlyCounts(svcs, riyouhyouRowKey, actualCount, utRow) : svcs.map(actualCount);
     for (const [i, s] of svcs.entries()) {
       const kind = (s.category ?? "").trim() || "(種類不明)";
-      const k = kinds.get(kind) ?? { planned: 0, actual: 0, over30: 0, over30Actual: 0, plannedMonthly1: 0, actualMonthly1: 0, aside: null, rows: 0 };
+      const k = kinds.get(kind) ?? { planned: 0, actual: 0, over30: 0, over30Actual: 0, plannedMonthly1: 0, actualMonthly1: 0, aside: null, rows: 0, nullUnits: 0 };
       k.rows++;
       kinds.set(kind, k);
       if (OUTSIDE_LIMIT.test(s.content ?? "")) continue; // 限度額対象外の加算は計画単位数に入らない
+      if (s.units == null) k.nullUnits++;
       if (RENTAL.has(kind)) k.aside = "貸与";
       else if (OUTSIDE_LIMIT_KINDS.has(kind)) k.aside = "限度額対象外の種類";
       else if ((s.content ?? "").includes("同一建物減算")) k.aside ??= "同一建物減算";
@@ -744,6 +745,105 @@ console.log(`
 ■ 負のコントロール 3: 同じ (事業所, サービス) の月 1 回コードの複数行を畳むのをやめる → 一致 ${res.match} → ${resNoDedupe.match} (${negDedupeOk ? "✓ 鳴った" : "✗ 鳴らない"})`);
 console.log("  畳むかどうかで結果が変わったキー (畳まないとき → 今):");
 printTransitions(transDedupe);
+
+// ── 頭打ちの検算 (CAP_CHECK=1 のときだけ。2026-11-14 H 依頼) ─────────────────────────────
+//   「限度額で頭打ち」は 3 条件 (当方の票合計 > 限度額 / KY の票合計 <= 限度額 / 当方 > KY) だけで決めていて、
+//   差の額が超過分と同じかは見ていない。超過分を 2 通りで出し、差と突き合わせる。
+//   ① 計算 (票ごと): 超過 = 当方の限度額対象の合計 − 限度額。
+//      限度額対象 = 種類 31 (居宅療養) を除く全種類の planned (OUTSIDE_LIMIT の加算行は buildOurs で既に除いている。貸与も入る)。
+//      頭打ちキーの差 (当方 − KY) の合計 == 超過 なら「額まで合う」。限度額対象の行に単位の空き (units null) があれば「計算不能」。
+//      ★ 票単位でしか見られない (どの種類に超過を割り振るかは ほのぼのの選択で、計算では決まらない)
+//   ② 第7表 (キーごと): ほのぼのが別表に印字した「区分支給限度を超える単位数」(items[].over_limit_units)。
+//      service_code の先頭 2 桁 = 種類 で集め、差 (当方 − KY) == その種類の超過 なら「額まで合う」。
+//      _over_limit_unallocated (どの行の超過か読めなかった分) があり合わないときは「割り振り不明」。第7表が無い月 (2026-07 など) は「第7表なし」。
+//   ★ ①と②が両方ある票では、①の超過と ②の超過合計 (over + unallocated) の食い違いも数える (独立 2 系統が一致しても値は確定しない、の裏返し)
+type DetailItem = { service_code?: string | null; over_limit_units?: number | string | null; _over_limit_unallocated?: number | string | null };
+type CapKeyIn = { kind: string; ours: number; ky: number };
+export function capCheckTicket(
+  kinds: Map<string, { planned: number; nullUnits: number }>, limit: number, capKeys: CapKeyIn[], items: DetailItem[] | null,
+): { calc: "額まで合う" | "額が合わない" | "計算不能"; calcExcess: number; diffSum: number; detail: Record<string, "額まで合う" | "額が合わない" | "割り振り不明" | "第7表なし" | "超過情報なし">; detailTotal: number | null } {
+  let target = 0, incomplete = false;
+  for (const [kind, k] of kinds) { if (OUTSIDE_LIMIT_KINDS.has(kind)) continue; target += k.planned; if (k.nullUnits > 0) incomplete = true; }
+  const calcExcess = target - limit;
+  const diffSum = capKeys.reduce((s, c) => s + (c.ours - c.ky), 0);
+  const calc = incomplete ? "計算不能" : diffSum === calcExcess ? "額まで合う" : "額が合わない";
+  const detail: Record<string, "額まで合う" | "額が合わない" | "割り振り不明" | "第7表なし" | "超過情報なし"> = {};
+  let detailTotal: number | null = null;
+  const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const unalloc = (items ?? []).reduce((s, it) => s + n(it._over_limit_unallocated), 0);
+  const hasOver = (items ?? []).some((it) => n(it.over_limit_units) > 0) || unalloc > 0;
+  if (items && hasOver) detailTotal = items.reduce((s, it) => s + n(it.over_limit_units), 0) + unalloc;
+  for (const c of capKeys) {
+    if (!items || !items.length) { detail[c.kind] = "第7表なし"; continue; }
+    if (!hasOver) { detail[c.kind] = "超過情報なし"; continue; }
+    const over = items.filter((it) => String(it.service_code ?? "").startsWith(c.kind)).reduce((s, it) => s + n(it.over_limit_units), 0);
+    detail[c.kind] = c.ours - c.ky === over ? "額まで合う" : unalloc > 0 ? "割り振り不明" : "額が合わない";
+  }
+  return { calc, calcExcess, diffSum, detail, detailTotal };
+}
+{ // 境界 (DB 不要)
+  const K = (o: Record<string, [number, number?]>) => new Map(Object.entries(o).map(([k, [p, nu]]) => [k, { planned: p, nullUnits: nu ?? 0 }]));
+  const it = (code: string, over: number, un?: number): DetailItem => ({ service_code: code, over_limit_units: over, _over_limit_unallocated: un });
+  type Case = [string, ReturnType<typeof K>, number, CapKeyIn[], DetailItem[] | null, string, Record<string, string>];
+  const cases: Case[] = [
+    ["超過 500 を訪問介護に全部 (計算・第7表とも合う)", K({ "11": [3000], "15": [2500] }), 5000, [{ kind: "11", ours: 3000, ky: 2500 }], [it("111111", 500), it("151111", 0)], "額まで合う", { "11": "額まで合う" }],
+    ["差が超過より小さい", K({ "11": [3000], "15": [2500] }), 5000, [{ kind: "11", ours: 3000, ky: 2700 }], [it("111111", 500)], "額が合わない", { "11": "額が合わない" }],
+    ["2 種類に割り振り", K({ "11": [3000], "15": [2500] }), 5000, [{ kind: "11", ours: 3000, ky: 2800 }, { kind: "15", ours: 2500, ky: 2200 }], [it("111111", 200), it("151111", 300)], "額まで合う", { "11": "額まで合う", "15": "額まで合う" }],
+    ["居宅療養 (31) は限度額対象に数えない", K({ "11": [5300], "31": [900] }), 5000, [{ kind: "11", ours: 5300, ky: 5000 }], null, "額まで合う", { "11": "第7表なし" }],
+    ["単位の空きがある = 計算不能", K({ "11": [5300], "17": [0, 1] }), 5000, [{ kind: "11", ours: 5300, ky: 5000 }], null, "計算不能", { "11": "第7表なし" }],
+    ["第7表に超過が無い", K({ "11": [5300] }), 5000, [{ kind: "11", ours: 5300, ky: 5000 }], [it("111111", 0)], "額まで合う", { "11": "超過情報なし" }],
+    ["行に割り振れない超過がある", K({ "11": [5300] }), 5000, [{ kind: "11", ours: 5300, ky: 5000 }], [it("111111", 100, 200)], "額まで合う", { "11": "割り振り不明" }],
+  ];
+  const bad = cases.filter(([, k, l, c, i, wc, wd]) => { const r = capCheckTicket(k, l, c, i); return r.calc !== wc || JSON.stringify(r.detail) !== JSON.stringify(wd); });
+  for (const [label, k, l, c, i] of bad) console.error(`✗ capCheckTicket (${label}) = ${JSON.stringify(capCheckTicket(k, l, c, i))}`);
+  // 負のコントロール: 差を見ずに「頭打ちなら合う」とすると 合わない例を見逃す
+  const negLoose = cases.filter(([, , , , , wc]) => wc !== "額まで合う").length;
+  if (bad.length || !negLoose) { console.error("✗ FAIL: 頭打ちの検算 capCheckTicket の境界が崩れている"); process.exit(1); }
+  console.log(`頭打ちの検算 capCheckTicket: 境界 ${cases.length} 件 OK / 負のコントロール 差を見ない→${negLoose} 件 落ちる ✓`);
+}
+if (process.env.CAP_CHECK === "1") {
+  const capByTicket = new Map<string, CapKeyIn[]>();
+  for (const m of res.mismatches) if (m.type === "限度額で頭打ち") {
+    const tk = m.key.split("|").slice(0, 3).join("|");
+    capByTicket.set(tk, [...(capByTicket.get(tk) ?? []), { kind: m.kind, ours: m.ours, ky: m.ky }]);
+  }
+  const oursByTk = new Map<string, OurDoc>();
+  for (const o of ours) { const tk = `${o.ym}|${o.insurer}|${o.insured}`; if (!oursByTk.has(tk)) oursByTk.set(tk, o); }
+  // 第7表は 頭打ちの票の人だけ読む (軽い)。同じ人・同じ月に 2 件以上あれば使わない (どちらか決められない)
+  const want = [...capByTicket.keys()].map((tk) => oursByTk.get(tk)!).filter(Boolean);
+  const detailBy = new Map<string, DetailItem[] | null>();
+  const get = restGet();
+  for (const month of new Set(want.map((o) => o.doc.report_month))) {
+    const users = [...new Set(want.filter((o) => o.doc.report_month === month).map((o) => o.doc.user_id))];
+    for (let i = 0; i < users.length; i += 100) {
+      const rows = await get(`kaigo_report_documents?select=user_id,items:content->items&report_type=eq.service-usage-detail&report_month=eq.${month}&user_id=in.(${users.slice(i, i + 100).join(",")})&limit=1000`) as { user_id: string; items: DetailItem[] | null }[];
+      if (rows.length >= 1000) throw new Error("第7表の読みが 1000 行に達した (分けて読む)");
+      const cnt = new Map<string, number>();
+      for (const r of rows) cnt.set(r.user_id, (cnt.get(r.user_id) ?? 0) + 1);
+      for (const r of rows) detailBy.set(`${month}|${r.user_id}`, cnt.get(r.user_id)! > 1 ? null : (r.items ?? []));
+    }
+  }
+  const calcCount: Record<string, number> = {}, detailCount: Record<string, number> = {};
+  let bothTickets = 0, bothDisagree = 0;
+  const lines: string[] = [];
+  for (const [tk, keys] of capByTicket) {
+    const o = oursByTk.get(tk);
+    if (!o || o.limit == null) { calcCount["(票が引けない)"] = (calcCount["(票が引けない)"] ?? 0) + keys.length; continue; }
+    const items = detailBy.get(`${o.doc.report_month}|${o.doc.user_id}`) ?? null;
+    const r = capCheckTicket(o.kinds, o.limit, keys, items);
+    calcCount[r.calc] = (calcCount[r.calc] ?? 0) + keys.length;
+    for (const v of Object.values(r.detail)) detailCount[v] = (detailCount[v] ?? 0) + 1;
+    if (r.detailTotal != null && r.calc !== "計算不能") { bothTickets++; if (r.detailTotal !== r.calcExcess) bothDisagree++; }
+    lines.push(`  ${tk} 種類 ${keys.map((k) => k.kind).join(",")} 差 ${r.diffSum} / 計算の超過 ${r.calcExcess} → ${r.calc} / 第7表 ${JSON.stringify(r.detail)}${r.detailTotal != null ? ` 第7表の超過 ${r.detailTotal}` : ""}  doc ${o.doc.id}`);
+  }
+  const nKeys = [...capByTicket.values()].reduce((s, v) => s + v.length, 0);
+  console.log(`\n■ 頭打ちの検算 (CAP_CHECK=1): 頭打ちキー ${nKeys} / 票 ${capByTicket.size}`);
+  console.log(`  ① 計算 (票単位・キー数で数える): ${JSON.stringify(calcCount)}`);
+  console.log(`  ② 第7表 (キー単位): ${JSON.stringify(detailCount)}`);
+  console.log(`  ①②が両方ある票 ${bothTickets} / うち超過の額が食い違う票 ${bothDisagree}`);
+  console.log("  ★ 見ていないもの: 頭打ち以外の型に紛れた頭打ち (実績回数で一致 等が先に当たったキー) / KY が限度額ちょうどかどうか");
+  for (const l of DETAIL ? lines : lines.slice(0, 15)) console.log(l);
+}
 
 if (CHECK_MONTH) {
   console.log(`
