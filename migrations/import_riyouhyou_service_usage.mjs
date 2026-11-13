@@ -230,7 +230,11 @@ async function fetchCerts(clientIds) {
 }
 
 // ── 3. content を組む ──────────────────────────────────────────────────────
-function buildServices(rows) {
+// ★ マスタに無い名前の行 (2026-11-14 H 判断): 人を落とさず 行は印字どおりの名前で書き、印を付ける。種類・単位は空のまま (推測で埋めない)
+//   kind-only  = 種類名だけの行 (「(訪問介護)」のような括弧書き / 「自立支援）生活介護」) = サービスコードの無い保険外らしい行
+//   unreadable = 印字の途中で切れた名前など (「…口腔栄養スクリ」「30日超短期生活生産性向上推」)
+const unmatchedKind = (n) => (/^[（(][^）)]+[）)]$/.test(String(n)) || /^自立支援[）)]/.test(String(n)) ? "kind-only" : "unreadable");
+function buildServices(rows, unmatched = null) {
   return rows.map((r) => {
     const svc = {
       time: r.time,
@@ -244,11 +248,12 @@ function buildServices(rows) {
     };
     if (r.equipment_name) svc.equipment_name = r.equipment_name;
     if (r.tais_code) svc.tais_code = r.tais_code;
+    if (unmatched?.has(r.content)) svc._name_unmatched = unmatchedKind(r.content);
     return svc;
   });
 }
 
-function buildContent(prev, person, cert) {
+function buildContent(prev, person, cert, unmatched = null) {
   const careLevel = cert?.care_level ?? person.careLevel ?? "";
   const limit = cert?.service_limit_amount ?? CARE_LEVEL_TO_LIMIT[careLevel] ?? "";
   return {
@@ -270,7 +275,7 @@ function buildContent(prev, person, cert) {
     // 埋める値がどこにも無いので空のままにする (2026-08-31 に PDF 実物で確認)。
     creation_date: prev?.creation_date || "",
     submission_date: prev?.submission_date || "",
-    services: buildServices(person.rows),
+    services: buildServices(person.rows, unmatched),
     _import_source: { kind: "riyouhyou-pdf", marker: MARKER, month: MONTH, files: person.sources },
   };
 }
@@ -314,7 +319,8 @@ async function main() {
 
   const total = { people: 0, resolved: 0, unresolved: 0, ambiguous: 0, rows: 0, warnRows: 0,
                   inserted: 0, updated: 0, skipped: 0, skippedExisting: 0, skippedWarnNew: 0, skippedUnknownNameNew: 0, over9: 0, nameMismatch: 0, failed: 0,
-                  droppedPages: 0 };
+                  droppedPages: 0, unmatchedRows: {}, unmatchedPeople: {} };
+  const unmatchedList = [];
   const unresolvedList = [];
   const nameMismatchList = [];
   const warnList = [];
@@ -401,6 +407,7 @@ async function main() {
       }
       if (p.rows.length > 9) total.over9++;
 
+      let unmatchedNames = null;
       const prev = ASSUME_NO_EXISTING ? undefined : existing.get(clientId);
       const prevContent = prev?.content ?? null;
       if (prev && ONLY_NEW) { total.skippedExisting++; continue; }
@@ -409,8 +416,14 @@ async function main() {
         //   壊れた行が入るほうが悪い)。件数と例を必ず出す
         if (w.length) { total.skippedWarnNew++; if (skipNewList.length < 20) skipNewList.push(`${area} ${p.name}: 警告のある行 ${w.length} (${w[0].content || "(空)"} — ${w[0].warn.join(" / ")})`); console.log(`★未取込	${p.name ?? ""}	${p.insured ?? ""}	利用票: 警告のある行 ${w.length}`); continue; }
         const unknown = p.rows.map((r) => r.content).filter((n) => n && n !== "(その他)" && !knownNames.has(masterKey(n)));
-        // ★ runner の「取り込めなかった人」に出す (2026-11-13。前は skipNewList に 20 名まで出るだけで 一覧から漏れていた)
-        if (unknown.length) { total.skippedUnknownNameNew++; if (skipNewList.length < 20) skipNewList.push(`${area} ${p.name}: マスタに無いサービス名 ${unknown.length} (${[...new Set(unknown)].slice(0, 3).join(" / ")})`); console.log(`★未取込	${p.name ?? ""}	${p.insured ?? ""}	利用票: マスタに無いサービス名 ${[...new Set(unknown)].slice(0, 2).join(" / ")}`); continue; }
+        // ★ 2026-11-14 H 判断: マスタに無い名前の行があっても 人は落とさない (1 行のために保険の行まで落ちる / 落ちたことに後から気づけない)。
+        //   行は印字どおりの名前で書き _name_unmatched を付ける。件数は 種類ごとに出す。2026-06 の利用票も同じ形 (種類・単位が空の行) で入っている
+        if (unknown.length) {
+          unmatchedNames = new Set(unknown);
+          for (const n of unknown) { const k = unmatchedKind(n); total.unmatchedRows[k] = (total.unmatchedRows[k] ?? 0) + 1; }
+          for (const k of new Set(unknown.map(unmatchedKind))) total.unmatchedPeople[k] = (total.unmatchedPeople[k] ?? 0) + 1;
+          if (unmatchedList.length < 40) unmatchedList.push(`${area} ${p.name}: ${[...new Set(unknown)].slice(0, 3).join(" / ")}`);
+        }
       }
       const mine = prevContent?._import_source?.kind === "riyouhyou-pdf";
       if (prev && !mine && hasAnyMark(prevContent) && !FORCE) {
@@ -418,7 +431,7 @@ async function main() {
         continue;
       }
 
-      const content = buildContent(prevContent, p, certs.get(clientId));
+      const content = buildContent(prevContent, p, certs.get(clientId), unmatchedNames);
       if (!EXECUTE) { if (prev) total.updated++; else total.inserted++; continue; }
 
       if (prev) {
@@ -461,7 +474,10 @@ async function main() {
   if (ONLY_NEW) {
     console.log(`  skip (既に利用票あり) ${total.skippedExisting} 件  ← --only-new`);
     console.log(`  skip (新規・警告のある行) ${total.skippedWarnNew} 件  ← --only-new では書かない`);
-    console.log(`  skip (新規・マスタに無いサービス名) ${total.skippedUnknownNameNew} 件  ← 折り返しで名前が切れた疑い。書かない`);
+    const ur = total.unmatchedRows, up = total.unmatchedPeople;
+    console.log(`  名前が読めない行 (書いた・印 _name_unmatched=unreadable) ${ur.unreadable ?? 0} 行 / ${up.unreadable ?? 0} 名  ← 印字の途中で切れた名前など。種類・単位は空`);
+    console.log(`  種類名だけの行 (書いた・印 _name_unmatched=kind-only) ${ur["kind-only"] ?? 0} 行 / ${up["kind-only"] ?? 0} 名  ← 「(訪問介護)」「自立支援）…」= 保険外らしい行。種類・単位は空`);
+    for (const l of unmatchedList.slice(0, 40)) console.log(`    ${l}`);
   }
   if (total.failed) console.log(`  ✗ 失敗                ${total.failed} 件`);
 

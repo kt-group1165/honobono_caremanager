@@ -33,7 +33,8 @@ type Doc = { id: string; user_id: string; content: { services?: Svc[] } | null }
 type Office = { id: string; name: string };
 type Asg = { client_id: string; office_id: string; start_date: string | null; end_date: string | null };
 type Area = { 貸与行: number; 未投入: number; bySource: Record<string, number> };
-type Baseline = { _readme: string[]; month: string; areas: Record<string, Area>; total: Area };
+type Unmatched = { rows: number; docs: number; byMark: Record<string, number> };
+type Baseline = { _readme: string[]; month: string; areas: Record<string, Area>; total: Area; unmatched?: Unmatched };
 
 function restGet(): (q: string) => Promise<unknown[]> {
   const env = Object.fromEntries(
@@ -146,6 +147,16 @@ const areaOf = (uid: string) => {
 };
 const docs = await getAll<Doc>(get, `kaigo_report_documents?select=id,user_id,content&report_type=eq.service-usage&report_month=eq.${MONTH}&order=id.asc`);
 const cur = tally(docs, areaOf);
+// ★ 名前があるのに種類 (category) が空の行 = マスタに無い名前の行 (2026-11-14 H)。種類・単位が入らないので 限度額・単位の集計から抜ける。
+//   印 _name_unmatched (unreadable = 印字の途中で切れた名前 / kind-only = 種類名だけの保険外らしい行)。印の無いものは 印を付ける前に入った行 (2026-06 の 5 行など)
+const unmatched: Unmatched = { rows: 0, docs: 0, byMark: {} };
+for (const d of docs) {
+  const rs = (d.content?.services ?? []).filter((s) => (s as { content?: string }).content && s.category == null);
+  if (!rs.length) continue;
+  unmatched.docs++; unmatched.rows += rs.length;
+  for (const s of rs) { const m = String((s as { _name_unmatched?: string })._name_unmatched ?? "(印なし)"); unmatched.byMark[m] = (unmatched.byMark[m] ?? 0) + 1; }
+}
+console.log(`名前があるのに種類が空の行 (限度額・単位の集計から抜ける行) ${unmatched.rows} 行 / ${unmatched.docs} 帳票 ${JSON.stringify(unmatched.byMark)}`);
 
 console.log(`\n母数: ${MONTH} に利用票がある人の 貸与行 (category 17/67) ${cur.total.貸与行} 行 / 帳票 ${docs.length} 件 (貸与契約の全件ではない)`);
 console.log(`投入済 ${cur.total.貸与行 - cur.total.未投入} 行 (${((1 - cur.total.未投入 / Math.max(cur.total.貸与行, 1)) * 100).toFixed(1)}%) / 未投入 ${cur.total.未投入} 行`);
@@ -162,7 +173,7 @@ if (UPDATE) {
     "  13 拠点の別表 (または居宅側の提供票 CSV) が入れば未投入は大きく減る。減ったら --update で締める。",
     "母数は「その月に利用票がある人の貸与行」。貸与契約の全件ではない。",
   ];
-  writeFileSync(BASELINE, JSON.stringify({ _readme: readme, month: MONTH, areas: cur.areas, total: cur.total } satisfies Baseline, null, 2) + "\n");
+  writeFileSync(BASELINE, JSON.stringify({ _readme: readme, month: MONTH, areas: cur.areas, total: cur.total, unmatched } satisfies Baseline, null, 2) + "\n");
   console.log(`\n基準値を書き直した: ${BASELINE}`);
   process.exit(0);
 }
@@ -183,6 +194,9 @@ console.log(`\n■ 負のコントロール: 投入済の 1 行の _units_source
 
 const { fails, notes } = compare(cur, base);
 if (!negOk) fails.push("負のコントロールが鳴らない");
+// 名前があるのに種類が空の行が 増えたら落とす (基準値に無い = 古い基準値のときは 件数を出すだけ)
+if (base.unmatched && unmatched.rows > base.unmatched.rows) fails.push(`名前があるのに種類が空の行 ${base.unmatched.rows} → ${unmatched.rows} (増えた。中身を見て、名前の照合で通せるものか 本当に読めないものかを分ける)`);
+if (!base.unmatched) notes.push(`名前があるのに種類が空の行は 基準値に無い (--update で入る)。今 ${unmatched.rows} 行`);
 for (const n of notes) console.log(`  ○ ${n}`);
 console.log("\n★ この検査が見ていないもの: 値が正しいか (KY との突合は check:riyouhyou-units) / 利用票が無い人の貸与 / 2026-06 以外の月 (MONTH で指定)");
 if (fails.length) { console.log("✗ FAIL"); for (const f of fails) console.log("  " + f); process.exit(1); }
