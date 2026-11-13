@@ -396,14 +396,20 @@ async function main() {
         const { cert, covered } = certResult;
         console.log(`  第3表: 採用する認定 ${cert.care_level} (${cert.certification_start_date}〜${cert.certification_end_date ?? ""})${covered ? "" : "  ※対象月を含む認定が無く最新で代替"}`);
 
-        const { data: existingCp3 } = await sb
+        // ★ maybeSingle() はエラーを見ないと「2 件ある」も data=null (= 既存なし) に見え、もう 1 件入れてしまう (2026-11-13 是正)
+        const { data: cp3Rows, error: cp3Err } = await sb
           .from("kaigo_report_documents")
           .select("id, content")
           .eq("user_id", clientId)
           .eq("report_type", "care-plan-3")
           .eq("certification_id", cert.id)
-          .maybeSingle();
-        if (existingCp3) {
+          .limit(2);
+        if (cp3Err) throw new Error(`既存の第3表の取得に失敗: ${cp3Err.message}`);
+        const existingCp3 = cp3Rows?.[0] ?? null;
+        if ((cp3Rows ?? []).length > 1) {
+          console.log("  skip (この認定に紐づく care-plan-3 が 2 件以上ある。どれを正とするか人が決める)");
+          skipped++;
+        } else if (existingCp3) {
           console.log("  skip (この認定に紐づく care-plan-3 が既にある。--force は使わない仕様)");
           skipped++;
         } else {
@@ -467,14 +473,22 @@ async function main() {
         continue;
       }
 
-      const { data: existingDetail } = await sb
+      // ★ maybeSingle() はエラーを見ないと「2 件ある」も data=null (= 既存なし) に見え、3 件目を入れてしまう (2026-11-13 是正)。
+      //   1 人 1 か月に第7表が 2 件あるのは 転居月 (保険者が 2 つ) など。どれを上書きするか決められないので書かない
+      const { data: detailRows, error: detailErr } = await sb
         .from("kaigo_report_documents")
         .select("id, content")
         .eq("user_id", clientId)
         .eq("report_type", "service-usage-detail")
         .eq("report_month", targetMonth)
-        .maybeSingle();
-      if (existingDetail && !FORCE) {
+        .limit(2);
+      if (detailErr) throw new Error(`既存の第7表の取得に失敗: ${detailErr.message}`);
+      const existingDetail = detailRows?.[0] ?? null;
+      if ((detailRows ?? []).length > 1) {
+        console.log(`  skip (既存 service-usage-detail ${targetMonth} が 2 件以上ある。どれを上書きするか決められない)`);
+        notIn(whoOf(b).name, whoOf(b).insured, `既存の第7表が 2 件以上 (${targetMonth})`);
+        skipped++;
+      } else if (existingDetail && !FORCE) {
         console.log(`  skip (既存 service-usage-detail ${targetMonth} あり。--force で上書き)`);
         skipped++;
       } else {
