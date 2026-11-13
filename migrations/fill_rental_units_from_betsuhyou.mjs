@@ -121,7 +121,7 @@ async function main() {
   const c2List = []; // C2 は全件出す (H 指示: 件数と氏名・品目を残す)
   const c1Out = []; // C1 を KY 検算で書かなかった人
   const kyOver = { n: 0, changed: [] }; // KY 単独で埋めた行を別表で上書きする件数 / 値が変わった行
-  const tais = { filled: 0, split: 0, upgraded: 0, changed: [], taintedPeople: [], itemsWith: 0, items: 0 }; // TAIS で当てた行
+  const tais = { filled: 0, split: 0, upgraded: 0, changed: [], taintedPeople: [], itemsWith: 0, items: 0, fromSameCount: 0, fromD: 0 }; // TAIS で当てた行
   const plans = []; // { docId, content, fills: [{ i, units }] }
   const examples = { D: [] };
   const existingMismatch = [];
@@ -184,6 +184,8 @@ async function main() {
             if (hasUnits(r.s)) { tais.upgraded++; const before = Number(r.s.rental_month_actual_units ?? r.s.manual_units); if (before !== vals[j]) tais.changed.push(`${label} TAIS ${t}: ${r.s._units_source} ${before} → ${vals[j]}`); }
             fills.push({ i: r.i, units: vals[j], src: `betsuhyou_tais_${ym}` });
             tais.filled++;
+            // 内訳 (H 依頼 2026-11-13): このグループが TAIS 無しなら どの型に落ちていたか。行数が合う = C (単位違い) か B / 行数違い = D
+            if (rs0.length === its0.length) tais.fromSameCount++; else tais.fromD++;
             usedR.add(r);
           }
           for (const it of iT) usedI.add(it);
@@ -260,6 +262,7 @@ async function main() {
   if (c2List.length) { console.log("  C2 (全件):"); for (const x of c2List) console.log(`    ${x}`); }
   if (examples.D.length) { console.log("  D の例:"); for (const x of examples.D) console.log(`    ${x}`); }
   console.log(`\n■ TAIS で当てた行 ${tais.filled} 行 (うち同じ TAIS の n 等分 ${tais.split} 行) / 別表の貸与行のうち TAIS を拾えた ${tais.itemsWith}/${tais.items} 行`);
+  console.log(`  TAIS で当てた行の内訳 (TAIS が無ければ落ちていた型): 行数が合うグループ (C・B) ${tais.fromSameCount} 行 / 行数違い (D) ${tais.fromD} 行`);
   console.log(`  集合 (betsuhyou_set_*)・KY 単独 で入れていた行を TAIS で確定 ${tais.upgraded} 行 / うち値が変わる ${tais.changed.length} 行`);
   for (const x of tais.changed) console.log(`    ⚠ ${x}`);
   console.log(`  ★ 同じ TAIS の組が割り切れず 書かなかった人 ${tais.taintedPeople.length} 名`);
