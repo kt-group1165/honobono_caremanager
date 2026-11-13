@@ -40,6 +40,7 @@ const CHECKS: Check[] = [
   { name: "invariant", script: "check:invariant", why: "★ 17条件を 全事業所・4制度に当てる (内部の関係が壊れていないか)" },
   { name: "densou", script: "check:densou", why: "伝送前の事前点検 (返戻・過大請求の元)" },
   { name: "anon", script: "check:anon", why: "★ 個人情報が anon から読めないか (分母は PostgREST の 228 表)" },
+  { name: "no-pii", script: "check:no-pii", why: "★ 被保険者番号などが repo に新しく入らないか (DB 不使用・1.4 秒・負のコントロール付き。基準値方式)", kind: "baseline" },
   { name: "addon-lines", script: "check:addon-lines", why: "★ 加算行の 書式ずれ (制度で読み方が違う) と マスタ実在" },
   { name: "month-format", script: "check:month-format", why: "★ 月を表す text 列 39 個の 書式ずれ (書く側と読む側で違うと 0 件になる)" },
   // ★ 同じ規約を 2 箇所で別々に持っているもの の見張り。TS から .mjs を import できないため
