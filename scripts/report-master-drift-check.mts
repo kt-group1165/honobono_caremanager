@@ -102,17 +102,6 @@ async function fetchAllDocs() {
   return docs;
 }
 
-async function fetchClientNames(userIds: string[]) {
-  const names = new Map<string, string>();
-  for (let i = 0; i < userIds.length; i += 150) {
-    const chunk = userIds.slice(i, i + 150);
-    const { data, error } = await sb.from("clients").select("id, name").in("id", chunk);
-    if (error) throw new Error(`利用者名の取得に失敗: ${error.message}`);
-    for (const c of data as { id: string; name: string }[]) names.set(c.id, c.name);
-  }
-  return names;
-}
-
 async function main() {
   const docs = await fetchAllDocs();
   const userIds = Array.from(new Set(docs.map((d) => d.user_id)));
@@ -182,12 +171,11 @@ async function main() {
     byType.set(d.report_type, t);
   }
 
-  // ★ 利用票 (外部に渡る帳票) は氏名付きで全件出力 (後から説明できるように)
+  // ★ 利用票 (外部に渡る帳票) は全件出力 (後から説明できるように)。
+  //   ★ 2026-11-14 氏名は出さない (commit されるファイル。検査を回すたびに実名が増えるため)。doc_id・user_id でアプリから引ける
   if (serviceUsageDetail.length > 0 && !NEG_CONTROL) {
-    const names = await fetchClientNames(Array.from(new Set(serviceUsageDetail.map((r) => r.user_id))));
-    const withNames = serviceUsageDetail.map((r) => ({ ...r, client_name: names.get(r.user_id) ?? "(不明)" }));
-    writeFileSync(DETAIL_OUT, JSON.stringify({ asOf: new Date().toISOString().slice(0, 10), rows: withNames }, null, 2));
-    console.log(`利用票の変更前後一覧 (${withNames.length}件) を書きました → ${DETAIL_OUT}`);
+    writeFileSync(DETAIL_OUT, JSON.stringify({ asOf: new Date().toISOString().slice(0, 10), rows: serviceUsageDetail }, null, 2));
+    console.log(`利用票の変更前後一覧 (${serviceUsageDetail.length}件) を書きました → ${DETAIL_OUT}`);
   }
 
   console.log(`\n=== 帳票別 care_level 食い違い件数 ===`);
@@ -244,7 +232,7 @@ async function main() {
         "  145 / 120 に増えて FAIL → 是正後 0 / 1 に下がったので基準値を下げた (厳しくなる方向)。",
         "  ① certification_id があればその認定 ② 無ければ report_month に有効な認定",
         "  (cert-for-month.ts pickCertRowForMonth = 請求と同じ規則) ③ それも無ければ現在の認定。",
-        "  残る 1 件: 櫻田 數枝 利用票 2026-06 — 保存 要支援2 / 6月に有効な認定は",
+        "  残る 1 件: doc af3698e8 の利用票 2026-06 — 保存 要支援2 / 6月に有効な認定は",
         "  要支援2 (2026-04〜) と 要介護2 (2026-06-01〜) が重なり、開始日が新しい 要介護2 を採る",
         "  (請求と同じ)。利用票は 8/31 04:58 保存、要介護2 の認定行は同日 15:54 登録 = 認定更新による自然な差。",
         "  負のコントロール: NEG_CONTROL=1 で わざと月外の認定を選ばせると service-usage 1175 件で FAIL する。",
@@ -266,7 +254,7 @@ async function main() {
         "",
         "■ service-usage (利用票) は外部に渡る帳票",
         "  変更前後の一覧を report-master-drift-service-usage-detail.json に",
-        "  全件出力している (利用者名付き。後から説明できるように)。",
+        "  全件出力している (doc_id・user_id のみ。2026-11-14 から氏名は出さない)。",
       ],
     }, null, 2));
     console.log(`\n★ 基準値を書きました: ${BASELINE}`);
