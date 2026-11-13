@@ -14,7 +14,8 @@
  *   - セルクリック → 手入力 (source='manual')
  *   - 「別表から取込」→ kaigo_report_documents (report_type='service-usage-detail') の
  *     content.items[] から自事業所 (provider_number=事業所番号 or provider_name=事業所名) の
- *     within_limit_units を合算して一括 upsert (source='careplan')
+ *     within_limit_units を合算して一括 upsert (source='careplan')。決め方は src/lib/beppyo-plan-units.ts
+ *     (★ 同じ人に第7表が 2 件 / 限度額を超えた人は 取り込まずに名前を出す。2026-11-13)
  *   - 「前月複写」→ 前月の kaigo_monthly_plan_units を当月へコピー (当月値ありは skip、source='copy')
  *
  * 警告バッジ (目視確認用):
@@ -31,6 +32,7 @@ import { createClient } from "@/lib/supabase/client";
 import { monthRange } from "@/lib/cert-for-month";
 import { mergeSegmentRows } from "@/lib/visit-seikyu/aggregate";
 import { useBusinessType } from "@/lib/business-type-context";
+import { planUnitsFromBeppyo, type BeppyoDoc } from "@/lib/beppyo-plan-units";
 import {
   useSeikyuContext,
   SeikyuKanaSidebar,
@@ -70,13 +72,6 @@ const PLAN_SOURCE_LABEL: Record<string, string> = {
 function isTableMissing(code: string | null | undefined, message: string | null | undefined): boolean {
   if (code === "42P01" || code === "PGRST205") return true;
   return !!message?.includes("kaigo_monthly_plan_units") && !!message?.includes("schema cache");
-}
-
-// 別表 (第7表) content.items[] の 1 行
-interface UsageDetailItem {
-  provider_number?: string | null;
-  provider_name?: string | null;
-  within_limit_units?: number | string | null;
 }
 
 export function MonthlyInfoContent() {
@@ -241,37 +236,37 @@ export function MonthlyInfoContent() {
     setImporting(true);
     try {
       const ym = `${year}-${String(month).padStart(2, "0")}`;
-      // 別表 (第7表) を対象月で取得。report_month が正 (reports 編集画面)、
-      // year_month は旧 careplan-import 形式のフォールバック。
-      const { data, error: qErr } = await supabase
-        .from("kaigo_report_documents")
-        .select("user_id, content, created_at")
-        .eq("report_type", "service-usage-detail")
-        .or(`content->>report_month.eq.${ym},content->>year_month.eq.${ym}`)
-        .order("created_at", { ascending: false })
-        .limit(1000);
-      if (qErr) {
-        toast.error(`別表の取得に失敗: ${qErr.message}`);
-        return;
+      // 別表 (第7表) を対象月で取得。★ 月は列 report_month が正 (2026-11-13 是正: 別表の束の取込は列にだけ月を持ち、
+      //   content の report_month / year_month を見るだけでは 1 件も拾えなかった)。content の 2 つは旧 careplan-import 形式のフォールバック。
+      // ★ 全件をページで読む (旧: limit(1000)。2026-06 は 2,850 件あり 打ち切られていた)
+      const docs: BeppyoDoc[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error: qErr } = await supabase
+          .from("kaigo_report_documents")
+          .select("id, user_id, content")
+          .eq("report_type", "service-usage-detail")
+          .or(`report_month.eq.${ym},content->>report_month.eq.${ym},content->>year_month.eq.${ym}`)
+          .order("id")
+          .range(from, from + 999);
+        if (qErr) {
+          toast.error(`別表の取得に失敗: ${qErr.message}`);
+          return;
+        }
+        docs.push(...((data ?? []) as BeppyoDoc[]));
+        if ((data ?? []).length < 1000) break;
       }
 
-      // user ごとに「最新の、自事業所 items を持つ別表」を採用
-      const byUser = new Map<string, number>();
-      for (const doc of (data ?? []) as { user_id: string; content: unknown }[]) {
-        if (byUser.has(doc.user_id)) continue;
-        const content = doc.content as { items?: UsageDetailItem[] } | null;
-        if (!content || !Array.isArray(content.items)) continue;
-        const own = content.items.filter(
-          (it) =>
-            (officeNumber != null && it.provider_number === officeNumber) ||
-            (officeName != null && it.provider_name === officeName),
+      // ★ 決め方は src/lib/beppyo-plan-units.ts (同じ人に 2 件 / 限度額を超えた人は 書かずに名前を出す)
+      const { units: byUser, multi, overLimit } = planUnitsFromBeppyo(docs, { number: officeNumber ?? null, name: officeName ?? null });
+      if (multi.length || overLimit.length) {
+        const names = (xs: { name: string }[]) => xs.slice(0, 5).map((x) => x.name || "(氏名なし)").join("・") + (xs.length > 5 ? ` ほか ${xs.length - 5} 名` : "");
+        toast.warning(
+          [
+            multi.length ? `第7表が 2 件以上あるため取り込まなかった ${multi.length} 名: ${names(multi)}` : "",
+            overLimit.length ? `区分支給限度を超えているため取り込まなかった ${overLimit.length} 名 (第7表で超過の割り振りを決めてから手入力): ${names(overLimit)}` : "",
+          ].filter(Boolean).join(" / "),
+          { duration: 15000 },
         );
-        if (own.length === 0) continue;
-        const sum = own.reduce(
-          (s, it) => s + (Number(it.within_limit_units) || 0),
-          0,
-        );
-        byUser.set(doc.user_id, sum);
       }
 
       if (byUser.size === 0) {
