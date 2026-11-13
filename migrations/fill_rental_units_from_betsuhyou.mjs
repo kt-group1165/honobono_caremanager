@@ -79,7 +79,11 @@ const hasUnits = (r) => Number(r.manual_units) > 0 || Number(r.rental_month_actu
 const isKySingle = (r) => String(r._units_source ?? "").startsWith("ky8222_single_");
 // 集合で入れた行 (betsuhyou_set_*) は TAIS で確定した値で上書きしてよい (allowSet=true のときだけ)
 const isSet = (r) => String(r._units_source ?? "").startsWith("betsuhyou_set_");
-const locked = (r, allowSet = false) => hasUnits(r) && !isKySingle(r) && !(allowSet && isSet(r));
+// ケアサポ明細 (fukuyogu_meisai_* v1 / v2) で入れた行も 別表で上書きしてよい (H 承認 2026-11-13・別表 > ケアサポ明細)。
+// ただし その人の別表の貸与合計 = KY 8222 の貸与合計 のときだけ (人の最後で確かめ、合わなければ その人のケアサポ明細の上書きを取り消す)
+const isCaresapo = (r) => String(r._units_source ?? "").startsWith("fukuyogu_meisai");
+const locked = (r, allowSet = false) => hasUnits(r) && !isKySingle(r) && !isCaresapo(r) && !(allowSet && isSet(r));
+const caresapoValue = (r) => (Number(r.rental_month_actual_units) > 0 ? Number(r.rental_month_actual_units) : Number(r.manual_units ?? 0));
 const normTais = (v) => (v ? String(v).normalize("NFKC").replace(/[\s　]/g, "") : null);
 /** 行を見分ける材料は印 (予定・実績) だけ (品目名・事業所は同じグループ内で同じ)。印が全行同じなら行は見分けられない */
 const marksKey = (s) => JSON.stringify([s.planned ?? [], s.actual ?? []]);
@@ -121,6 +125,7 @@ async function main() {
   const c2List = []; // C2 は全件出す (H 指示: 件数と氏名・品目を残す)
   const c1Out = []; // C1 を KY 検算で書かなかった人
   const kyOver = { n: 0, changed: [] }; // KY 単独で埋めた行を別表で上書きする件数 / 値が変わった行
+  const csOver = { n: 0, changed: [], skippedPeople: [] }; // ケアサポ明細の行を別表で上書きする件数 / 値が変わった行 / KY で合わず取り消した人
   const tais = { filled: 0, split: 0, upgraded: 0, changed: [], taintedPeople: [], itemsWith: 0, items: 0, fromSameCount: 0, fromD: 0 }; // TAIS で当てた行
   const plans = []; // { docId, content, fills: [{ i, units }] }
   const examples = { D: [] };
@@ -182,7 +187,7 @@ async function main() {
           if (!vals) continue;
           for (const [j, r] of rT.entries()) {
             if (hasUnits(r.s)) { tais.upgraded++; const before = Number(r.s.rental_month_actual_units ?? r.s.manual_units); if (before !== vals[j]) tais.changed.push(`${label} TAIS ${t}: ${r.s._units_source} ${before} → ${vals[j]}`); }
-            fills.push({ i: r.i, units: vals[j], src: `betsuhyou_tais_${ym}` });
+            fills.push({ i: r.i, units: vals[j], src: `betsuhyou_tais_${ym}`, cs: isCaresapo(r.s), before: isCaresapo(r.s) ? caresapoValue(r.s) : null, label });
             tais.filled++;
             // 内訳 (H 依頼 2026-11-13): このグループが TAIS 無しなら どの型に落ちていたか。行数が合う = C (単位違い) か B / 行数違い = D
             if (rs0.length === its0.length) tais.fromSameCount++; else tais.fromD++;
@@ -219,7 +224,7 @@ async function main() {
           const before = Number(r.s.rental_month_actual_units), after = Number(its[j].service_units);
           if (before !== after) kyOver.changed.push(`${label}  KY 単独 ${before} → 別表 ${after}`);
         }
-        fills.push({ i: r.i, units: Number(its[j].service_units), src: `betsuhyou_${ym}` });
+        fills.push({ i: r.i, units: Number(its[j].service_units), src: `betsuhyou_${ym}`, cs: isCaresapo(r.s), before: isCaresapo(r.s) ? caresapoValue(r.s) : null, label });
         cls[rs.length === 1 ? "A" : "B"]++;
       }
     }
@@ -245,6 +250,20 @@ async function main() {
     }
     tais.items += items.length; tais.itemsWith += items.filter((it) => it.tais_code).length;
     if (tainted) { tais.taintedPeople.push(tainted); continue; } // 割り切れない同じ TAIS の組があった人は 何も書かない
+    // ケアサポ明細の上書きは その人の 別表の貸与合計 = KY のときだけ (合わなければ取り消す。他の行はそのまま書く)
+    if (fills.some((f) => f.cs)) {
+      const insured = b.betsuhyouHeader?.insured ?? b.riyouhyouIdentity?.insured;
+      const ymc = ym.replace("-", "");
+      const kyTot = b.betsuhyouOfficeNumber && insured ? kyRentalTotals(ymc).get(`${b.betsuhyouOfficeNumber}|${insured}|${ymc}`) : undefined;
+      const mine = items.reduce((t, it) => t + Number(it.service_units), 0);
+      const csFills = fills.filter((f) => f.cs);
+      if (kyTot === undefined || kyTot !== mine) {
+        csOver.skippedPeople.push(`${names.get(clientId) ?? b.betsuhyouHeader?.name ?? ""} ${ym}: 別表の貸与合計 ${mine} / KY ${kyTot ?? "居ない"} → ケアサポ明細の ${csFills.length} 行は上書きしない`);
+        for (const f of csFills) fills.splice(fills.indexOf(f), 1);
+      } else {
+        for (const f of csFills) { csOver.n++; if (f.before !== f.units) csOver.changed.push(`${f.label}  ケアサポ明細 ${f.before} → 別表 ${f.units}`); }
+      }
+    }
     if (fills.length) plans.push({ docId: doc.id, ym, content: doc.content, fills, name: names.get(clientId) ?? "" });
   }
 
@@ -267,6 +286,9 @@ async function main() {
   for (const x of tais.changed) console.log(`    ⚠ ${x}`);
   console.log(`  ★ 同じ TAIS の組が割り切れず 書かなかった人 ${tais.taintedPeople.length} 名`);
   for (const x of tais.taintedPeople) console.log(`    ${x}`);
+  console.log(`\n■ ケアサポ明細 (fukuyogu_meisai_*) の行を別表で上書き ${csOver.n} 行 / うち値が変わる ${csOver.changed.length} 行 / KY と合わず上書きしなかった人 ${csOver.skippedPeople.length} 名`);
+  for (const x of csOver.changed) console.log(`    ${x}`);
+  for (const x of csOver.skippedPeople) console.log(`    ✗ ${x}`);
   console.log(`\n■ KY 単独 (ky8222_single_*) で埋めた行を別表で上書き ${kyOver.n} 行 / うち値が変わる ${kyOver.changed.length} 行`);
   for (const x of kyOver.changed) console.log(`    ⚠ ${x}  ← KY 単独か別表の読みのどちらかが誤り。確かめる`);
   const officeNotes = [...headerResolved.values()].filter((r) => r.warn || r.note);
