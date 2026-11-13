@@ -2,12 +2,13 @@
   "_readme": [
     "基準値方式。未投入が増えたら / 出どころ別の投入済が減ったら落ちる。0 を目指す検査ではない。",
     "なぜこの数か: 他社の用具事業者の貸与の単位は 別表 (第7表) PDF からしか取れない (居宅側の提供票 CSV は出ないと 2026-11-13 に確定)。",
-    "  2026-11-13 夕方 (大網白里まで): 投入済 3,071 行 = fukuyogu_meisai 1,204 / betsuhyou (別表 1 対 1) 1,178 / betsuhyou_tais (TAIS で確定) 429 /",
+    "  2026-11-13 夕方 (大網白里まで・ケアサポ明細 v2 の後): 投入済 3,071 行 = fukuyogu_meisai (v1・商品 1 本の品目など) 722 / fukuyogu_meisai_v2 482 / betsuhyou (別表 1 対 1) 1,178 / betsuhyou_tais (TAIS で確定) 429 /",
     "    ky8222_single (KY 単独) 246 / betsuhyou_set (値の集合) 14。別表を出した拠点: 高品・木更津・いすみ (935 中 未投入 217 = 76.8%)・四街道 (337 中 96 = 71.5%)・",
     "    ちはら台 (200 中 17 = 91.5%)・大網白里 (426 中 149 = 65.0%)",
     "    拠点ごとの TAIS を拾えた率 (別表の貸与行): いすみ 550/773 (71%) / 四街道 76/268 (28%) / ちはら台 8/177 (5%) / 大網白里 19/299 (6%)  ← 差の由来は拠点がそろってから見る (H)",
-    "  ⚠ fukuyogu_meisai_* の 1,204 行は ★ 同じ品目を複数本借りている人が 1 本分しか入っていない (2026-11-13 判明。backfill_rental_units_from_fukuyogu.mjs が (利用者, 品目) ごとに商品を 1 つだけ残す)。",
-    "    ちはら台 12 行 11 名で KY = 別表 > 利用票 を確認。直すまで この 1,204 行の値は過少を含む",
+    "  ★ ケアサポ明細 v1 (fukuyogu_meisai_*) は 同じ品目を複数本借りている人が 1 本分しか入っていなかった (backfill_rental_units_from_fukuyogu.mjs の誤り)。",
+    "    2026-11-13 に v2 (fix_fukuyogu_meisai_multi_items_202606.mjs・fukuyogu_meisai_v2_*) で 482 行を直した (人ごとに KY と検算・値が変わる 346 行・v1 合計 141,891 → v2 197,266)。",
+    "    v1 のまま残る 722 行 = 商品 1 本の品目 526 (正しい) + 書かない品目 43 件・書かない人 5 名の行 (過少のまま。別表のある拠点は別表で上書きする)",
     "  残る 12 拠点の別表が入れば未投入は減る。減ったら --update で締める。",
     "  上書きで出どころの件数が減るのは正常な場合がある (別表 > KY 単独 / TAIS で確定 > 値の集合)。移った行の値が変わっていないことを確かめてから --update。",
     "    実績: いすみ KY 単独 38 行 → 別表 38/38 同じ (_backup_fill_rental_betsuhyou_20261113T0543.json) /",
@@ -26,7 +27,8 @@
       "bySource": {
         "betsuhyou_*": 244,
         "betsuhyou_tais_*": 10,
-        "fukuyogu_meisai_*": 23
+        "fukuyogu_meisai_v2_*": 13,
+        "fukuyogu_meisai_*": 10
       }
     },
     "リンクス居宅介護支援事業所": {
@@ -48,7 +50,8 @@
       "未投入": 17,
       "bySource": {
         "betsuhyou_*": 120,
-        "fukuyogu_meisai_*": 61,
+        "fukuyogu_meisai_*": 49,
+        "fukuyogu_meisai_v2_*": 12,
         "betsuhyou_tais_*": 2
       }
     },
@@ -57,7 +60,8 @@
       "未投入": 506,
       "bySource": {
         "ky8222_single_*": 50,
-        "fukuyogu_meisai_*": 25
+        "fukuyogu_meisai_v2_*": 9,
+        "fukuyogu_meisai_*": 16
       }
     },
     "ケアプランＨａｎａ": {
@@ -71,7 +75,8 @@
       "貸与行": 590,
       "未投入": 276,
       "bySource": {
-        "fukuyogu_meisai_*": 295,
+        "fukuyogu_meisai_*": 160,
+        "fukuyogu_meisai_v2_*": 135,
         "ky8222_single_*": 19
       }
     },
@@ -87,8 +92,9 @@
       "貸与行": 774,
       "未投入": 549,
       "bySource": {
-        "fukuyogu_meisai_*": 203,
-        "ky8222_single_*": 22
+        "fukuyogu_meisai_*": 120,
+        "ky8222_single_*": 22,
+        "fukuyogu_meisai_v2_*": 83
       }
     },
     "ケアプランＨａｎａ八千代": {
@@ -102,7 +108,8 @@
       "貸与行": 498,
       "未投入": 283,
       "bySource": {
-        "fukuyogu_meisai_*": 200,
+        "fukuyogu_meisai_*": 134,
+        "fukuyogu_meisai_v2_*": 66,
         "ky8222_single_*": 15
       }
     },
@@ -111,7 +118,8 @@
       "未投入": 227,
       "bySource": {
         "betsuhyou_*": 136,
-        "fukuyogu_meisai_*": 60,
+        "fukuyogu_meisai_*": 41,
+        "fukuyogu_meisai_v2_*": 19,
         "ky8222_single_*": 1
       }
     },
@@ -129,7 +137,8 @@
       "未投入": 325,
       "bySource": {
         "betsuhyou_*": 147,
-        "fukuyogu_meisai_*": 83
+        "fukuyogu_meisai_*": 44,
+        "fukuyogu_meisai_v2_*": 39
       }
     },
     "ＫＴ在宅サポートセンター": {
@@ -137,7 +146,8 @@
       "未投入": 509,
       "bySource": {
         "ky8222_single_*": 31,
-        "fukuyogu_meisai_*": 254
+        "fukuyogu_meisai_*": 148,
+        "fukuyogu_meisai_v2_*": 106
       }
     },
     "(居宅の割当が複数)": {
@@ -157,7 +167,8 @@
     "貸与行": 7842,
     "未投入": 4771,
     "bySource": {
-      "fukuyogu_meisai_*": 1204,
+      "fukuyogu_meisai_*": 722,
+      "fukuyogu_meisai_v2_*": 482,
       "ky8222_single_*": 246,
       "betsuhyou_*": 1178,
       "betsuhyou_tais_*": 429,
