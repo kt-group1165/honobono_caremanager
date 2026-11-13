@@ -550,11 +550,21 @@ export function applyKohiToItems(items, kohi) {
       //   「エスポ大原・通所リハ」= エスポワール大原・通所リハビリ / 「デイサービスいすみ苑」= デイサービス　いすみ苑 (空白)。
       //   空白を除いて含む、または 先頭 2 文字が同じで 文字が順に全部現れる (部分列) 事業所が ★ その人の明細で 1 つに決まるときだけ当てる
       if (!matched.length) {
-        const nk = (v) => String(v ?? "").normalize("NFKC").replace(/[\s　]/g, "");
+        // 法人の種類 (㈱ = NFKC で (株)・株式会社・有限会社 等) は除いて比べる (大網 杉田 賢司「㈱トーカイ千葉支店」= 株式会社トーカイ千葉支店)
+        const nk = (v) => String(v ?? "").normalize("NFKC").replace(/[\s　]/g, "").replace(/株式会社|有限会社|合同会社|社会福祉法人|医療法人|\(株\)|\(有\)/g, "");
         const a = nk(row.providerNamePrefix);
         const subseq = (p) => { let j = 0; for (const ch of p) if (ch === a[j]) j++; return j === a.length; };
-        const cands = [...new Set(items.map((it) => it.provider_name).filter(Boolean))]
-          .filter((p) => nk(p).includes(a) || (nk(p).slice(0, 2) === a.slice(0, 2) && subseq(nk(p))));
+        // 「地名(サービスの種類)」の書き方 (大網 8 名「大網白里(訪問介護)」= リンクス大網白里・コード 11)。括弧の前で探し、
+        //   2 つ以上に当たるときだけ 括弧の中のサービスの種類 → コードの頭 2 桁 で絞る
+        const pm = /^(.+?)\((.+)\)$/.exec(a);
+        const core = pm ? pm[1] : null;
+        const KIND = { 訪問介護: "11", 訪問入浴: "12", 訪問看護: "13", 訪問リハ: "14", 通所介護: "15", 通所リハ: "16", 福祉用具: "17" };
+        const provs = [...new Set(items.map((it) => it.provider_name).filter(Boolean))];
+        let cands = provs.filter((p) => nk(p).includes(a) || (nk(p).slice(0, 2) === a.slice(0, 2) && subseq(nk(p))) || (core && nk(p).includes(core)));
+        if (cands.length > 1 && pm) {
+          const kind = Object.entries(KIND).find(([k]) => pm[2].includes(k))?.[1];
+          if (kind) cands = cands.filter((p) => items.some((it) => it.provider_name === p && String(it.service_code).startsWith(kind)));
+        }
         if (cands.length === 1) matched = items.filter((it) => it.provider_name === cands[0]);
       }
       if (!matched.length) {
