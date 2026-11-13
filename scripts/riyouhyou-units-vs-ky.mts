@@ -757,7 +757,7 @@ printTransitions(transDedupe);
 //      service_code の先頭 2 桁 = 種類 で集め、差 (当方 − KY) == その種類の超過 なら「額まで合う」。
 //      _over_limit_unallocated (どの行の超過か読めなかった分) があり合わないときは「割り振り不明」。第7表が無い月 (2026-07 など) は「第7表なし」。
 //   ★ ①と②が両方ある票では、①の超過と ②の超過合計 (over + unallocated) の食い違いも数える (独立 2 系統が一致しても値は確定しない、の裏返し)
-type DetailItem = { service_code?: string | null; over_limit_units?: number | string | null; _over_limit_unallocated?: number | string | null };
+type DetailItem = { service_code?: string | null; service_content?: string | null; over_limit_units?: number | string | null; _over_limit_unallocated?: number | string | null };
 type CapKeyIn = { kind: string; ours: number; ky: number };
 export function capCheckTicket(
   kinds: Map<string, { planned: number; nullUnits: number }>, limit: number, capKeys: CapKeyIn[], items: DetailItem[] | null,
@@ -770,6 +770,9 @@ export function capCheckTicket(
   const detail: Record<string, "額まで合う" | "額が合わない" | "割り振り不明" | "第7表なし" | "超過情報なし"> = {};
   let detailTotal: number | null = null;
   const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  // ★ 処遇改善加算の行にも別表は超過の額を印字するが、限度額の対象外で 人の超過合計には入らない (2026-11-13 段1 で確認)。
+  //   入れると第7表の超過が 1 割ほど大きく出る (2026-11-14 CAP_CHECK 初回で 21/21 票が食い違った原因)
+  items = items ? items.filter((it) => !/処遇改善/.test(String(it.service_content ?? ""))) : items;
   const unalloc = (items ?? []).reduce((s, it) => s + n(it._over_limit_unallocated), 0);
   const hasOver = (items ?? []).some((it) => n(it.over_limit_units) > 0) || unalloc > 0;
   if (items && hasOver) detailTotal = items.reduce((s, it) => s + n(it.over_limit_units), 0) + unalloc;
@@ -792,6 +795,7 @@ export function capCheckTicket(
     ["居宅療養 (31) は限度額対象に数えない", K({ "11": [5300], "31": [900] }), 5000, [{ kind: "11", ours: 5300, ky: 5000 }], null, "額まで合う", { "11": "第7表なし" }],
     ["単位の空きがある = 計算不能", K({ "11": [5300], "17": [0, 1] }), 5000, [{ kind: "11", ours: 5300, ky: 5000 }], null, "計算不能", { "11": "第7表なし" }],
     ["第7表に超過が無い", K({ "11": [5300] }), 5000, [{ kind: "11", ours: 5300, ky: 5000 }], [it("111111", 0)], "額まで合う", { "11": "超過情報なし" }],
+    ["処遇改善の行の超過は数えない", K({ "11": [5300] }), 5000, [{ kind: "11", ours: 5300, ky: 5000 }], [it("111111", 300), { service_code: "116275", service_content: "訪問介護処遇改善加算Ⅱ", over_limit_units: 41 }], "額まで合う", { "11": "額まで合う" }],
     ["行に割り振れない超過がある", K({ "11": [5300] }), 5000, [{ kind: "11", ours: 5300, ky: 5000 }], [it("111111", 100, 200)], "額まで合う", { "11": "割り振り不明" }],
   ];
   const bad = cases.filter(([, k, l, c, i, wc, wd]) => { const r = capCheckTicket(k, l, c, i); return r.calc !== wc || JSON.stringify(r.detail) !== JSON.stringify(wd); });
