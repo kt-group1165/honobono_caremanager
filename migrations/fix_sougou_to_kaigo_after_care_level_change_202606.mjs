@@ -107,7 +107,7 @@ async function main() {
   }
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で 退避 → 1 行ずつ更新 → 読み直して検算。"); return; }
 
-  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13);
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 19) /* ミリ秒まで: 同じ分に 2 本流すと退避が上書きされた (2026-11-13) */;
   const backup = path.join(KAIGO, "migrations", `_backup_fix_sougou_to_kaigo_202606_${stamp}.json`);
   writeFileSync(backup, JSON.stringify(plans.map((p) => p.row), null, 2));
   console.log(`退避: ${backup}`);

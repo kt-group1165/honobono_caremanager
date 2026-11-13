@@ -98,7 +98,7 @@ async function main() {
   for (const p of plans.slice(0, 5)) console.log(`  例: ${p.name}  ${p.item}  ${p.units} 単位`);
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で 退避 → 帳票ごとに更新 → 読み直して KY と一致を確かめる。"); return; }
 
-  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13);
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 19) /* ミリ秒まで: 同じ分に 2 本流すと退避が上書きされた (2026-11-13) */;
   const backup = path.join(KAIGO, "migrations", `_backup_fill_rental_ky_single_${stamp}.json`);
   writeFileSync(backup, JSON.stringify(plans.map((p) => ({ id: p.docId, content: p.content })), null, 2));
   console.log(`退避: ${backup}`);

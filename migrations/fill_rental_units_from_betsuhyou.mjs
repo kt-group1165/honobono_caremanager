@@ -61,6 +61,8 @@ import { ky8222ByPerson, kyRentalLines } from "../scripts/_ky-parse.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
 const PDF_PATHS = process.argv.flatMap((a, i, arr) => (a === "--pdf" ? [arr[i + 1]] : []));
+// --skip-name <氏名>: その人は書かない (判断待ちの人を止めておく。2026-11-13 木更津 堀川 茂子: 画面の月計が前後で変わるので H 判断待ち)
+const SKIP_NAMES = new Set(process.argv.flatMap((a, i, arr) => (a === "--skip-name" ? [String(arr[i + 1]).replace(/[\s　]/g, "")] : [])));
 if (!PDF_PATHS.length) { console.error("--pdf <path> を最低 1 つ指定する"); process.exit(1); }
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
 const env = Object.fromEntries(
@@ -140,6 +142,7 @@ async function main() {
       clientId = headerResolved.get(key)?.clientId ?? null;
     }
     if (!clientId) { st.特定できない++; continue; }
+    if (SKIP_NAMES.has(String(names.get(clientId) ?? b.betsuhyouHeader?.name ?? "").replace(/[\s　]/g, ""))) { console.log(`  --skip-name で書かない: ${names.get(clientId) ?? b.betsuhyouHeader?.name}`); continue; }
     // 行が 1 行も読めない別表 (利用票別表・全CM の出し方。列の位置が違う) を「貸与なし」と取り違えない
     if (!(b.betsuhyouItems ?? []).length) { st.別表の行が読めない++; continue; }
     const items =(b.betsuhyouItems ?? []).filter((it) => isRentalCode(it.service_code));
@@ -299,9 +302,14 @@ async function main() {
   console.log(`\n■ 既に単位がある行で 別表と食い違う (1 対 1・上書きしない) ${existingMismatch.length} 行`);
   for (const x of existingMismatch) console.log(`    ${x}`);
   console.log(`\n埋める帳票 ${plans.length} 件 / 行 ${plans.reduce((s, p) => s + p.fills.length, 0)}`);
+  // env DUMP_FILLS=<path>: 書く予定の行 (帳票 id・行番号・前の行・書く値) を JSON に書き出す (画面の月計の前後比較に使う。DRY RUN 専用)
+  if (process.env.DUMP_FILLS && !EXECUTE) {
+    writeFileSync(process.env.DUMP_FILLS, JSON.stringify(plans.flatMap((p) => p.fills.map((f) => ({ docId: p.docId, name: p.name, i: f.i, row: p.content.services[f.i], units: f.units, src: f.src })))));
+    console.log(`書く予定の行を書き出した: ${process.env.DUMP_FILLS}`);
+  }
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で 退避 → 帳票ごとに更新 → 読み直して検算。"); return; }
 
-  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13);
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 19) /* ミリ秒まで: 同じ分に 2 本流すと退避が上書きされた (2026-11-13) */;
   const backup = path.join(KAIGO, "migrations", `_backup_fill_rental_betsuhyou_${stamp}.json`);
   writeFileSync(backup, JSON.stringify(plans.map((p) => ({ id: p.docId, content: p.content })), null, 2));
   console.log(`退避: ${backup}`);

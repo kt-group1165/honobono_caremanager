@@ -94,7 +94,7 @@ async function main() {
   if (changedDisplay) { console.error("✗ 表示が変わる行がある。移すと画面の数字が変わるので止める"); process.exit(2); }
   if (!EXECUTE) { console.log("\n※ DRY RUN。--execute で 退避 → 帳票ごとに更新 → 読み直して検算。"); return; }
 
-  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13);
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 19) /* ミリ秒まで: 同じ分に 2 本流すと退避が上書きされた (2026-11-13) */;
   const backup = path.join(KAIGO, "migrations", `_backup_migrate_rental_month_actual_${stamp}.json`);
   writeFileSync(backup, JSON.stringify(plans.map((p) => ({ id: p.id, content: p.content })), null, 2));
   console.log(`退避: ${backup}`);
