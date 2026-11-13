@@ -27,6 +27,13 @@
 //        ⚠ H の指示は「autoRentalPeriodType の結果が同じ」だが、node から TS を呼べないので「印が全行同じ」で判定する。
 //          こちらのほうが厳しい (印が同じなら按分区分も同じ)。印が違うが区分が同じ行は C2 に倒れる (書かない側)
 //     C2 行を見分けられる (印が行ごとに違う / 一部投入済み) → ★ 埋めない。全件を出力に残す
+//   ★ 2026-11-13 TAIS 経路 (H 承認): 1 対 1 に決まらないグループ (複数行 / 行数違い) は、先に TAIS コードで当てる
+//     別表の TAIS 1 行 ↔ 利用票の同じ TAIS 1 行 → その値 / 同じ TAIS n 行 → 割り切れれば n 等分 (同じ商品 = 同じ単価)
+//     ★ 割り切れない組が 1 つでもあった人は 何も書かない (同じ商品ではない証拠)。_units_source = "betsuhyou_tais_<月>"
+//     集合 (betsuhyou_set_*) で入れた行は TAIS で確定した値で上書きし、件数と値の変化を出す
+//     ほのぼのが 1 行にまとめるのは TAIS の無い行なので、まとめられた行 (D の大半) は TAIS でも解けない
+//     いすみ (2026-11-13): TAIS で当てた 327 行 / うち集合で入れていた 280 行は値が同じ (0 行変化) / D 254 → 206 / 割り切れない人 0
+//     負のコントロール: 割り切れる判定を外すと 9 名がまるごと書かれない
 //   D 行数違い  利用票 n 行・別表 m 行 (n≠m) / 事業所が当たらない      → 埋めない
 //   (旧 E 月途中 は 2026-11-13 に廃止)
 //      以前は manual_units に入れていたので、画面が印で半月と判定すると半額をさらに半分にした。それを避けるため
@@ -70,7 +77,10 @@ const hasUnits = (r) => Number(r.manual_units) > 0 || Number(r.rental_month_actu
 // KY 単独 (fill_rental_units_from_ky_single.mjs) で埋めた行は、別表のほうが品目ごとで細かいので ★ 別表で上書きする (H 指示 2026-11-13)。
 // ただし黙って上書きしない: 上書きした件数と、値が変わった行を出力に出す (変わったら KY 単独か別表の読みのどちらかが誤り)
 const isKySingle = (r) => String(r._units_source ?? "").startsWith("ky8222_single_");
-const locked = (r) => hasUnits(r) && !isKySingle(r);
+// 集合で入れた行 (betsuhyou_set_*) は TAIS で確定した値で上書きしてよい (allowSet=true のときだけ)
+const isSet = (r) => String(r._units_source ?? "").startsWith("betsuhyou_set_");
+const locked = (r, allowSet = false) => hasUnits(r) && !isKySingle(r) && !(allowSet && isSet(r));
+const normTais = (v) => (v ? String(v).normalize("NFKC").replace(/[\s　]/g, "") : null);
 /** 行を見分ける材料は印 (予定・実績) だけ (品目名・事業所は同じグループ内で同じ)。印が全行同じなら行は見分けられない */
 const marksKey = (s) => JSON.stringify([s.planned ?? [], s.actual ?? []]);
 
@@ -111,6 +121,7 @@ async function main() {
   const c2List = []; // C2 は全件出す (H 指示: 件数と氏名・品目を残す)
   const c1Out = []; // C1 を KY 検算で書かなかった人
   const kyOver = { n: 0, changed: [] }; // KY 単独で埋めた行を別表で上書きする件数 / 値が変わった行
+  const tais = { filled: 0, split: 0, upgraded: 0, changed: [], taintedPeople: [], itemsWith: 0, items: 0 }; // TAIS で当てた行
   const plans = []; // { docId, content, fills: [{ i, units }] }
   const examples = { D: [] };
   const existingMismatch = [];
@@ -144,10 +155,43 @@ async function main() {
     for (const r of rows) { const k = `${normProv(r.s.provider)}|${r.s.content}`; (groups.get(k) ?? groups.set(k, []).get(k)).push(r); }
     const fills = [];
     const setGroups = []; // C1 の候補 (人ごとの KY 検算の後で書く)
-    for (const [k, rs] of groups) {
+    let tainted = null; // 同じ TAIS の組が割り切れない = 同じ商品ではない → この人は書かない (H 指示 2026-11-13)
+    for (const [k, rs0] of groups) {
       const [prov, content] = [k.slice(0, k.indexOf("|")), k.slice(k.indexOf("|") + 1)];
-      const its = items.filter((it) => it.service_content === content && prov && normProv(it.provider_name).startsWith(prov));
+      const its0 = items.filter((it) => it.service_content === content && prov && normProv(it.provider_name).startsWith(prov));
       const label = `${names.get(clientId) ?? b.betsuhyouHeader?.name ?? ""} ${ym} ${content} @${prov}`;
+      // ── TAIS で当てる (2026-11-13 H 承認)。1 対 1 で決まらないグループ (複数行 or 行数違い) だけ ──
+      //   別表の TAIS が 1 行 ↔ 利用票で同じ TAIS が 1 行 → その値 / 同じ TAIS が n 行 → 割り切れれば n 等分 (同じ商品 = 同じ単価)
+      //   集合で入れた行 (betsuhyou_set_*) と KY 単独の行は、TAIS で確定した値で上書きする (件数と値の変化を出す)
+      //   当てた行・別表の行は取り除き、残りを従来の分類 (A/B/C1/C2/D) に回す
+      let rs = rs0, its = its0;
+      if (rs0.length > 1 || its0.length !== rs0.length) {
+        const usedR = new Set(), usedI = new Set();
+        for (const t of new Set(its0.map((it) => it.tais_code).filter(Boolean))) {
+          const iT = its0.filter((it) => it.tais_code === t);
+          const rT = rs0.filter((r) => normTais(r.s.tais_code) === t && !locked(r.s, true));
+          if (!rT.length) continue;
+          let vals = null;
+          if (iT.length === 1 && rT.length === 1) vals = [Number(iT[0].service_units)];
+          else if (iT.length === 1 && rT.length > 1) {
+            const u = Number(iT[0].service_units);
+            if (u % rT.length !== 0) { tainted = `${label} TAIS ${t}: 別表 1 行 ${u} を利用票 ${rT.length} 行に割り切れない (同じ商品ではない)`; continue; }
+            vals = rT.map(() => u / rT.length);
+            tais.split += rT.length;
+          } else if (iT.length === rT.length && new Set(iT.map((it) => Number(it.service_units))).size === 1) vals = rT.map(() => Number(iT[0].service_units));
+          if (!vals) continue;
+          for (const [j, r] of rT.entries()) {
+            if (hasUnits(r.s)) { tais.upgraded++; const before = Number(r.s.rental_month_actual_units ?? r.s.manual_units); if (before !== vals[j]) tais.changed.push(`${label} TAIS ${t}: ${r.s._units_source} ${before} → ${vals[j]}`); }
+            fills.push({ i: r.i, units: vals[j], src: `betsuhyou_tais_${ym}` });
+            tais.filled++;
+            usedR.add(r);
+          }
+          for (const it of iT) usedI.add(it);
+        }
+        rs = rs0.filter((r) => !usedR.has(r));
+        its = its0.filter((it) => !usedI.has(it));
+        if (!rs.length) continue;
+      }
       if (rs.every((r) => locked(r.s))) {
         cls.投入済み += rs.length;
         // 既に単位がある行は触らない。1 対 1 で別表と食い違うものだけ一覧に出す (事業所をまたぐ不整合の材料)
@@ -197,6 +241,8 @@ async function main() {
         }
       }
     }
+    tais.items += items.length; tais.itemsWith += items.filter((it) => it.tais_code).length;
+    if (tainted) { tais.taintedPeople.push(tainted); continue; } // 割り切れない同じ TAIS の組があった人は 何も書かない
     if (fills.length) plans.push({ docId: doc.id, ym, content: doc.content, fills, name: names.get(clientId) ?? "" });
   }
 
@@ -213,6 +259,11 @@ async function main() {
   if (c1Out.length) { console.log("  C1 を書かなかった人:"); for (const x of c1Out) console.log(`    ${x}`); }
   if (c2List.length) { console.log("  C2 (全件):"); for (const x of c2List) console.log(`    ${x}`); }
   if (examples.D.length) { console.log("  D の例:"); for (const x of examples.D) console.log(`    ${x}`); }
+  console.log(`\n■ TAIS で当てた行 ${tais.filled} 行 (うち同じ TAIS の n 等分 ${tais.split} 行) / 別表の貸与行のうち TAIS を拾えた ${tais.itemsWith}/${tais.items} 行`);
+  console.log(`  集合 (betsuhyou_set_*)・KY 単独 で入れていた行を TAIS で確定 ${tais.upgraded} 行 / うち値が変わる ${tais.changed.length} 行`);
+  for (const x of tais.changed) console.log(`    ⚠ ${x}`);
+  console.log(`  ★ 同じ TAIS の組が割り切れず 書かなかった人 ${tais.taintedPeople.length} 名`);
+  for (const x of tais.taintedPeople) console.log(`    ${x}`);
   console.log(`\n■ KY 単独 (ky8222_single_*) で埋めた行を別表で上書き ${kyOver.n} 行 / うち値が変わる ${kyOver.changed.length} 行`);
   for (const x of kyOver.changed) console.log(`    ⚠ ${x}  ← KY 単独か別表の読みのどちらかが誤り。確かめる`);
   const officeNotes = [...headerResolved.values()].filter((r) => r.warn || r.note);

@@ -85,6 +85,8 @@ const LAYOUTS = {
   ikkatsu: {
     label: "計画書一括印刷", codeHeaderX: [190, 205],
     code: [185, 215], content: [108, 185], providerMaxX: 40, providerNumber: [41, 110], subtotal: [108, 190],
+    // 福祉用具貸与だけ: 用具名称 (機種名) x≈223 / TAIS コード x≈271 (★「00170-」「000519」の 2 語・上下 2 段で出る。2026-11-13 いすみで実測)
+    model: [215, 262], tais: [262, 295],
     units: [295, 322], count: [360, 385], serviceUnits: [393, 412], serviceUnits2: [414, 442],
     withinLimitBracket: [583, 601], unitPrice: [605, 622], totalCost: [623, 663], benefitRate: [668, 683],
     insuranceClaim: [683, 716], userCopay: [750, 786],
@@ -370,8 +372,19 @@ export function extractBetsuhyouRows(words) {
     // 金額がこの行自身に直接出ているか (①のパターン)。出ていなければ null のまま返し、
     // 呼出側 (groupBetsuhyouItems) が直後の「◯◯合計」行から借りる (②のパターン)。
     const money = readMoneyAt(words, cw.y, 3, L);
+    // 福祉用具貸与の TAIS コードと機種名 (列の位置が分かっている出し方だけ)。TAIS は「5 桁-」「6 桁」の 2 語に分かれて出る。
+    //   1 語の「5 桁-6 桁」で探すと 0 件に見える (2026-11-13 に踏んだ)。拾えた件数は呼出側で必ず数えて出す
+    let tais = null, model = null;
+    if (L.tais && /^(17|67)/.test(cw.t)) {
+      const band = words.filter((w) => nearY(w) && w.x >= L.tais[0] && w.x < L.tais[1]);
+      const head = band.find((w) => /^\d{5}-$/.test(w.t)), tail = band.find((w) => /^\d{6}$/.test(w.t));
+      const whole = band.find((w) => /^\d{5}-\d{6}$/.test(w.t));
+      tais = whole ? whole.t : head && tail ? head.t + tail.t : null;
+      model = words.filter((w) => nearY(w) && w.x >= L.model[0] && w.x < L.model[1]).sort((a, b) => a.y - b.y || a.x - b.x).map((w) => w.t).join("") || null;
+    }
 
     raw.push({
+      tais_code: tais, model_name: model,
       y: cw.y,
       service_code: cw.t,
       service_content: content || null,
@@ -546,6 +559,9 @@ function finalizeItem(r, money) {
     unit_price: unitPrice, total_cost: totalCost, benefit_rate: benefitRate, insurance_claim: insuranceClaim,
     fixed_copay: 0, user_copay: userCopay, user_full_pay: 0,
     _money_source: money ? (hasDirect ? "direct" : "group-total") : "default",
+    // 福祉用具貸与だけ (読めた出し方のとき)。それ以外は付けない (第7表の content を以前と同じ形に保つ)
+    ...(r.tais_code ? { tais_code: r.tais_code } : {}),
+    ...(r.model_name ? { model_name: r.model_name } : {}),
   };
 }
 
