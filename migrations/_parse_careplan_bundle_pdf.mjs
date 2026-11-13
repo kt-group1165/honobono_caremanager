@@ -567,6 +567,22 @@ export function applyKohiToItems(items, kohi) {
         }
         if (cands.length === 1) matched = items.filter((it) => it.provider_name === cands[0]);
       }
+      // ★ 名前で決まらないときは 金額で当てる (2026-11-13 ケイティサービス 8 名)。
+      //   公費欄の事業所名は 明細と書き方が違い (「ちはら台訪介」= (介)ケイ・ティ・グループヘルパーステーションHana /
+      //   明細側が「*辰巳ﾅｰｼﾝｸﾞ･ｳﾞｨﾗﾃﾞ」で切れている / 先頭の「*」)、名前では当てようがないことがある。
+      //   公費額 + 本人負担 = その事業所 (事業所番号でまとめる) の Σ(総費用 − 保険請求) は、
+      //   名前で当たった 73 行で 73/73 成り立つ (いすみ・大網白里・ケイティサービス 実測)。
+      //   ★ 金額がちょうど合う事業所が その人の明細で 1 つに決まるときだけ当てる (2 つ以上なら当てない = 警告のまま)
+      if (!matched.length) {
+        // 事業所番号 + サービスの種類 (コードの頭 2 桁) でまとめる。老健は デイケア (16) と ショート (22) が同じ番号で、
+        //   公費欄は種類ごとに別の行で出る (木藤 やゑ「…ｳﾞｨﾗﾃﾞｲｹ」/「…ｳﾞｨﾗｼｮｰﾄ」)
+        const key = (it) => `${it.provider_number ?? it.provider_name}|${String(it.service_code ?? "").slice(0, 2)}`;
+        const sums = new Map();
+        for (const it of items) sums.set(key(it), (sums.get(key(it)) ?? 0) + (Number(it.total_cost) - Number(it.insurance_claim)));
+        const want = Number(row.kohiClaim) + Number(row.honninFutan);
+        const hit = [...sums].filter(([, v]) => v === want).map(([k]) => k);
+        if (hit.length === 1) matched = items.filter((it) => key(it) === hit[0]);
+      }
       if (!matched.length) {
         warn.push(`公費適用事業所「${row.providerNamePrefix}」に対応する items 行が見つからない (公費額 ${row.kohiClaim})`);
         continue;

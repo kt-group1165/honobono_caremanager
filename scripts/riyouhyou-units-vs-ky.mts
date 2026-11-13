@@ -61,7 +61,7 @@ import { fileURLToPath } from "node:url";
 import { findKyFiles, readKy8222Lines } from "./_ky-parse.mjs";
 import { resolveByBetsuhyouHeader } from "../migrations/_client_resolve.mjs";
 import { normName } from "../migrations/_name_normalize.mjs";
-import { selectBundlePersons } from "../migrations/_parse_careplan_bundle_pdf.mjs";
+import { selectBundlePersons, applyKohiToItems } from "../migrations/_parse_careplan_bundle_pdf.mjs";
 import { usageLimitUnits } from "@/lib/usage-limit-total";
 import { rowMonthlyUnitsOf, isMonthlyUnitType, dedupeMonthlyCounts, riyouhyouRowKey, markedCountOf, dayCountOf } from "@/lib/riyouhyou-row-units";
 import { rentalMonthlyUnits, type RentalRowLike } from "@/lib/rental-units";
@@ -376,6 +376,32 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
     const nI = runL(negIgnore).length, nE = runL(negNoExempt).length;
     if (!nI || !nE) { console.error(`✗ FAIL: 負のコントロールが鳴らない (第7表を見ない ${nI} / 対象外を除かない ${nE})`); process.exit(1); }
     console.log(`利用票画面の限度額の判定 usageLimitUnits: 境界 ${lc.length} 件 OK / 負のコントロール 第7表を見ない→${nI}・対象外を除かない→${nE} 件 落ちる ✓`);
+  }
+  // 別表の公費欄を明細に当てる applyKohiToItems — 名前で決まらないときの金額当て (2026-11-13 ケイティサービス 8 名)
+  //   公費額 + 本人負担 = その事業所 (番号 + 種類 2 桁) の Σ(総費用 − 保険請求)。1 つに決まるときだけ当てる
+  {
+    const it = (no: string, name: string, code: string, cost: number, ins: number) => ({ provider_number: no, provider_name: name, service_code: code, total_cost: cost, insurance_claim: ins, user_copay: cost - ins });
+    const kohi = (prefix: string, claim: number) => ({ rows: [{ providerNamePrefix: prefix, kohiClaim: claim, honninFutan: 0 }], total: { kohiClaim: claim } });
+    // 木藤 やゑ 型: 老健の デイケア (16) と ショート (22) が同じ番号。名前は「…ﾃﾞｲｹ」と「…ﾃﾞ」で当たらない
+    const kito = () => [it("1", "*KTやわた", "111411", 30000, 27000), it("2", "*辰巳ﾅｰｼﾝｸﾞ･ｳﾞｨﾗﾃﾞ", "161111", 50000, 39735), it("2", "*介護老人保健施設辰巳ｼｮｰﾄ", "221111", 40000, 28938)];
+    type KC = [string, ReturnType<typeof kito>, ReturnType<typeof kohi>, number, string];
+    const kc: KC[] = [
+      ["種類で分けると 1 つに決まる → 当てる", kito(), kohi("*辰巳ﾅｰｼﾝｸﾞ･ｳﾞｨﾗﾃﾞｲｹ", 10265), 0, "161111"],
+      ["名前が全く違う (ちはら台訪介) でも金額で 1 つ → 当てる", [it("3", "(介)ケイ・ティ・グループヘルパーステーションHana", "111111", 49000, 44100), it("4", "*ドットライフ市原", "131111", 20000, 18000)], kohi("ちはら台訪介", 4900), 0, "111111"],
+      ["金額が合う事業所が 2 つ → 当てない (警告)", [it("5", "A訪介", "111111", 10000, 9000), it("6", "B通所", "151111", 10000, 9000)], kohi("ちはら台訪介", 1000), 2, ""],
+      ["金額が 1 円違う → 当てない (警告)", kito(), kohi("*辰巳ﾅｰｼﾝｸﾞ･ｳﾞｨﾗﾃﾞｲｹ", 10266), 2, ""],
+    ];
+    const bad = kc.filter(([label, items, k, wantWarn, wantCode]) => {
+      const { warn, publicExpenseByProvider } = applyKohiToItems(items, k);
+      const ok = warn.length === wantWarn && (wantCode ? publicExpenseByProvider.length === 1 : publicExpenseByProvider.length === 0);
+      if (!ok) console.error(`✗ applyKohiToItems: ${label} / 警告 ${warn.length} (期待 ${wantWarn}) / 当てた ${publicExpenseByProvider.length}`);
+      return !ok;
+    });
+    if (bad.length) { console.error("✗ FAIL: 公費欄の金額当ての境界が崩れている"); process.exit(1); }
+    // 負のコントロール: 種類で分けずに番号だけでまとめたら 木藤 型は当たらないはず (= 種類 2 桁が効いている)
+    const merged = kito().map((x) => ({ ...x, service_code: "161111" }));
+    if (!applyKohiToItems(merged, kohi("*辰巳ﾅｰｼﾝｸﾞ･ｳﾞｨﾗﾃﾞｲｹ", 10265)).warn.length) { console.error("✗ FAIL: 負のコントロールが鳴らない (番号だけでまとめても当たってしまう)"); process.exit(1); }
+    console.log(`公費欄の金額当て applyKohiToItems: 境界 ${kc.length} 件 OK / 負のコントロール 種類で分けない→ 当たらない ✓`);
   }
   // 帳票の合計で月 1 回コードの複数行を畳む dedupeMonthlyCounts
   type R = { provider: string; content: string; n: number; ut: string | null };
