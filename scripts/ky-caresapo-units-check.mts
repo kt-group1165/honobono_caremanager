@@ -74,7 +74,8 @@ type Result = { people: number; same: number; diff: number; kyOnly: number; kdsO
 type Baseline = { _readme: string[]; months: Record<string, Result> };
 
 // ── 自社の居宅 (KY を持っている居宅) ──
-type KyLine = { insurer: string; insured: string; kyotakuOffice: string; providerNumber: string; plannedUnits: number };
+// scripts/_ky-parse.mjs の Ky8222Line と同じ形 (縮めて書くと kyRentalLines に渡すときに型が合わず、本番の build が落ちる。2026-11-13 に一度落とした)
+type KyLine = { ym: string; insurer: string; kyotakuOffice: string; lineNo: string; insured: string; providerNumber: string; serviceKind: string; plannedUnits: number };
 const kyMap = ky8222ByPerson(join(ROOT, "伝送データ"), YM) as Map<string, KyLine[]>;
 const ourKyotaku = new Set<string>(); for (const [, ls] of kyMap) for (const l of ls) ourKyotaku.add(nfkc(l.kyotakuOffice));
 if (!ourKyotaku.size) { console.error(`✗ ${YM} の KY 8222 が 1 本も無い`); process.exit(1); }
