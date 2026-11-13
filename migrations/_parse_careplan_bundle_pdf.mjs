@@ -572,7 +572,7 @@ function emptyPerson() {
   return {
     weekly: null, riyouhyouIdentity: null, riyouhyouGrid: null, riyouhyouMonth: null,
     betsuhyouItems: null, betsuhyouWarn: [], betsuhyouPublicExpense: [], betsuhyouMonth: null, betsuhyouName: null,
-    betsuhyouLimitAmount: null, betsuhyouHeader: null, betsuhyouOfficeNumber: null, betsuhyouPages: 0, pages: [],
+    betsuhyouLimitAmount: null, betsuhyouHeader: null, betsuhyouOfficeNumber: null, betsuhyouHasEnd: false, betsuhyouPages: 0, pages: [],
   };
 }
 
@@ -596,7 +596,15 @@ export function parseBundles(pdfPath) {
   const { texts, words } = extractPages(pdfPath);
   const persons = [];
   let cur = emptyPerson();
-  const startNew = () => { if (cur.pages.length) persons.push(cur); cur = emptyPerson(); };
+  // 人を閉じるとき: 別表があるのに最終ページの欄 (種類別支給限度管理) が無ければ、ページ境界で割れたかけら。
+  // 事業所ごとの小計は合うので、行の検算だけでは気づけない (2026-11-13 いすみを 4/5 ページで割って実証: 1 ページ目だけで「完全」に見えた)。
+  // 既存の束 26 本・336 人では 0 人 (割ったファイルだけが当たる)
+  const finishPerson = (p) => {
+    if (p.betsuhyouItems != null && !p.betsuhyouHasEnd)
+      p.betsuhyouWarn = [...p.betsuhyouWarn, "別表の最終ページ (種類別支給限度管理の欄) が無い — ページ境界で割れたかけらの疑い"];
+    return p;
+  };
+  const startNew = () => { if (cur.pages.length) persons.push(finishPerson(cur)); cur = emptyPerson(); };
   const idKey = (id) => `${id?.insurer ?? ""}|${id?.insured ?? ""}`;
   const hKey = (h) => (h ? `${h.month}|${h.insured}|${h.name}` : "");
   for (let i = 0; i < texts.length; i++) {
@@ -640,6 +648,9 @@ export function parseBundles(pdfPath) {
       out.betsuhyouPages++;
       out.betsuhyouHeader ??= header;
       out.betsuhyouOfficeNumber ??= parseBetsuhyouOfficeNumber(texts[i]);
+      // 人の最終ページにだけ「種類別支給限度管理」の欄が出る (1 ページの人にも出る。2026-11-13 いすみで実測)。
+      // これが無いまま人が終わったら ページ境界で割れたかけら (下の finishPerson で警告にする)
+      if (texts[i].includes("種類別支給限度管理")) out.betsuhyouHasEnd = true;
       out.betsuhyouItems = cont ? [...out.betsuhyouItems, ...items] : items;
       out.betsuhyouWarn = cont ? [...out.betsuhyouWarn, ...warn.map((w) => `(${out.betsuhyouPages} ページ目) ${w}`)] : warn;
       out.betsuhyouPublicExpense = cont ? [...out.betsuhyouPublicExpense, ...(publicExpenseByProvider ?? [])] : (publicExpenseByProvider ?? []);
@@ -669,4 +680,60 @@ export function parseBundles(pdfPath) {
   }
   startNew();
   return persons;
+}
+
+// ── 複数ファイルの束を人単位で突き合わせる (2026-11-13 H 依頼: 別表を 60 ページずつに割って出すため) ──
+// 範囲を 1 ページ重ねて出す (1-60 / 60-120) ので、同じ人が 2 ファイルに出る。重ね忘れると 1 人が 2 ファイルに割れる。
+// 人の同一性 = 別表ヘッダの (提供年月, 被保番, 氏名)。別表の無い人 (利用票だけ) は突き合わせない (そのまま渡す)。
+// 「完全」 = 別表の行が 1 行以上読めて、自己検算 (印字の合計行 = 行の合計) の警告が無い。割れた別表は合計行が欠けて警告になる。
+//   同じ人が複数ファイルに出たとき:
+//     完全なものが 1 つ以上・行の中身が全部同じ → 最初の 1 つを使う (静かに。件数だけ数える)
+//     完全なものが 2 つ以上・行の中身が違う     → ★ どれも使わない (印刷設定の違いなどで読みがずれた疑い)。conflicts に出す
+//     完全なものが 1 つも無い                  → 最初の 1 つを渡す (各 script が自己検算の警告で書かない = 取り込めなかった人に出る)
+//     不完全なものは、完全なものがあれば捨てる
+// 1 ファイルだけ渡したときは parseBundles と同じ結果 (path の付け方も同じ)。
+const bundleKey = (b) => (b.betsuhyouHeader ? `${b.betsuhyouHeader.month}|${b.betsuhyouHeader.insured}|${String(b.betsuhyouHeader.name).replace(/[\s　]/g, "")}` : null);
+const isComplete = (b) => (b.betsuhyouItems ?? []).length > 0 && (b.betsuhyouWarn ?? []).length === 0;
+const itemsSig = (b) => JSON.stringify((b.betsuhyouItems ?? []).map((it) => [it.service_code, it.provider_number, it.service_units, it.count, it.total_cost, it.insurance_claim]));
+
+/**
+ * @param {string[]} pdfPaths
+ * @returns {{persons: Array<object>, sameDropped: number, partialDropped: Array<{name: string, insured: string, files: string[]}>, conflicts: Array<{name: string, insured: string, month: string, files: string[]}>}}
+ *   persons の各要素は parseBundles の人に path (1 人のファイルは そのファイル、複数人は「ファイル#何人目」) と file / idx を足したもの
+ */
+export function parseBundlesMany(pdfPaths) {
+  return selectBundlePersons(pdfPaths.flatMap((p) => {
+    const ps = parseBundles(p);
+    return ps.map((b, i) => ({ ...b, path: ps.length > 1 ? `${p}#${i + 1}` : p, file: p.split(/[\\/]/).pop(), idx: i + 1 }));
+  }));
+}
+
+/** parseBundlesMany の突き合わせ部分 (純関数。検査 check:riyouhyou-units が合成データで境界を見る)
+ * @param {Array<object>} all  path / file / idx を持つ人の配列 (ファイル順)
+ */
+export function selectBundlePersons(all) {
+  const groups = new Map();
+  for (const b of all) { const k = bundleKey(b); if (k) (groups.get(k) ?? groups.set(k, []).get(k)).push(b); }
+  const drop = new Set();
+  let sameDropped = 0;
+  const partialDropped = [], conflicts = [];
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    const h = g[0].betsuhyouHeader;
+    const complete = g.filter(isComplete);
+    if (complete.length === 0) { for (const b of g.slice(1)) drop.add(b); continue; }
+    if (new Set(complete.map(itemsSig)).size > 1) {
+      for (const b of g) drop.add(b);
+      conflicts.push({ name: h.name, insured: h.insured, month: h.month, files: g.map((b) => b.file) });
+      continue;
+    }
+    const keep = complete[0];
+    for (const b of g) {
+      if (b === keep) continue;
+      drop.add(b);
+      if (isComplete(b)) sameDropped++;
+      else partialDropped.push({ name: h.name, insured: h.insured, files: [b.file] });
+    }
+  }
+  return { persons: all.filter((b) => !drop.has(b)), sameDropped, partialDropped, conflicts };
 }

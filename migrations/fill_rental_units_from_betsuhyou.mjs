@@ -47,7 +47,7 @@ import { createClient } from "@supabase/supabase-js";
 import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
+import { parseBundlesMany } from "./_parse_careplan_bundle_pdf.mjs";
 import { resolveClients, resolveByBetsuhyouHeader } from "./_client_resolve.mjs";
 import { normName } from "./_name_normalize.mjs";
 import { ky8222ByPerson, kyRentalLines } from "../scripts/_ky-parse.mjs";
@@ -89,8 +89,12 @@ const existingUnits = (r) => (Number(r.manual_units) > 0 ? { v: Number(r.manual_
 
 async function main() {
   console.log(`=== 別表 → 利用票の貸与 rental_month_actual_units ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"} ===\n`);
-  const persons = PDF_PATHS.flatMap((p) => parseBundles(p).map((b, i) => ({ ...b, file: path.basename(p), idx: i + 1 })));
+  // 複数ファイルに同じ人が出たら人単位で 1 つに決める (第7表の取込と同じ parseBundlesMany。食い違う人は使わない)
+  const sel = parseBundlesMany(PDF_PATHS);
+  const persons = sel.persons;
   console.log(`PDF ${PDF_PATHS.length} 本 / 人 ${persons.length}`);
+  if (sel.sameDropped || sel.partialDropped.length || sel.conflicts.length)
+    console.log(`同じ人が複数ファイル: 同じ中身で 1 つに ${sel.sameDropped} / 割れた別表を捨てた ${sel.partialDropped.length} / 中身が食い違うので使わない ${sel.conflicts.length} 人 (${sel.conflicts.map((c) => c.name).join("・")})`);
 
   // ── 人の特定 ──
   const people = new Map();

@@ -61,7 +61,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveClients, resolveByBetsuhyouHeader } from "./_client_resolve.mjs";
-import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
+import { parseBundlesMany } from "./_parse_careplan_bundle_pdf.mjs";
 import { normName } from "./_name_normalize.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
@@ -216,16 +216,24 @@ function buildDetailPayload(prev, b, month) {
   };
 }
 
+// ★ 取り込めなかった人を 1 行ずつ機械可読で出す (runner が拾って最後に一覧にする。H 依頼 2026-11-13)
+//   既存ありの skip は「取り込めなかった」に入れない (既に入っている)
+function notIn(name, insured, reason) { console.log(`★未取込\t${name ?? ""}\t${insured ?? ""}\t${reason}`); }
+const whoOf = (b) => ({ name: b.betsuhyouHeader?.name ?? b.riyouhyouIdentity?.name ?? b.weekly?.userName ?? "", insured: b.betsuhyouHeader?.insured ?? b.riyouhyouIdentity?.insured ?? "" });
+
 async function main() {
   console.log("=== 計画書一括印刷PDF → 第3表(care-plan-3)・第7表(service-usage-detail) 取込 ===");
   console.log(EXECUTE ? "*** 本番実行 ***" : "*** DRY RUN ***");
   console.log("");
 
   // 1 ファイルに複数人いるときは path を「ファイル#何人目」にする (1 人だけのファイルは以前と同じ path)
-  const parsed = PDF_PATHS.flatMap((p) => {
-    const persons = parseBundles(p);
-    return persons.map((b, i) => ({ ...b, path: persons.length > 1 ? `${p}#${i + 1}` : p }));
-  });
+  // 複数ファイルに同じ人が出たら人単位で 1 つに決める (60 ページずつに割った出し方。_parse_careplan_bundle_pdf.mjs の parseBundlesMany)
+  const sel = parseBundlesMany(PDF_PATHS);
+  const parsed = sel.persons;
+  if (sel.sameDropped || sel.partialDropped.length || sel.conflicts.length) {
+    console.log(`同じ人が複数ファイルに出た: 同じ中身で 1 つにまとめた ${sel.sameDropped} 件 / 割れた別表を捨てた (完全なものを使う) ${sel.partialDropped.length} 件 / 中身が食い違う ${sel.conflicts.length} 人`);
+    for (const c of sel.conflicts) notIn(c.name, c.insured, `複数ファイルで別表の中身が違う (${c.files.join(", ")})。どれも書かない`);
+  }
   {
     const files = new Map();
     for (const b of parsed) { const f = b.path.replace(/#\d+$/, ""); files.set(f, (files.get(f) ?? 0) + 1); }
@@ -263,6 +271,7 @@ async function main() {
     const nm = b.weekly?.userName ?? null;
     if (!nm) {
       console.log(`✗ ${base}: 利用票ページが無く、週間計画にも氏名が読めない (ページ構成: ${b.pages.join(",")}) → 完全に要確認`);
+      notIn("", "", `人を特定できない (${base})`);
       continue;
     }
     const key = normName(nm);
@@ -272,6 +281,7 @@ async function main() {
       console.log(`⚠ ${base}: 利用票ページが無い (ページ構成: ${b.pages.join(",")})。週間計画の氏名「${nm}」で当方に1名だけヒット: ${hit[0].name} (id=${hit[0].id}) — ★氏名のみの参考情報。番号での確認が取れるまで書込対象外`);
     } else {
       console.log(`✗ ${base}: 利用票ページが無い (ページ構成: ${b.pages.join(",")})。週間計画の氏名「${nm}」は当方で ${hit.length} 名に該当 → 要確認`);
+      notIn(nm, "", `引き当て不能 (利用票ページなし・氏名で ${hit.length} 名)`);
     }
   }
 
@@ -323,7 +333,7 @@ async function main() {
     const hr = headerResolved.get(b.path);
     if (hr) {
       // 利用票ページが無く、別表ヘッダの (被保番, 氏名) で引いた人
-      if (!hr.clientId) { console.log(`  ✗ 引き当て失敗: ${hr.reason}`); unresolved++; continue; }
+      if (!hr.clientId) { console.log(`  ✗ 引き当て失敗: ${hr.reason}`); unresolved++; notIn(whoOf(b).name, whoOf(b).insured, `引き当て不能: ${hr.reason}`); continue; }
       clientId = hr.clientId; dbName = hr.name;
       console.log(`  → ${dbName} (client_id=${clientId}) ※利用票ページが無いため別表ヘッダの被保番+氏名で特定`);
       if (hr.note) { console.log(`  ※ ${hr.note}`); officeNarrowed++; }
@@ -334,6 +344,7 @@ async function main() {
       if (!ids || ids.size !== 1) {
         console.log(`  ✗ 引き当て失敗 (保険者${p.insurer} 被保番${p.insured} → 該当 ${ids?.size ?? 0} 件)`);
         unresolved++;
+        notIn(whoOf(b).name, p.insured, `引き当て不能 (保険者${p.insurer} 被保番${p.insured} → 該当 ${ids?.size ?? 0} 件)`);
         continue;
       }
       clientId = [...ids][0];
@@ -341,6 +352,7 @@ async function main() {
       if (dbName && normName(dbName) !== p.nameKey) {
         console.log(`  ⚠ 氏名不一致: PDF「${b.riyouhyouIdentity.name}」 vs 当方「${dbName}」→ skip`);
         nameMismatch++;
+        notIn(whoOf(b).name, whoOf(b).insured, `氏名不一致 (当方「${dbName}」)`);
         continue;
       }
       console.log(`  → ${dbName || b.riyouhyouIdentity.name} (client_id=${clientId})`);
@@ -358,6 +370,7 @@ async function main() {
     }
     if (!targetMonth) {
       console.log("  ✗ 対象月が利用票・別表のどちらからも読めない → skip (要確認)");
+      notIn(whoOf(b).name, whoOf(b).insured, "対象月不明");
       skipped++;
       continue;
     }
@@ -437,16 +450,19 @@ async function main() {
         // 2026-11-13: 利用票別表 (全CM) の出し方の PDF は列の位置が違い、extractBetsuhyouRows が 1 行も読めない
         //   (高品 143 人・木更津 150 人すべて 0 行)。合計も 0 なので自己検算は「一致」になり、空の別表を書いてしまう
         console.log("  ✗ 第7表: 別表の行が 1 行も読めない (レイアウト違いの疑い) ので書かない");
+        notIn(whoOf(b).name, whoOf(b).insured, "別表の行が読めない (レイアウト違いの疑い)");
         detailSkippedEmpty++;
         continue;
       }
       if (b.betsuhyouWarn.length) {
         console.log("  ✗ 第7表: 自己検算の警告があるので書かない (別掲)");
+        notIn(whoOf(b).name, whoOf(b).insured, `自己検算 (${b.betsuhyouWarn[0] ?? ""}${b.betsuhyouWarn.length > 1 ? ` ほか ${b.betsuhyouWarn.length - 1} 件` : ""})`);
         detailSkippedWarn++;
         continue;
       }
       if (b.riyouhyouIdentity?.insured && b.betsuhyouHeader?.insured && b.riyouhyouIdentity.insured !== b.betsuhyouHeader.insured) {
         console.log(`  ✗ 第7表: 利用票の被保番 ${b.riyouhyouIdentity.insured} と別表ヘッダの被保番 ${b.betsuhyouHeader.insured} が違うので書かない`);
+        notIn(whoOf(b).name, b.betsuhyouHeader.insured, `利用票と別表の被保番が違う (${b.riyouhyouIdentity.insured})`);
         detailSkippedMismatch++;
         continue;
       }

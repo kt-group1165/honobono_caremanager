@@ -33,12 +33,21 @@
 //   ・日別の印が今の PDF と違っていても、どちらが正かはこの runner では決められない
 //   → 新規の人だけ入れる。既存の人は ② ③ だけ (第7表と貸与の実額) を通す。件数は「既に利用票あり」で出る
 //
+// ── 60 ページずつに割って出したとき (2026-11-13 H: リモート PC が 351 ページで落ちるため) ────────────
+//   ・同じ人が複数ファイルに出たら 第7表・貸与の取込が ★ 人単位で 1 つに決める (_parse_careplan_bundle_pdf.mjs の parseBundlesMany)
+//     完全 (自己検算 OK) で中身が同じ → 1 つ / 完全で中身が違う → どれも書かない / 割れて不完全 → 完全な方を使う
+//     (下の「新しい方を残す」は 1 人 1 ファイルの「利用者毎印刷」の出し直し用。束どうしには使わない)
+//   ・最後に「★ 取り込めなかった人」を 氏名・被保番・理由で必ず出す (第7表の取込が出す ★未取込 行を拾う)。その人だけ出し直す
+//   ・最後に 拠点の進捗 (その月の利用票の人数 / 第7表がある人数 / 今回の書込予定) を出す
+//
 // ── DRY RUN で数えられないもの ──────────────────────────────────────────────
 //   ③ は利用票があることが前提。① で新規に入る人は DRY RUN の時点では利用票が無いので、
 //   ③ では「利用票なし」に数えられる。--execute では ① の後に ③ を回すので埋まる
 // ============================================================================
 import { spawnSync } from "node:child_process";
-import { existsSync, statSync, readdirSync } from "node:fs";
+import { existsSync, statSync, readdirSync, readFileSync } from "node:fs";
+import { createClient } from "@supabase/supabase-js";
+import { AREA_OFFICES } from "./_area_offices.mjs";
 import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
 import { extractPages } from "./_pdf_words.mjs";
 import path from "node:path";
@@ -117,8 +126,8 @@ const STEPS = [
 // 各 script の「まとめ」から拾う行 (見出しの文字で引く。数字の位置は決め打ちしない)
 const PICK = {
   利用票: [/PDF の利用者/, /引き当て成功/, /引き当て失敗/, /複数該当/, /合計が合わない行/, /氏名が食い違う/, /読めずに落ちたページ/, /INSERT/, /UPDATE/, /skip \(/, /✗ 失敗/],
-  第7表: [/人数 \(ファイル内/, /利用者引き当て成功/, /引き当て失敗/, /氏名不一致/, /対象月不明/, /第7表 (書込|書かない)/],
-  貸与: [/^\s*\{"人"/, /A 一意/, /B 多重/, /C 多重/, /D 行数違い/, /既に単位あり/, /食い違う/, /埋める帳票/],
+  第7表: [/同じ人が複数ファイルに出た/, /人数 \(ファイル内/, /利用者引き当て成功/, /引き当て失敗/, /氏名不一致/, /対象月不明/, /第7表 (書込|書かない)/],
+  貸与: [/同じ人が複数ファイル/, /^\s*\{"人"/, /A 一意/, /B 多重/, /C1 /, /うち KY 検算/, /C2 /, /D 行数違い/, /既に単位あり/, /KY 単独.*上書き/, /食い違う/, /埋める帳票/],
 };
 
 console.log(`=== 居宅 束 PDF 取込 runner ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"}  ${AREA || "(拠点名なし)"} ${MONTH} / PDF ${PDFS.length} 本 ===`);
@@ -139,7 +148,7 @@ for (const st of STEPS) {
   process.stdout.write(out);
   const lines = out.split(/\r?\n/);
   const picked = lines.filter((l) => PICK[st.key].some((re) => re.test(l))).map((l) => l.trim());
-  summary.push({ key: st.key, status: r.status, picked });
+  summary.push({ key: st.key, status: r.status, picked, out });
   if (r.status !== 0) {
     console.error(`\n✗ ${st.key} が exit ${r.status} で終わった。後ろの手順は回さない`);
     break;
@@ -151,6 +160,40 @@ for (const s of summary) {
   console.log(`[${s.key}] exit ${s.status}`);
   for (const l of s.picked) console.log(`    ${l}`);
 }
+
+// ── ★ 取り込めなかった人 (第7表の取込が出す「★未取込<TAB>氏名<TAB>被保番<TAB>理由」) ──
+const notIn = new Map();
+for (const s of summary) for (const l of s.out.split(/\r?\n/)) {
+  if (!l.startsWith("★未取込\t")) continue;
+  const [, name, insured, reason] = l.split("\t");
+  notIn.set(`${name}|${insured}|${reason}`, { name, insured, reason });
+}
+console.log(`\n★ 取り込めなかった人 ${notIn.size} 名${notIn.size ? " (この人だけ出し直す)" : ""}`);
+for (const r of [...notIn.values()].sort((a, b) => a.reason.localeCompare(b.reason) || a.name.localeCompare(b.name)))
+  console.log(`    ${r.name || "(氏名不明)"}  被保番 ${r.insured || "-"}  ${r.reason}`);
+
+// ── 拠点の進捗: その月の利用票がある人のうち 第7表がある人 ──
+await (async () => {
+  if (!AREA || !Array.isArray(AREA_OFFICES[AREA])) { console.log(`\n(拠点の進捗: --area ${AREA || "なし"} から居宅を引けないので出さない)`); return; }
+  const env = Object.fromEntries(readFileSync(path.join(HERE, "..", ".env.local"), "utf8").split(/\r?\n/).filter((l) => l.includes("="))
+    .map((l) => { const i = l.indexOf("="); return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, "")]; }));
+  const sb = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+  const all = async (build) => { const o = []; for (let f = 0; ; f += 1000) { const { data, error } = await build().range(f, f + 999); if (error) throw new Error(error.message); o.push(...data); if (data.length < 1000) break; } return o; };
+  const norm = (v) => String(v ?? "").normalize("NFKC").replace(/[\s　]/g, "");
+  const kyo = (await all(() => sb.from("offices").select("id, name").eq("service_type", "居宅介護支援").order("id")))
+    .filter((o) => AREA_OFFICES[AREA].some((w) => norm(o.name) === norm(w)));
+  if (!kyo.length) { console.log(`\n(拠点の進捗: ${AREA} の居宅介護支援事業所が offices に無い)`); return; }
+  const [y, m] = MONTH.split("-").map(Number);
+  const first = `${MONTH}-01`, last = `${MONTH}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
+  const users = new Set((await all(() => sb.from("client_office_assignments").select("id, client_id, start_date, end_date").in("office_id", kyo.map((o) => o.id)).order("id")))
+    .filter((r) => (!r.start_date || r.start_date <= last) && (!r.end_date || r.end_date >= first)).map((r) => r.client_id));
+  const su = new Set((await all(() => sb.from("kaigo_report_documents").select("id, user_id").eq("report_type", "service-usage").eq("report_month", MONTH).order("id"))).map((d) => d.user_id).filter((u) => users.has(u)));
+  const sud = new Set((await all(() => sb.from("kaigo_report_documents").select("id, user_id").eq("report_type", "service-usage-detail").eq("report_month", MONTH).order("id"))).map((d) => d.user_id).filter((u) => su.has(u)));
+  const plan = Number((summary.find((s) => s.key === "第7表")?.out.match(/第7表 書込予定\s+(\d+)/) ?? [])[1] ?? 0);
+  console.log(`\n■ 拠点の進捗  ${AREA} (${kyo.map((o) => o.name).join(" / ")})  ${MONTH}`);
+  console.log(`    利用票がある人 ${su.size} 名 (この居宅に割当があり その月の利用票がある人) / 第7表あり ${sud.size} 名${EXECUTE ? "" : ` / 今回の書込予定 ${plan} 件`}`);
+  console.log(`    → まだ第7表が無い ${Math.max(su.size - sud.size - (EXECUTE ? 0 : plan), 0)} 名${EXECUTE ? "" : " (DRY RUN なので書込予定を引いた見込み。他拠点の人が混ざると少なく見える)"}`);
+})();
 const ran = summary.length;
 if (ran < STEPS.length) console.log(`⚠ ${STEPS.length - ran} 手順を回していない (前の手順が失敗)`);
 if (!EXECUTE) console.log("\n※ DRY RUN。③ の「利用票なし」には ① で新規に入る人も含まれる (--execute では ① の後に ③ を回すので埋まる)");

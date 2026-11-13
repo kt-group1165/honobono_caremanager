@@ -61,6 +61,7 @@ import { fileURLToPath } from "node:url";
 import { findKyFiles, readKy8222Lines } from "./_ky-parse.mjs";
 import { resolveByBetsuhyouHeader } from "../migrations/_client_resolve.mjs";
 import { normName } from "../migrations/_name_normalize.mjs";
+import { selectBundlePersons } from "../migrations/_parse_careplan_bundle_pdf.mjs";
 import { rowMonthlyUnitsOf, isMonthlyUnitType, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
 import { rentalMonthlyUnits, type RentalRowLike } from "@/lib/rental-units";
 import { recordMonthActualUnits, splitInsuranceRecords, type EquipmentRecordLike } from "@/lib/equipment-record-units";
@@ -529,6 +530,43 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
     const negNoName = await runB(rb, () => "");
     if (!negNoName.some((x) => x.startsWith("nm:"))) { console.error(`✗ FAIL: 負のコントロールが鳴らない (氏名を見ない → ${negNoName.length} 件)`); process.exit(1); }
     console.log(`別表ヘッダの引き当て: 境界 ${bc.length} 件 OK (被保番違い・氏名 1 文字違いは引けない / 割当なしは warn) / 負のコントロール 氏名を見ない→${negNoName.length} 件 落ちる ✓`);
+  }
+
+  // 60 ページずつに割って出した束で 同じ人が複数ファイルに出たとき (selectBundlePersons・2026-11-13 H 依頼)
+  //   完全 = 別表の行あり・警告なし (割れたかけらは「最終ページの欄が無い」警告が付く)
+  {
+    type P = { file: string; betsuhyouHeader: { month: string; insured: string; name: string }; betsuhyouItems: { service_code: string; service_units: number }[]; betsuhyouWarn: string[] };
+    const H0 = { month: "2026-06", insured: "0000223887", name: "秋葉 政己" };
+    const it = (u: number) => [{ service_code: "171003", service_units: u }];
+    const full = (file: string, u = 800): P => ({ file, betsuhyouHeader: H0, betsuhyouItems: it(u), betsuhyouWarn: [] });
+    const frag = (file: string): P => ({ file, betsuhyouHeader: H0, betsuhyouItems: it(800), betsuhyouWarn: ["別表の最終ページ (種類別支給限度管理の欄) が無い"] });
+    type SC = [P[], string, string]; // 期待: "keep:<file>" / "none" と conflicts 数
+    const sc: SC[] = [
+      [[full("a"), full("b")], "keep:a|same1", "両方完全・同じ中身 → 1 つ (静かに)"],
+      [[full("a"), full("b", 801)], "none|conflict1", "★ 両方完全・中身が違う → どれも書かない"],
+      [[full("a"), frag("b")], "keep:a|partial1", "完全 + かけら → 完全な方"],
+      [[frag("a"), full("b")], "keep:b|partial1", "★ かけらが先・完全が後 → 完全な方 (新しい方ではない)"],
+      [[frag("a"), frag("b")], "keep:a|", "かけらしか無い → 1 つ渡す (自己検算の警告で書かれず、取り込めなかった人に出る)"],
+      [[full("a")], "keep:a|", "1 ファイルだけ → そのまま"],
+    ];
+    type Sel = (all: P[]) => { persons: P[]; sameDropped: number; partialDropped: unknown[]; conflicts: unknown[] };
+    const show = (fn: Sel, ps: P[]) => {
+      const r = fn(ps);
+      const keep = r.persons.length ? `keep:${r.persons.map((p) => p.file).join(",")}` : "none";
+      const tag = r.conflicts.length ? `conflict${r.conflicts.length}` : r.sameDropped ? `same${r.sameDropped}` : r.partialDropped.length ? `partial${r.partialDropped.length}` : "";
+      return `${keep}|${tag}`;
+    };
+    const runS = (fn: Sel) => sc.filter(([ps, want]) => show(fn, ps) !== want);
+    const sel = selectBundlePersons as unknown as Sel;
+    const badS = runS(sel);
+    for (const [ps, want, label] of badS) console.error(`✗ selectBundlePersons(${ps.map((p) => p.file + (p.betsuhyouWarn.length ? "(かけら)" : "")).join(",")}) = ${show(sel, ps)} / 期待 ${want} (${label})`);
+    if (badS.length) { console.error("✗ FAIL: 束の人単位の突き合わせの境界が崩れている"); process.exit(1); }
+    // 負のコントロール: 以前の runner と同じ「後のファイルを採る」/ 中身を比べない
+    const negLast: Sel = (all) => ({ persons: all.slice(-1), sameDropped: Math.max(all.length - 1, 0), partialDropped: [], conflicts: [] });
+    const negNoCompare: Sel = (all) => ({ persons: all.slice(0, 1), sameDropped: Math.max(all.length - 1, 0), partialDropped: [], conflicts: [] });
+    const nL = runS(negLast).length, nC = runS(negNoCompare).length;
+    if (!nL || !nC) { console.error(`✗ FAIL: 負のコントロールが鳴らない (後のファイルを採る ${nL} / 中身を比べない ${nC})`); process.exit(1); }
+    console.log(`束の人単位の突き合わせ: 境界 ${sc.length} 件 OK (中身が違えば書かない / かけらが先でも完全な方) / 負のコントロール 後のファイルを採る→${nL}・中身を比べない→${nC} 件 落ちる ✓`);
   }
 }
 
