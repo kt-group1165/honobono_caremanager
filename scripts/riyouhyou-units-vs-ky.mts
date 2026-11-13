@@ -62,7 +62,7 @@ import { findKyFiles, readKy8222Lines } from "./_ky-parse.mjs";
 import { resolveByBetsuhyouHeader } from "../migrations/_client_resolve.mjs";
 import { normName } from "../migrations/_name_normalize.mjs";
 import { selectBundlePersons } from "../migrations/_parse_careplan_bundle_pdf.mjs";
-import { rowMonthlyUnitsOf, isMonthlyUnitType, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
+import { rowMonthlyUnitsOf, isMonthlyUnitType, dedupeMonthlyCounts, riyouhyouRowKey, markedCountOf, dayCountOf } from "@/lib/riyouhyou-row-units";
 import { rentalMonthlyUnits, type RentalRowLike } from "@/lib/rental-units";
 import { recordMonthActualUnits, splitInsuranceRecords, type EquipmentRecordLike } from "@/lib/equipment-record-units";
 import { planEquipmentImport, EQUIPMENT_IMPORT_SOURCE, type MergeRow, type MergePlan, type ImportChoice } from "@/lib/equipment-import-merge";
@@ -324,6 +324,32 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
   for (const [u, n, t, want, label] of bad) console.error(`✗ rowMonthlyUnitsOf(${u}, ${n}, ${JSON.stringify(t)}) = ${rowMonthlyUnitsOf(u, n, t)} / 期待 ${want} (${label})`);
   if (bad.length) { console.error("✗ FAIL: 共有の式 rowMonthlyUnitsOf の境界が崩れている"); process.exit(1); }
   console.log(`共有の式 rowMonthlyUnitsOf: 境界 ${cases.length} 件 OK (unit_type 未設定は従来どおり units × 回数)`);
+  // 画面・印刷の回数 dayCountOf / markedCountOf (2026-11-13: 以前は印の日数で、訪看・訪問リハの 1 日 2〜3 回を 1 回と数えていた)
+  {
+    const T = true, F = false;
+    type CC = [boolean[], (number | null)[] | null, number, string];
+    const cc: CC[] = [
+      [[T, T, T], [3, 3, 3], 9, "訪問リハ 1 日 3 回 × 3 日"],
+      [[T, F, T], [2, 2, 2], 4, "印の無い日は 回数配列に値があっても 0 (印を外した日)"],
+      [[T, T], null, 2, "回数配列が無い行は 1 日 1 回"],
+      [[T, T], [0, 2], 3, "その日の値が 0 なら 1 (印を新しく付けた日)"],
+      [[T, T], [null, 2], 3, "その日の値が null なら 1"],
+      [[T, T, T, T, T, T, T, T, T], [2, 2, 2, 2, 2, 2, 2, 2, 2], 18, "送迎減算 片道 = 1 日 2 回 × 9 日"],
+      [[F, F], [3, 3], 0, "印が 1 つも無ければ 0"],
+    ];
+    type CountFn = (m: boolean[], c: (number | null)[] | null) => number;
+    const runC = (fn: CountFn) => cc.filter(([m, c, want]) => fn(m, c) !== want);
+    const badC = runC(markedCountOf);
+    for (const [m, c, want, label] of badC) console.error(`✗ markedCountOf(${JSON.stringify(m)}, ${JSON.stringify(c)}) = ${markedCountOf(m, c)} / 期待 ${want} (${label})`);
+    const dOk = dayCountOf([T, F], [3, 3], 0) === 3 && dayCountOf([T, F], [3, 3], 1) === 0 && dayCountOf(undefined, undefined, 0) === 0;
+    if (badC.length || !dOk) { console.error("✗ FAIL: 画面・印刷の回数 markedCountOf / dayCountOf の境界が崩れている"); process.exit(1); }
+    // 負のコントロール: 直す前の実装 (印の日数) / 回数配列を印と無関係に足す
+    const negMarks: CountFn = (m) => m.filter(Boolean).length;
+    const negSumAll: CountFn = (m, c) => (c ? c.reduce<number>((t, x) => t + Number(x ?? 0), 0) : m.filter(Boolean).length);
+    const nM = runC(negMarks).length, nS = runC(negSumAll).length;
+    if (!nM || !nS) { console.error(`✗ FAIL: 負のコントロールが鳴らない (印の日数 ${nM} / 配列を全部足す ${nS})`); process.exit(1); }
+    console.log(`画面・印刷の回数 markedCountOf: 境界 ${cc.length} 件 OK / 負のコントロール 印の日数で数える→${nM}・配列を印と無関係に足す→${nS} 件 落ちる ✓`);
+  }
   // 帳票の合計で月 1 回コードの複数行を畳む dedupeMonthlyCounts
   type R = { provider: string; content: string; n: number; ut: string | null };
   const rows: R[] = [

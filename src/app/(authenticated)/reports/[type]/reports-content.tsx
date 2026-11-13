@@ -14,7 +14,7 @@ import { format, parseISO, differenceInYears } from "date-fns";
 import { ja } from "date-fns/locale";
 import { toast } from "sonner";
 import { validInMonth } from "@/lib/service-code-valid";
-import { rowMonthlyUnitsOf, dedupeMonthlyCounts, riyouhyouRowKey } from "@/lib/riyouhyou-row-units";
+import { rowMonthlyUnitsOf, dedupeMonthlyCounts, riyouhyouRowKey, dayCountOf, markedCountOf } from "@/lib/riyouhyou-row-units";
 import { daysInMonthOf, autoRentalPeriodType, rentalMonthlyUnits, rentalUnitsKind } from "@/lib/rental-units";
 import { planEquipmentImport, isImportRow, type MergeRow } from "@/lib/equipment-import-merge";
 import { selectCurrentPlanForReports, isExpired, type CarePlanForSelection } from "@/lib/careplan-selection";
@@ -631,6 +631,12 @@ type SvcRow = {
    * 未設定 (既存帳票) は従来どおり units × 回数。
    */
   unit_type?: string | null;
+  /**
+   * 日ごとの回数 (利用票 PDF 取込が入れる。訪問看護・訪問リハは 1 日 2〜3 回、送迎減算は 1 日 2 回)。
+   * 回数は印のある日だけ数える (dayCountOf / markedCountOf・src/lib/riyouhyou-row-units.ts)。無い行は 1 日 1 回。
+   */
+  planned_counts?: (number | null)[] | null;
+  actual_counts?: (number | null)[] | null;
   /** 福祉用具貸与行の 1 月あたりの単価 (按分前)。印から 1月/半月 を判定して按分する (src/lib/rental-units.ts)。 */
   manual_units?: number | null;
   /**
@@ -661,7 +667,7 @@ function isAddonRow(svc: SvcRow): boolean {
  * 2 行目以降を 0 にする (dedupeMonthlyCounts)。各行の月計欄には使わない。
  */
 function monthlyEffCounts(services: SvcRow[], kind: "planned" | "actual"): number[] {
-  return dedupeMonthlyCounts(services, riyouhyouRowKey, (s) => s[kind].filter(Boolean).length, (s) => s.unit_type);
+  return dedupeMonthlyCounts(services, riyouhyouRowKey, (s) => markedCountOf(s[kind], kind === "planned" ? s.planned_counts : s.actual_counts), (s) => s.unit_type);
 }
 
 // rentalMonthlyUnits は src/lib/rental-units.ts (manual_units=単価・印で按分 / rental_month_actual_units=実額・按分しない)
@@ -2029,14 +2035,16 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
   const copyPlannedToActualOne = (i: number) => {
     const src = services[i];
     if (!src) return;
-    updateSvc(i, "actual", [...src.planned]);
+    // 日ごとの回数も一緒に写す (印だけ写すと、回数配列が古いまま残り 1 日 3 回が 1 回に見える)
+    const next = services.map((r, j) => (j === i ? { ...r, actual: [...r.planned], actual_counts: r.planned_counts ? [...r.planned_counts] : r.planned_counts } : r));
+    onChange({ ...content, services: next });
   };
   // 全行 予実変換 (= 月末作業の時短)。1 回の onChange で services 配列全体を一括更新。
   const copyPlannedToActualAll = () => {
     if (services.length === 0) return;
     const ok = window.confirm("全行の予定を実績にコピーします。よろしいですか?\n(実績の入力内容は上書きされます)");
     if (!ok) return;
-    const next = services.map((r) => ({ ...r, actual: [...r.planned] }));
+    const next = services.map((r) => ({ ...r, actual: [...r.planned], actual_counts: r.planned_counts ? [...r.planned_counts] : r.planned_counts }));
     onChange({ ...content, services: next });
   };
   const toggleDay = (svcIdx: number, field: "planned" | "actual", dayIdx: number) => {
@@ -2291,8 +2299,8 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
               {services.map((svc, i) => {
                 const rental = isRentalRow(svc);
                 // rental は marks (開始日/終了日) から区分を自動判定。計列は回数表示で統一。
-                const plannedCount = svc.planned.filter(Boolean).length;
-                const actualCount  = svc.actual.filter(Boolean).length;
+                const plannedCount = markedCountOf(svc.planned, svc.planned_counts);
+                const actualCount  = markedCountOf(svc.actual, svc.actual_counts);
                 // 予定・実績トグル: 各サービス行の 予/実 2 段のうち表示する段を絞る
                 const showPlanned = rowMode !== "actual";
                 const showActual = rowMode !== "planned";
@@ -2496,7 +2504,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                             style={{ height: 18, width: 18, minWidth: 18 }}
                           >
                             {inMonth && svc.planned[di]
-                              ? <span className="text-blue-600 font-semibold">1</span>
+                              ? <span className="text-blue-600 font-semibold">{dayCountOf(svc.planned, svc.planned_counts, di)}</span>
                               : inMonth && mismatch
                                 ? <span className="text-red-500 font-bold">×</span>
                                 : null}
@@ -2573,7 +2581,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                             style={{ height: 18, width: 18, minWidth: 18 }}
                           >
                             {inMonth && svc.actual[di]
-                              ? <span className="text-emerald-700 font-semibold">1</span>
+                              ? <span className="text-emerald-700 font-semibold">{dayCountOf(svc.actual, svc.actual_counts, di)}</span>
                               : inMonth && mismatch
                                 ? <span className="text-red-500 font-bold">×</span>
                                 : null}
@@ -2613,7 +2621,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                   <tr style={{ height: 18 }}>
                     <td colSpan={4} className="sticky z-10 border border-gray-300 border-r-2 border-r-gray-400 bg-blue-100 px-1 text-center text-[10px] font-semibold text-blue-700" style={{ left: 0 }}>予定合計</td>
                     {DAYS.map((_, di) => {
-                      const count = services.filter((svc) => svc.planned[di]).length;
+                      const count = services.reduce((t, svc) => t + dayCountOf(svc.planned, svc.planned_counts, di), 0);
                       return (
                         <td key={di} className="border border-dashed border-gray-300 text-center text-[10px] text-blue-700 font-semibold bg-blue-50" style={{ width: 18, minWidth: 18 }}>
                           {count > 0 ? count : ""}
@@ -2621,7 +2629,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                       );
                     })}
                     <td className="border border-gray-300 text-center text-[10px] text-blue-700 font-semibold bg-blue-50">
-                      {services.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
+                      {services.reduce((sum, svc) => sum + markedCountOf(svc.planned, svc.planned_counts), 0) || ""}
                     </td>
                     <td className="border border-gray-300 text-center text-[10px] text-amber-700 font-semibold bg-blue-50">
                       {plannedUnitsSum || ""}
@@ -2633,7 +2641,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                   <tr style={{ height: 18 }}>
                     <td colSpan={4} className="sticky z-10 border border-gray-300 border-r-2 border-r-gray-400 bg-emerald-100 px-1 text-center text-[10px] font-semibold text-emerald-700" style={{ left: 0 }}>実績合計</td>
                     {DAYS.map((_, di) => {
-                      const count = services.filter((svc) => svc.actual[di]).length;
+                      const count = services.reduce((t, svc) => t + dayCountOf(svc.actual, svc.actual_counts, di), 0);
                       return (
                         <td key={di} className="border border-gray-300 text-center text-[10px] text-emerald-700 font-semibold bg-emerald-50" style={{ width: 18, minWidth: 18 }}>
                           {count > 0 ? count : ""}
@@ -2641,7 +2649,7 @@ function EditFormServiceTicket({ content, onChange, userId, reportMonth, masterF
                       );
                     })}
                     <td className="border border-gray-300 text-center text-[10px] text-emerald-700 font-semibold bg-emerald-50">
-                      {services.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
+                      {services.reduce((sum, svc) => sum + markedCountOf(svc.actual, svc.actual_counts), 0) || ""}
                     </td>
                     <td className="border border-gray-300 text-center text-[10px] text-amber-700 font-semibold bg-emerald-50">
                       {actualUnitsSum || ""}
@@ -4411,8 +4419,8 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   const rental = isRentalRow(svc);
                   const monthlyPlanned = rental ? rentalMonthlyUnits(svc, printYM, "planned") : 0;
                   const monthlyActual = rental ? rentalMonthlyUnits(svc, printYM, "actual") : 0;
-                  const plannedCount = svc.planned.filter(Boolean).length;
-                  const actualCount = svc.actual.filter(Boolean).length;
+                  const plannedCount = markedCountOf(svc.planned, svc.planned_counts);
+                  const actualCount = markedCountOf(svc.actual, svc.actual_counts);
                   const mPlanned = rental ? monthlyPlanned : rowMonthlyUnitsOf(svc.units, plannedCount, svc.unit_type);
                   const mActual = rental ? monthlyActual : rowMonthlyUnitsOf(svc.units, actualCount, svc.unit_type);
                   return (
@@ -4439,7 +4447,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                       {svc.planned.map((v, di) => {
                         const dow = dowOf(di + 1);
                         const isWE = dow === 0 || dow === 6;
-                        return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed", fontWeight: "bold", ...(dow === null ? { backgroundColor: "#eee" } : {}) }}>{dow !== null && v ? "1" : ""}</td>;
+                        return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", borderStyle: "dashed", fontWeight: "bold", ...(dow === null ? { backgroundColor: "#eee" } : {}) }}>{dow !== null && v ? dayCountOf(svc.planned, svc.planned_counts, di) : ""}</td>;
                       })}
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", borderStyle: "dashed" }}>{plannedCount || ""}</td>
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", fontWeight: "bold", borderStyle: "dashed" }}>{mPlanned > 0 ? mPlanned : ""}</td>
@@ -4449,7 +4457,7 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                       {svc.actual.map((v, di) => {
                         const dow = dowOf(di + 1);
                         const isWE = dow === 0 || dow === 6;
-                        return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontWeight: "bold", ...(dow === null ? { backgroundColor: "#eee" } : {}) }}>{dow !== null && v ? "1" : ""}</td>;
+                        return <td key={di} style={{ ...(isWE ? tdGreen : tdStyle), textAlign: "center", padding: "0", fontWeight: "bold", ...(dow === null ? { backgroundColor: "#eee" } : {}) }}>{dow !== null && v ? dayCountOf(svc.actual, svc.actual_counts, di) : ""}</td>;
                       })}
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt" }}>{actualCount || ""}</td>
                       <td style={{ ...tdStyle, textAlign: "center", fontSize: "7pt", fontWeight: "bold" }}>{mActual > 0 ? mActual : ""}</td>
@@ -4475,13 +4483,13 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   <tr style={{ height: `${ROW_H}px` }}>
                     <td colSpan={4} style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>予定合計</td>
                     {DAYS.map((_, di) => {
-                      const count = services.filter((svc) => svc.planned[di]).length;
+                      const count = services.reduce((t, svc) => t + dayCountOf(svc.planned, svc.planned_counts, di), 0);
                       const dow = dowOf(di + 1);
                       const isWE = dow === 0 || dow === 6;
                       return <td key={di} style={{ ...(isWE ? thGreen : thStyle), color: "#1565c0", backgroundColor: isWE ? "#bbdefb" : "#e3f2fd", fontWeight: "bold", textAlign: "center", padding: "0" }}>{dow !== null && count > 0 ? count : ""}</td>;
                     })}
                     <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>
-                      {services.reduce((sum, svc) => sum + svc.planned.filter(Boolean).length, 0) || ""}
+                      {services.reduce((sum, svc) => sum + markedCountOf(svc.planned, svc.planned_counts), 0) || ""}
                     </td>
                     <td style={{ ...thStyle, color: "#1565c0", backgroundColor: "#e3f2fd" }}>{plannedUnitsSum || ""}</td>
                   </tr>
@@ -4489,13 +4497,13 @@ function PrintServiceTicket({ c, title }: { c: Record<string, unknown>; title: s
                   <tr style={{ height: `${ROW_H}px` }}>
                     <td colSpan={4} style={{ ...thStyle, color: "#1b5e20", backgroundColor: "#e8f5e9" }}>実績合計</td>
                     {DAYS.map((_, di) => {
-                      const count = services.filter((svc) => svc.actual[di]).length;
+                      const count = services.reduce((t, svc) => t + dayCountOf(svc.actual, svc.actual_counts, di), 0);
                       const dow = dowOf(di + 1);
                       const isWE = dow === 0 || dow === 6;
                       return <td key={di} style={{ ...(isWE ? tdGreen : thStyle), color: "#1b5e20", backgroundColor: isWE ? "#a5d6a7" : "#e8f5e9", fontWeight: "bold", textAlign: "center", padding: "0" }}>{dow !== null && count > 0 ? count : ""}</td>;
                     })}
                     <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>
-                      {services.reduce((sum, svc) => sum + svc.actual.filter(Boolean).length, 0) || ""}
+                      {services.reduce((sum, svc) => sum + markedCountOf(svc.actual, svc.actual_counts), 0) || ""}
                     </td>
                     <td style={{ ...tdStyle, color: "#1b5e20", backgroundColor: "#e8f5e9", fontWeight: "bold", textAlign: "center" }}>{actualUnitsSum || ""}</td>
                   </tr>

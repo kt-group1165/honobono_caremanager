@@ -28,9 +28,31 @@ export function isMonthlyUnitType(unitType: string | null | undefined): boolean 
 }
 
 /**
+ * その日の回数 (2026-11-13 追加)。印が無ければ 0。印があれば 日ごとの回数配列 (planned_counts / actual_counts) の値、
+ * 配列が無い・その日の値が 0 以下なら 1。
+ *
+ * ★ 訪問看護 (20 分を 1 回)・訪問リハは 1 日 2〜3 回、送迎減算は片道ごとで 1 日 2 回が普通。
+ *   以前の画面・印刷は印の日数 (filter(Boolean).length) で数えていて、月計が 1/2〜1/3 に過少だった
+ *   (いすみ 258 名で 訪看・訪問リハ 33 行 −55,935 単位。回数配列で数え直すと 40 組中 36 組が第7表と一致)。
+ * 印を基準にするので、画面で印を外した日は 0、新しく付けた日は 1 になり、印の編集と矛盾しない。
+ */
+export function dayCountOf(marks: readonly boolean[] | null | undefined, counts: readonly (number | null)[] | null | undefined, dayIdx: number): number {
+  if (!marks?.[dayIdx]) return 0;
+  const c = Number(counts?.[dayIdx] ?? 0);
+  return Number.isFinite(c) && c > 0 ? c : 1;
+}
+
+/** 1 行の月の回数 = 印のある日の dayCountOf の合計 */
+export function markedCountOf(marks: readonly boolean[] | null | undefined, counts: readonly (number | null)[] | null | undefined): number {
+  let n = 0;
+  for (let i = 0; i < (marks?.length ?? 0); i++) n += dayCountOf(marks, counts, i);
+  return n;
+}
+
+/**
  * 貸与以外の 1 行の月計単位。
  * @param units    1 回あたりの単位 (マスタ値。未設定は 0 扱い)
- * @param count    回数 (画面・印刷は印の数。検査は planned_counts の合計)
+ * @param count    回数 (画面・印刷は markedCountOf = 印のある日の回数の合計。検査は planned_counts の合計)
  * @param unitType kaigo_service_codes.unit_type。不明 (undefined/null) なら従来どおり units × count
  */
 export function rowMonthlyUnitsOf(units: number | null | undefined, count: number, unitType?: string | null): number {
