@@ -84,10 +84,19 @@ const shiftedLayout = [];
 // ★ ページ単位の検品 (2026-11-13 H 依頼)。人として認識されなかったページは「取り込めなかった人」に出ないので、
 //   別表のページごとに ヘッダ (提供年月・被保番・氏名) が読めたかを数える。被保番は英字で始まることがある (四街道 H551079091 新井 秀雄 ほか。
 //   この 2 名はヘッダの行だけ 110 ほど左にずれ、末尾に空欄の「: 令和 年 月 日」が付く。明細の列は通常どおり)
-const pageAudit = { betsuhyouPages: 0, noHeader: [], labelXs: new Map() };
+// ★ 利用票 (第6表) のページも ページ単位で数える (2026-11-13 H 依頼・2026-07 の利用票の束に備える)。
+//   下の labelX はファイルの最初のページの「予定」しか見ないので、束の途中に印刷設定の違うページが混ざっても気づけなかった。
+//   2026-06 の束 (いすみ 305 / 八千代 197 ページ) は「サービス利用票」ラベル x=289・「予定」x=326 の 1 種類
+const pageAudit = { betsuhyouPages: 0, noHeader: [], labelXs: new Map(), riyouhyouPages: 0, yoteiXs: new Map() };
 const labelX = (p) => {
   const { words, texts } = extractPages(p);
   for (const [i, t] of texts.entries()) {
+    if (classifyPage(t) === "riyouhyou") {
+      pageAudit.riyouhyouPages++;
+      const y = words[i].find((x) => x.t === "予定" && x.x > 300 && x.x < 360);
+      const k = y ? Math.round(y.x) : "なし";
+      pageAudit.yoteiXs.set(k, (pageAudit.yoteiXs.get(k) ?? 0) + 1);
+    }
     if (classifyPage(t) !== "betsuhyou") continue;
     pageAudit.betsuhyouPages++;
     if (!parseBetsuhyouHeader(t)) pageAudit.noHeader.push(`${path.basename(p)} p${i + 1}`);
@@ -151,6 +160,11 @@ if (otherMonth.length) { console.log(`  提供年月が ${MONTH} でない (渡�
 console.log(`  ★ ページ単位の検品: 別表のページ ${pageAudit.betsuhyouPages} / ヘッダの番号が読めなかったページ ${pageAudit.noHeader.length}` +
   ` / 「サービス利用票別表」ラベルの x ${[...pageAudit.labelXs].map(([x, n]) => `${x}:${n}`).join(" ") || "なし"}${pageAudit.labelXs.size > 1 ? " ← ★ 2 種類以上 = 印刷設定の違うページが混ざっている" : ""}`);
 for (const d of pageAudit.noHeader.slice(0, 20)) console.log(`    ヘッダが読めない: ${d}`);
+if (pageAudit.riyouhyouPages) {
+  const ys = [...pageAudit.yoteiXs];
+  const odd = ys.filter(([x]) => x === "なし" || Math.abs(Number(x) - 326) > 6).reduce((s, [, n]) => s + n, 0);
+  console.log(`  ★ 利用票のページ ${pageAudit.riyouhyouPages} / 「予定」ラベルの x ${ys.map(([x, n]) => `${x}:${n}`).join(" ")}${odd ? ` ← ★ いつもの x=326 でないページ ${odd} (印刷設定の違うページ。利用票の新規取込は怪しい人を書かない)` : ""}`);
+}
 
 const summary = [];
 for (const st of STEPS) {
