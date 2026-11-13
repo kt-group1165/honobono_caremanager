@@ -99,3 +99,35 @@ export function readKy8222Lines(path, ym) {
   }
   return out;
 }
+
+/**
+ * 月の 8222 明細を 人 = (居宅事業所番号, 被保番) ごとにまとめる (2026-11-13)。
+ * 同じ月の KY が当初 (KY2607xx) と修正 (KY2608xx) の 2 本にあることがある (岡本 ふみ子)。
+ * そのため人ごとに ★ 後のファイル (findKyFiles の sort 順 = 送信順) の行で置き換える。足し合わせると二重になる。
+ * @param {string} dir  例: <kaigo-app>/伝送データ
+ * @param {string} ym   YYYYMM
+ * @returns {Map<string, Ky8222Line[]>}  キー `${kyotakuOffice}|${insured}`
+ */
+export function ky8222ByPerson(dir, ym) {
+  /** @type {Map<string, Ky8222Line[]>} */
+  const out = new Map();
+  for (const f of findKyFiles(dir, ym)) {
+    /** @type {Map<string, Ky8222Line[]>} */
+    const inFile = new Map();
+    for (const l of readKy8222Lines(f, ym)) {
+      const k = `${l.kyotakuOffice}|${l.insured}`;
+      const arr = inFile.get(k) ?? [];
+      arr.push(l);
+      inFile.set(k, arr);
+    }
+    for (const [k, v] of inFile) out.set(k, v);
+  }
+  return out;
+}
+
+/** 貸与 (種類 17 / 67) の行だけ
+ * @param {Ky8222Line[] | undefined} lines
+ * @returns {Ky8222Line[]} */
+export function kyRentalLines(lines) {
+  return (lines ?? []).filter((l) => l.serviceKind === "17" || l.serviceKind === "67");
+}

@@ -50,7 +50,7 @@ import { fileURLToPath } from "node:url";
 import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
 import { resolveClients, resolveByBetsuhyouHeader } from "./_client_resolve.mjs";
 import { normName } from "./_name_normalize.mjs";
-import { findKyFiles, readKy8222Lines } from "../scripts/_ky-parse.mjs";
+import { ky8222ByPerson, kyRentalLines } from "../scripts/_ky-parse.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
 const PDF_PATHS = process.argv.flatMap((a, i, arr) => (a === "--pdf" ? [arr[i + 1]] : []));
@@ -67,23 +67,21 @@ const normProv = (s) => (s ?? "").normalize("NFKC").replace(/[\s　]/g, "");
 const isRentalCode = (c) => /^(17|67)\d{4}$/.test(c ?? "");
 
 const hasUnits = (r) => Number(r.manual_units) > 0 || Number(r.rental_month_actual_units) > 0;
+// KY 単独 (fill_rental_units_from_ky_single.mjs) で埋めた行は、別表のほうが品目ごとで細かいので ★ 別表で上書きする (H 指示 2026-11-13)。
+// ただし黙って上書きしない: 上書きした件数と、値が変わった行を出力に出す (変わったら KY 単独か別表の読みのどちらかが誤り)
+const isKySingle = (r) => String(r._units_source ?? "").startsWith("ky8222_single_");
+const locked = (r) => hasUnits(r) && !isKySingle(r);
 /** 行を見分ける材料は印 (予定・実績) だけ (品目名・事業所は同じグループ内で同じ)。印が全行同じなら行は見分けられない */
 const marksKey = (s) => JSON.stringify([s.planned ?? [], s.actual ?? []]);
 
 // KY 8222 の 貸与 (種類 17/67) の合計: `${居宅事業所番号}|${被保番}|${YYYYMM}` → 単位。
-// 同じ月の KY が当初 (KY2607xx) と修正 (KY2608xx) の 2 本にあることがある (岡本 ふみ子)。人ごとに ★ 後のファイルの行で置き換える
+// 人ごとの集め方 (当初と修正の 2 本は後のファイルで置き換え) は scripts/_ky-parse.mjs の ky8222ByPerson
 const kyCache = new Map();
 function kyRentalTotals(ymCompact) {
   if (kyCache.has(ymCompact)) return kyCache.get(ymCompact);
   const tot = new Map();
-  for (const f of findKyFiles(path.join(KAIGO, "伝送データ"), ymCompact)) { // sort 済み = 送信順
-    const inFile = new Map();
-    for (const l of readKy8222Lines(f, ymCompact)) {
-      const k = `${l.kyotakuOffice}|${l.insured}|${l.ym}`;
-      inFile.set(k, (inFile.get(k) ?? 0) + (["17", "67"].includes(l.serviceKind) ? l.plannedUnits : 0));
-    }
-    for (const [k, v] of inFile) tot.set(k, v);
-  }
+  for (const [k, lines] of ky8222ByPerson(path.join(KAIGO, "伝送データ"), ymCompact))
+    tot.set(`${k}|${ymCompact}`, kyRentalLines(lines).reduce((s, l) => s + l.plannedUnits, 0));
   kyCache.set(ymCompact, tot);
   return tot;
 }
@@ -108,6 +106,7 @@ async function main() {
   const cls = { A: 0, B: 0, C1: 0, C1_KY無し: 0, C1_KY不一致: 0, C2: 0, D: 0, 投入済み: 0 };
   const c2List = []; // C2 は全件出す (H 指示: 件数と氏名・品目を残す)
   const c1Out = []; // C1 を KY 検算で書かなかった人
+  const kyOver = { n: 0, changed: [] }; // KY 単独で埋めた行を別表で上書きする件数 / 値が変わった行
   const plans = []; // { docId, content, fills: [{ i, units }] }
   const examples = { D: [] };
   const existingMismatch = [];
@@ -145,7 +144,7 @@ async function main() {
       const [prov, content] = [k.slice(0, k.indexOf("|")), k.slice(k.indexOf("|") + 1)];
       const its = items.filter((it) => it.service_content === content && prov && normProv(it.provider_name).startsWith(prov));
       const label = `${names.get(clientId) ?? b.betsuhyouHeader?.name ?? ""} ${ym} ${content} @${prov}`;
-      if (rs.every((r) => hasUnits(r.s))) {
+      if (rs.every((r) => locked(r.s))) {
         cls.投入済み += rs.length;
         // 既に単位がある行は触らない。1 対 1 で別表と食い違うものだけ一覧に出す (事業所をまたぐ不整合の材料)
         if (rs.length === 1 && its.length === 1 && existingUnits(rs[0].s).v !== Number(its[0].service_units)) {
@@ -164,7 +163,12 @@ async function main() {
         continue;
       }
       for (const [j, r] of rs.entries()) {
-        if (hasUnits(r.s)) { cls.投入済み++; continue; }
+        if (locked(r.s)) { cls.投入済み++; continue; }
+        if (isKySingle(r.s)) {
+          kyOver.n++;
+          const before = Number(r.s.rental_month_actual_units), after = Number(its[j].service_units);
+          if (before !== after) kyOver.changed.push(`${label}  KY 単独 ${before} → 別表 ${after}`);
+        }
         fills.push({ i: r.i, units: Number(its[j].service_units), src: `betsuhyou_${ym}` });
         cls[rs.length === 1 ? "A" : "B"]++;
       }
@@ -205,6 +209,8 @@ async function main() {
   if (c1Out.length) { console.log("  C1 を書かなかった人:"); for (const x of c1Out) console.log(`    ${x}`); }
   if (c2List.length) { console.log("  C2 (全件):"); for (const x of c2List) console.log(`    ${x}`); }
   if (examples.D.length) { console.log("  D の例:"); for (const x of examples.D) console.log(`    ${x}`); }
+  console.log(`\n■ KY 単独 (ky8222_single_*) で埋めた行を別表で上書き ${kyOver.n} 行 / うち値が変わる ${kyOver.changed.length} 行`);
+  for (const x of kyOver.changed) console.log(`    ⚠ ${x}  ← KY 単独か別表の読みのどちらかが誤り。確かめる`);
   const officeNotes = [...headerResolved.values()].filter((r) => r.warn || r.note);
   if (officeNotes.length) {
     console.log(`\n■ 別表の居宅支援事業者番号 (引き当ては成立・書く) ${officeNotes.length} 人`);
