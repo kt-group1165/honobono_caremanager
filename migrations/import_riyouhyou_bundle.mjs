@@ -40,6 +40,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, statSync, readdirSync } from "node:fs";
 import { parseBundles } from "./_parse_careplan_bundle_pdf.mjs";
+import { extractPages } from "./_pdf_words.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -66,10 +67,25 @@ if (!MONTH || !/^\d{4}-\d{2}$/.test(MONTH)) { console.error("--month YYYY-MM を
 // 提供年月が --month と違うファイルは渡さない (件数と名前を出す)。
 const dupes = [];
 const otherMonth = [];
+// ★ 印刷設定の違うファイル (2026-11-13 実測)。いつもの出し方は 利用票の「予定」ラベルが x≈326。
+//   x≈342 のファイル (列が右にずれ、長いサービス名が 2 行に折り返して後半しか読めない) が混ざっていた。
+//   読み取り (_riyouhyou_grid.mjs) はいつもの出し方の列位置で作ってあるので、ずれたファイルは数えて警告する
+//   (利用票取込の --only-new は、そういう人を「警告のある行 / マスタに無い名前」で書かない)
+const shiftedLayout = [];
+const labelX = (p) => {
+  const { words } = extractPages(p);
+  for (const w of words) {
+    const lab = w.find((x) => x.t === "予定" && x.x > 300 && x.x < 360);
+    if (lab) return lab.x;
+  }
+  return null;
+};
 const byPerson = new Map();
 const passThrough = [];
 for (const p of RAW_PDFS) {
   if (!existsSync(p) || statSync(p).size === 0) { passThrough.push(p); continue; } // 下でまとめて止める
+  const lx = labelX(p);
+  if (lx != null && Math.abs(lx - 326) > 6) shiftedLayout.push(`${path.basename(p)} (予定ラベル x=${lx.toFixed(0)})`);
   const ps = parseBundles(p);
   const id = ps.length === 1 ? ps[0].riyouhyouIdentity : null;
   const month = ps.length === 1 ? (ps[0].riyouhyouMonth ?? ps[0].betsuhyouHeader?.month ?? null) : null;
@@ -110,6 +126,7 @@ if (PDFS.length <= 10) for (const p of PDFS) console.log(`  ${p}`);
 else console.log(`  ${path.dirname(PDFS[0])} ほか (${PDFS.length} 本)`);
 console.log(`  読んだ PDF ${RAW_PDFS.length} 本 → 渡す ${PDFS.length} 本 (同じ人の出し直し ${dupes.length} 本 / 提供年月が ${MONTH} でない ${otherMonth.length} 本 を除いた)`);
 if (dupes.length) { console.log("  同じ人の出し直し (古いほうを使わない):"); for (const d of dupes) console.log(`    ${d}`); }
+if (shiftedLayout.length) { console.log(`  ⚠ 印刷設定の違うファイル ${shiftedLayout.length} 本 (列がずれている。利用票の新規取込は怪しい人を書かない。第7表・貸与は別表の自己検算に従う):`); for (const d of shiftedLayout.slice(0, 20)) console.log(`    ${d}`); if (shiftedLayout.length > 20) console.log(`    … 他 ${shiftedLayout.length - 20} 本`); }
 if (otherMonth.length) { console.log(`  提供年月が ${MONTH} でない (渡さない):`); for (const d of otherMonth) console.log(`    ${d}`); }
 
 const summary = [];
