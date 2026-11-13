@@ -134,7 +134,8 @@ async function main() {
       }
     }
     if (backup.length !== willDelete) { console.error(`✗ 退避 ${backup.length} 行が 消す ${willDelete} 行と違う`); process.exit(1); }
-    const file = path.join(KAIGO, "migrations", `_backup_benefit_${TAG}_${YM}_${new Date().toISOString().replace(/[-:]/g, "").slice(0, 13)}.json`);
+    // ★ 退避ファイル名はミリ秒まで入れる: 分単位だと続けて 2 本流したとき上書きされる (2026-11-13 に 3 拠点分が消えた)
+    const file = path.join(KAIGO, "migrations", `_backup_benefit_${TAG}_${YM}_${new Date().toISOString().replace(/[-:]/g, "").slice(0, 19)}.json`);
     writeFileSync(file, JSON.stringify(backup, null, 1));
     console.log(`退避: ${file} (${backup.length} 行)`);
   }

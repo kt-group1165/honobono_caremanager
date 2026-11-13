@@ -51,7 +51,8 @@ if (mode === "backup") {
   const officeId = process.env.OFFICE_ID, month = process.env.TARGET_MONTH;
   if (!officeId || !month) { console.error("OFFICE_ID と TARGET_MONTH が要ります"); process.exit(1); }
   const rows = await fetchRows(officeId, month);
-  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13);
+  // ★ 退避ファイル名はミリ秒まで入れる: 分単位だと続けて 2 本流したとき上書きされる (2026-11-13 に 3 拠点分が消えた)
+  const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 19);
   const file = path.join(ROOT, "migrations", `_backup_shogai_import_${officeId.slice(0, 8)}_${month.replace("-", "")}_${stamp}.json`);
   writeFileSync(file, JSON.stringify({ officeId, month, count: rows.length, rows }, null, 0));
   console.log(`退避 ${rows.length} 行 → ${file}`);

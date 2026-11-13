@@ -132,7 +132,8 @@ if (conflicts.length) {
 }
 if (!EXECUTE) { console.log("\n(DRY RUN。書き込むには --execute)"); process.exit(0); }
 
-const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 13);
+// ★ 退避ファイル名はミリ秒まで入れる: 分単位だと続けて 2 本流したとき上書きされる (2026-11-13 に 3 拠点分が消えた)
+const stamp = new Date().toISOString().replace(/[-:]/g, "").slice(0, 19);
 const backup = path.join(ROOT, "migrations", `_backup_care_plan_cm_from_kk_${stamp}.json`);
 writeFileSync(backup, JSON.stringify(updates.map((u) => u.plan)));
 console.log(`\n退避 ${updates.length} 行 → ${backup}`);
