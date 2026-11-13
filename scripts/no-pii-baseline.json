@@ -1,0 +1,713 @@
+{
+  "_readme": [
+    "基準値方式。ファイルごとに ① 事業所番号でない 10 桁 / ② 被保番などの行の数字 が増えたら落ちる。0 を目指す検査ではない",
+    "★ 履歴 (過去の commit) には残っている。これは 新しく書き込むのを止める検査。repo の文書に 実在の氏名・被保険者番号を書かない (その場で DB から引く)",
+    "今ある件数には 電話番号・仮番号 (1111111111 など)・サンプルの番号 も入っている。増えたときは --update の前に 中身を見て消す"
+  ],
+  "total": {
+    "ten": 16981,
+    "near": 1469
+  },
+  "files": {
+    "docs/AUDIT_densou_202606.md": {
+      "ten": 32,
+      "near": 2
+    },
+    "docs/MIGRATION_HONOBONO_EXPORT.md": {
+      "ten": 2,
+      "near": 0
+    },
+    "docs/TJ_JISSEKI_STRUCTURE.md": {
+      "ten": 3,
+      "near": 0
+    },
+    "docs/VERIFY_INVARIANTS.md": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/_backup/demo_data_20260807.json": {
+      "ten": 87,
+      "near": 72
+    },
+    "migrations/_backup_cert_end_dates_20260901.json": {
+      "ten": 33,
+      "near": 33
+    },
+    "migrations/_backup_client_insurance_records_step1dedup_20260902.json": {
+      "ten": 287,
+      "near": 287
+    },
+    "migrations/_backup_insurance_dup_20260805130657.json": {
+      "ten": 34,
+      "near": 34
+    },
+    "migrations/_backup_insurance_dup_20260805132340.json": {
+      "ten": 53,
+      "near": 53
+    },
+    "migrations/_backup_insurance_dup_20260805132351.json": {
+      "ten": 17,
+      "near": 17
+    },
+    "migrations/_backup_insurance_dup_20260805132508.json": {
+      "ten": 27,
+      "near": 27
+    },
+    "migrations/_backup_insurance_dup_20260805132724.json": {
+      "ten": 48,
+      "near": 48
+    },
+    "migrations/_backup_insurance_dup_20260805132800.json": {
+      "ten": 232,
+      "near": 232
+    },
+    "migrations/_backup_insurance_dup_20260805134031.json": {
+      "ten": 5,
+      "near": 5
+    },
+    "migrations/_backup_insurance_dup_20260805134136.json": {
+      "ten": 18,
+      "near": 18
+    },
+    "migrations/_backup_insurance_dup_20260805141659.json": {
+      "ten": 56,
+      "near": 56
+    },
+    "migrations/_backup_insurance_dup_20260805141956.json": {
+      "ten": 43,
+      "near": 43
+    },
+    "migrations/_backup_insurance_dup_20260806133738.json": {
+      "ten": 1,
+      "near": 1
+    },
+    "migrations/_backup_insurance_dup_20260806133833.json": {
+      "ten": 2,
+      "near": 2
+    },
+    "migrations/_backup_insurance_dup_20260806134020.json": {
+      "ten": 1,
+      "near": 1
+    },
+    "migrations/_backup_insurance_dup_20260806134116.json": {
+      "ten": 4,
+      "near": 4
+    },
+    "migrations/_backup_insurance_dup_20260806145253.json": {
+      "ten": 30,
+      "near": 30
+    },
+    "migrations/_backup_insurance_dup_20260807015819.json": {
+      "ten": 44,
+      "near": 44
+    },
+    "migrations/_backup_insurance_dup_20260807052443.json": {
+      "ten": 128,
+      "near": 128
+    },
+    "migrations/_backup_insurance_dup_20260807052453.json": {
+      "ten": 134,
+      "near": 134
+    },
+    "migrations/_backup_oyumino_testdata_20260804.json": {
+      "ten": 4,
+      "near": 0
+    },
+    "migrations/_backup_shogai_cert_parse_garbage.json": {
+      "ten": 7,
+      "near": 0
+    },
+    "migrations/_backup_shougai_cert_kano_1787123075889.json": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/_backup_shougai_cert_kano_1787125423616.json": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/_billed_202606.json": {
+      "ten": 4076,
+      "near": 0
+    },
+    "migrations/_deleted_office_name_clients.json": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/_densou_intentional_diff.json": {
+      "ten": 1,
+      "near": 1
+    },
+    "migrations/_detect_kohi_futan_202606.json": {
+      "ten": 217,
+      "near": 0
+    },
+    "migrations/_dropped_cert_generation_noise.json": {
+      "ten": 82,
+      "near": 82
+    },
+    "migrations/_fake_jogen_test_manifest.deleted.json": {
+      "ten": 9,
+      "near": 0
+    },
+    "migrations/_goi_kihon.json": {
+      "ten": 22,
+      "near": 0
+    },
+    "migrations/_import_cert_history_20260804.json": {
+      "ten": 510,
+      "near": 0
+    },
+    "migrations/_import_cert_history_20260831.json": {
+      "ten": 3339,
+      "near": 0
+    },
+    "migrations/_import_cert_history_dryrun.json": {
+      "ten": 4183,
+      "near": 0
+    },
+    "migrations/_insured_number_padding_backup.json": {
+      "ten": 15,
+      "near": 0
+    },
+    "migrations/_kyotaku_clients_created.json": {
+      "ten": 15,
+      "near": 0
+    },
+    "migrations/_kyotaku_superseded.json": {
+      "ten": 6,
+      "near": 0
+    },
+    "migrations/_kyotaku_sync_created.json": {
+      "ten": 794,
+      "near": 0
+    },
+    "migrations/_meisai_num_to_client.json": {
+      "ten": 38,
+      "near": 0
+    },
+    "migrations/_moba_cert_shi.json": {
+      "ten": 33,
+      "near": 0
+    },
+    "migrations/_parse_careplan_bundle_pdf.mjs": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/_riyouhyou_grid.mjs": {
+      "ten": 1,
+      "near": 1
+    },
+    "migrations/_shared_user_number_fix_backup.json": {
+      "ten": 2,
+      "near": 2
+    },
+    "migrations/_unseen_cases_20260903.json": {
+      "ten": 44,
+      "near": 0
+    },
+    "migrations/add_kyotaku_tsukiokure_yotsukaido.mjs": {
+      "ten": 4,
+      "near": 4
+    },
+    "migrations/add_shogai_tokuchi_formula.mjs": {
+      "ten": 4,
+      "near": 0
+    },
+    "migrations/addon_lines_system_sougou.sql": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/applied_archive/import_r8_06_shogai_service_codes.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/applied_archive/seed_seiho_samples.mjs": {
+      "ten": 4,
+      "near": 1
+    },
+    "migrations/applied_archive/seed_test_care_office_link.mjs": {
+      "ten": 5,
+      "near": 0
+    },
+    "migrations/applied_archive/update_r8_06_shoguu_formula_shogai.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/care_support_claims_base_code_nullable.sql": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/care_support_claims_insurer.sql": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/check_cert_owner_mismatch.mjs": {
+      "ten": 3,
+      "near": 1
+    },
+    "migrations/check_user_master_csv.mjs": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/diagnose_meisai_unreachable.mjs": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/enrich_visit_record_contents.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/fix_assessment_cert_link.mjs": {
+      "ten": 5,
+      "near": 0
+    },
+    "migrations/fix_cert_owner_mismatch.mjs": {
+      "ten": 5,
+      "near": 0
+    },
+    "migrations/fix_client_birth_date_format.mjs": {
+      "ten": 2,
+      "near": 2
+    },
+    "migrations/fix_client_furigana_yashiro.mjs": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/fix_doukou_shogu_formula.mjs": {
+      "ten": 6,
+      "near": 0
+    },
+    "migrations/fix_duplicate_client_kanou_kinuyo.mjs": {
+      "ten": 4,
+      "near": 1
+    },
+    "migrations/fix_insurance_record_wrong_owner.mjs": {
+      "ten": 4,
+      "near": 0
+    },
+    "migrations/fix_insured_number_padding.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/fix_insurer_number_001220.mjs": {
+      "ten": 6,
+      "near": 0
+    },
+    "migrations/fix_insurer_number_toride_082172.mjs": {
+      "ten": 1,
+      "near": 1
+    },
+    "migrations/fix_jogen_kanri_office_number_external.mjs": {
+      "ten": 11,
+      "near": 0
+    },
+    "migrations/fix_junk_user_number_owners.mjs": {
+      "ten": 17,
+      "near": 1
+    },
+    "migrations/fix_kano_yuka_shogai_cert.mjs": {
+      "ten": 9,
+      "near": 2
+    },
+    "migrations/fix_kyotaku_shared_user_number_owners.mjs": {
+      "ten": 18,
+      "near": 10
+    },
+    "migrations/fix_missing_certification_from_kk.mjs": {
+      "ten": 6,
+      "near": 6
+    },
+    "migrations/fix_missing_office_assignment_from_billing_list.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/fix_nameless_kyotaku_clients.mjs": {
+      "ten": 7,
+      "near": 0
+    },
+    "migrations/fix_oami_2147483647_hiruta.mjs": {
+      "ten": 10,
+      "near": 4
+    },
+    "migrations/fix_sato_kimiko_2147483647.mjs": {
+      "ten": 9,
+      "near": 2
+    },
+    "migrations/fix_shogai_cert_kanda.mjs": {
+      "ten": 4,
+      "near": 0
+    },
+    "migrations/fix_shogai_cert_parse_garbage.mjs": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/fix_shogai_municipality_name_to_number.mjs": {
+      "ten": 5,
+      "near": 1
+    },
+    "migrations/fix_takashina_import_wrong_owner.mjs": {
+      "ten": 4,
+      "near": 0
+    },
+    "migrations/import_care_plan3_usage_detail_from_pdf.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/import_cert_history.mjs": {
+      "ten": 1,
+      "near": 1
+    },
+    "migrations/import_honobono_shougai_oami.mjs": {
+      "ten": 3,
+      "near": 0
+    },
+    "migrations/import_jogen_kanri_from_densou.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/import_juho_from_tj.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/import_kyotaku_benefit_from_jisseki.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/import_kyotaku_claims_from_kk.mjs": {
+      "ten": 4,
+      "near": 0
+    },
+    "migrations/import_kyotaku_clients_from_master_csv.mjs": {
+      "ten": 1,
+      "near": 2
+    },
+    "migrations/import_kyotaku_clients_from_user_master.mjs": {
+      "ten": 7,
+      "near": 4
+    },
+    "migrations/import_kyotaku_office.mjs": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/import_kyotaku_step1_clients.mjs": {
+      "ten": 3,
+      "near": 0
+    },
+    "migrations/import_meisai_addon_lines.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/import_meisai_shougai_records.mjs": {
+      "ten": 21,
+      "near": 0
+    },
+    "migrations/import_meisai_step1_clients.mjs": {
+      "ten": 7,
+      "near": 1
+    },
+    "migrations/import_riyouhyou_service_usage.mjs": {
+      "ten": 2,
+      "near": 1
+    },
+    "migrations/merge_duplicate_clients.mjs": {
+      "ten": 7,
+      "near": 1
+    },
+    "migrations/propose_meisai_client_mapping.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/rollback_kyotaku_master_import_20260901.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/seed_fake_gendo_test.mjs": {
+      "ten": 0,
+      "near": 1
+    },
+    "migrations/seed_fake_houmonkaigo_clients.mjs": {
+      "ten": 10,
+      "near": 2
+    },
+    "migrations/seed_fake_insurer_change_test.mjs": {
+      "ten": 11,
+      "near": 0
+    },
+    "migrations/seed_fake_jogen_kanri_test.mjs": {
+      "ten": 19,
+      "near": 0
+    },
+    "migrations/seed_fake_kohi_test.mjs": {
+      "ten": 0,
+      "near": 1
+    },
+    "migrations/seed_fake_kyotaku_clients.mjs": {
+      "ten": 51,
+      "near": 0
+    },
+    "migrations/seed_fake_report_documents.mjs": {
+      "ten": 3,
+      "near": 0
+    },
+    "migrations/seed_fake_reseikyu_test.mjs": {
+      "ten": 0,
+      "near": 1
+    },
+    "migrations/seed_fake_shougai_clients.mjs": {
+      "ten": 10,
+      "near": 0
+    },
+    "migrations/seed_sample_kyotaku_j.mjs": {
+      "ten": 3,
+      "near": 4
+    },
+    "migrations/seed_sample_shogai_l.mjs": {
+      "ten": 1,
+      "near": 0
+    },
+    "migrations/seed_sample_teigen_j.mjs": {
+      "ten": 1,
+      "near": 2
+    },
+    "migrations/seed_sample_yobo_j.mjs": {
+      "ten": 4,
+      "near": 2
+    },
+    "migrations/seed_shogai_sample_v2.mjs": {
+      "ten": 4,
+      "near": 0
+    },
+    "migrations/set_shougai_holder_kana_moba.mjs": {
+      "ten": 4,
+      "near": 0
+    },
+    "migrations/shougai_cert_holder_kana.sql": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/shougai_import_goi.json": {
+      "ten": 285,
+      "near": 0
+    },
+    "migrations/shougai_import_moba.json": {
+      "ten": 324,
+      "near": 0
+    },
+    "migrations/shougai_import_oami.json": {
+      "ten": 249,
+      "near": 0
+    },
+    "migrations/sync_kyotaku_clients_from_master_csv.mjs": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/test_kokuho_tsuchi_parse.mjs": {
+      "ten": 18,
+      "near": 2
+    },
+    "migrations/verify_j611_jisseki.mts": {
+      "ten": 2,
+      "near": 0
+    },
+    "migrations/verify_juho_step_and_hospitalization.mjs": {
+      "ten": 3,
+      "near": 2
+    },
+    "scripts/README.md": {
+      "ten": 1,
+      "near": 0
+    },
+    "scripts/bath-seikyu-verify.mts": {
+      "ten": 1,
+      "near": 2
+    },
+    "scripts/beppyo-plan-units-check.mts": {
+      "ten": 2,
+      "near": 0
+    },
+    "scripts/careplan2-migration-check.mts": {
+      "ten": 1,
+      "near": 0
+    },
+    "scripts/demo-data-check.mts": {
+      "ten": 1,
+      "near": 0
+    },
+    "scripts/densou-7111-7131-verify.mts": {
+      "ten": 4,
+      "near": 6
+    },
+    "scripts/densou-builder-cross-diff.mts": {
+      "ten": 2,
+      "near": 1
+    },
+    "scripts/densou-diff-check.mts": {
+      "ten": 7,
+      "near": 0
+    },
+    "scripts/densou-diff-expected.json": {
+      "ten": 7,
+      "near": 0
+    },
+    "scripts/fb-zengin-verify.mts": {
+      "ten": 6,
+      "near": 0
+    },
+    "scripts/insurer-change-verify.mts": {
+      "ten": 8,
+      "near": 0
+    },
+    "scripts/investigate-diff-client.mts": {
+      "ten": 2,
+      "near": 0
+    },
+    "scripts/kaigo-densou-diff-check-extra.mts": {
+      "ten": 13,
+      "near": 4
+    },
+    "scripts/keikakuhi-8124-verify.mts": {
+      "ten": 9,
+      "near": 0
+    },
+    "scripts/kohi-verify.mts": {
+      "ten": 0,
+      "near": 1
+    },
+    "scripts/kokuho-tsuchi-apply-verify.mts": {
+      "ten": 3,
+      "near": 0
+    },
+    "scripts/ky-caresapo-units-baseline.json": {
+      "ten": 1,
+      "near": 1
+    },
+    "scripts/kyotaku-diff-check.mts": {
+      "ten": 1,
+      "near": 0
+    },
+    "scripts/kyotaku-diff-expected.json": {
+      "ten": 2,
+      "near": 1
+    },
+    "scripts/kyufu-kanri-8222-verify.mts": {
+      "ten": 38,
+      "near": 2
+    },
+    "scripts/meisai-map-keys-baseline.json": {
+      "ten": 765,
+      "near": 0
+    },
+    "scripts/riyouhyou-units-vs-ky.mts": {
+      "ten": 24,
+      "near": 12
+    },
+    "scripts/shogai-cert-expiry-alert-verify.mts": {
+      "ten": 1,
+      "near": 0
+    },
+    "scripts/shogai-densou-diff.mts": {
+      "ten": 1,
+      "near": 0
+    },
+    "scripts/shogai-jogen-verify.mts": {
+      "ten": 10,
+      "near": 2
+    },
+    "scripts/sougou-densou-71r1-verify.mts": {
+      "ten": 9,
+      "near": 1
+    },
+    "scripts/sougou-shoguu-verify.mts": {
+      "ten": 1,
+      "near": 1
+    },
+    "scripts/sougou-verify.mts": {
+      "ten": 9,
+      "near": 12
+    },
+    "scripts/teikyohyo-diff-baseline.json": {
+      "ten": 3,
+      "near": 0
+    },
+    "scripts/teikyohyo-diff.mts": {
+      "ten": 3,
+      "near": 0
+    },
+    "scripts/tj-juho-analyze-baseline.json": {
+      "ten": 1,
+      "near": 0
+    },
+    "scripts/tj-juho-analyze.mjs": {
+      "ten": 5,
+      "near": 0
+    },
+    "scripts/verify-kyufu-kanri-boundary.mts": {
+      "ten": 15,
+      "near": 0
+    },
+    "scripts/verify-shogai-j11-boundary.mts": {
+      "ten": 5,
+      "near": 0
+    },
+    "scripts/verify-shogai-j411-boundary.mts": {
+      "ten": 17,
+      "near": 0
+    },
+    "scripts/yobo-sample-verify.mts": {
+      "ten": 1,
+      "near": 0
+    },
+    "scripts/yobo-shien-densou-verify.mts": {
+      "ten": 3,
+      "near": 0
+    },
+    "src/app/(authenticated)/master/care-offices/care-offices-content.tsx": {
+      "ten": 1,
+      "near": 0
+    },
+    "src/app/(authenticated)/master/office/office-content.tsx": {
+      "ten": 1,
+      "near": 0
+    },
+    "src/app/(authenticated)/master/providers/providers-content.tsx": {
+      "ten": 1,
+      "near": 0
+    },
+    "src/lib/kokuho-densou/build-sougou.ts": {
+      "ten": 1,
+      "near": 0
+    },
+    "src/lib/kokuho-densou/build.ts": {
+      "ten": 1,
+      "near": 1
+    },
+    "src/lib/kokuho-densou/honobono-format.ts": {
+      "ten": 1,
+      "near": 0
+    },
+    "src/lib/shogai-seikyu/aggregate.ts": {
+      "ten": 1,
+      "near": 0
+    },
+    "src/lib/shogai-seikyu/code-from-time.ts": {
+      "ten": 1,
+      "near": 0
+    },
+    "src/lib/visit-seikyu/aggregate-sougou.ts": {
+      "ten": 1,
+      "near": 0
+    },
+    "src/lib/visit-seikyu/sougou-insurer-map.mjs": {
+      "ten": 2,
+      "near": 2
+    },
+    "supabase/seed.sql": {
+      "ten": 10,
+      "near": 0
+    },
+    "supabase/seed_providers.sql": {
+      "ten": 10,
+      "near": 0
+    }
+  }
+}

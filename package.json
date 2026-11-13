@@ -20,6 +20,7 @@
     "check:kyotaku-matrix": "tsx scripts/kyotaku-matrix-verify.mts",
     "check:service-code-gap": "tsx scripts/service-code-gap-check.mts",
     "check:riyouhyou-units": "tsx scripts/riyouhyou-units-vs-ky.mts",
+    "check:no-pii": "tsx scripts/no-pii-check.mts",
     "check:beppyo-plan-units": "tsx scripts/beppyo-plan-units-check.mts",
     "check:ky-caresapo-units": "tsx scripts/ky-caresapo-units-check.mts",
     "check:rental-limit-over": "tsx scripts/rental-limit-over-check.mts",
