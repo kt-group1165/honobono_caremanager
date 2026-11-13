@@ -87,18 +87,22 @@ const shiftedLayout = [];
 // ★ 利用票 (第6表) のページも ページ単位で数える (2026-11-13 H 依頼・2026-07 の利用票の束に備える)。
 //   下の labelX はファイルの最初のページの「予定」しか見ないので、束の途中に印刷設定の違うページが混ざっても気づけなかった。
 //   2026-06 の束 (いすみ 305 / 八千代 197 ページ) は「サービス利用票」ラベル x=289・「予定」x=326 の 1 種類
-const pageAudit = { betsuhyouPages: 0, noHeader: [], labelXs: new Map(), riyouhyouPages: 0, yoteiXs: new Map() };
+// ★ 提供年月もページ単位で数える (2026-11-13 H)。下の「提供年月が MONTH でない n 本」はファイル単位で、1 人 1 ファイルのときしか効かない (束は素通り)
+const pageAudit = { betsuhyouPages: 0, noHeader: [], labelXs: new Map(), riyouhyouPages: 0, yoteiXs: new Map(), months: new Map() };
+const pageMonthOf = (t) => { const m = /令和[\s　]*(\d+)[\s　]*年[\s　]*(\d+)[\s　]*月/.exec(t); return m ? `${2018 + Number(m[1])}-${String(Number(m[2])).padStart(2, "0")}` : "読めない"; };
 const labelX = (p) => {
   const { words, texts } = extractPages(p);
   for (const [i, t] of texts.entries()) {
     if (classifyPage(t) === "riyouhyou") {
       pageAudit.riyouhyouPages++;
+      { const mo = `利用票 ${pageMonthOf(t)}`; pageAudit.months.set(mo, (pageAudit.months.get(mo) ?? 0) + 1); }
       const y = words[i].find((x) => x.t === "予定" && x.x > 300 && x.x < 360);
       const k = y ? Math.round(y.x) : "なし";
       pageAudit.yoteiXs.set(k, (pageAudit.yoteiXs.get(k) ?? 0) + 1);
     }
     if (classifyPage(t) !== "betsuhyou") continue;
     pageAudit.betsuhyouPages++;
+    { const mo = `別表 ${parseBetsuhyouHeader(t)?.month ?? pageMonthOf(t)}`; pageAudit.months.set(mo, (pageAudit.months.get(mo) ?? 0) + 1); }
     if (!parseBetsuhyouHeader(t)) pageAudit.noHeader.push(`${path.basename(p)} p${i + 1}`);
     const lab = words[i].find((x) => x.t === "サービス利用票別表");
     if (lab) { const k = Math.round(lab.x); pageAudit.labelXs.set(k, (pageAudit.labelXs.get(k) ?? 0) + 1); }
@@ -153,13 +157,18 @@ const PICK = {
 console.log(`=== 居宅 束 PDF 取込 runner ${EXECUTE ? "【EXECUTE】" : "【DRY RUN】"}  ${AREA || "(拠点名なし)"} ${MONTH} / PDF ${PDFS.length} 本 ===`);
 if (PDFS.length <= 10) for (const p of PDFS) console.log(`  ${p}`);
 else console.log(`  ${path.dirname(PDFS[0])} ほか (${PDFS.length} 本)`);
-console.log(`  読んだ PDF ${RAW_PDFS.length} 本 → 渡す ${PDFS.length} 本 (同じ人の出し直し ${dupes.length} 本 / 提供年月が ${MONTH} でない ${otherMonth.length} 本 を除いた)`);
+console.log(`  読んだ PDF ${RAW_PDFS.length} 本 → 渡す ${PDFS.length} 本 (同じ人の出し直し ${dupes.length} 本 / 提供年月が ${MONTH} でない ${otherMonth.length} 本 を除いた。★ 1 人 1 ファイルのときだけの判定。束はページ単位の行を見る)`);
 if (dupes.length) { console.log("  同じ人の出し直し (古いほうを使わない):"); for (const d of dupes) console.log(`    ${d}`); }
 if (shiftedLayout.length) { console.log(`  ⚠ 印刷設定の違うファイル ${shiftedLayout.length} 本 (列がずれている。利用票の新規取込は怪しい人を書かない。第7表・貸与は別表の自己検算に従う):`); for (const d of shiftedLayout.slice(0, 20)) console.log(`    ${d}`); if (shiftedLayout.length > 20) console.log(`    … 他 ${shiftedLayout.length - 20} 本`); }
 if (otherMonth.length) { console.log(`  提供年月が ${MONTH} でない (渡さない):`); for (const d of otherMonth) console.log(`    ${d}`); }
 console.log(`  ★ ページ単位の検品: 別表のページ ${pageAudit.betsuhyouPages} / ヘッダの番号が読めなかったページ ${pageAudit.noHeader.length}` +
   ` / 「サービス利用票別表」ラベルの x ${[...pageAudit.labelXs].map(([x, n]) => `${x}:${n}`).join(" ") || "なし"}${pageAudit.labelXs.size > 1 ? " ← ★ 2 種類以上 = 印刷設定の違うページが混ざっている" : ""}`);
 for (const d of pageAudit.noHeader.slice(0, 20)) console.log(`    ヘッダが読めない: ${d}`);
+{
+  const ms = [...pageAudit.months];
+  const off = ms.filter(([k]) => !k.endsWith(` ${MONTH}`)).reduce((s, [, n]) => s + n, 0);
+  console.log(`  ★ ページ単位の提供年月: ${ms.map(([k, n]) => `${k}:${n}`).join(" / ") || "なし"}${off ? ` ← ★ ${MONTH} でないページ ${off} (そのページは各取込が書かない)` : ""}`);
+}
 if (pageAudit.riyouhyouPages) {
   const ys = [...pageAudit.yoteiXs];
   const odd = ys.filter(([x]) => x === "なし" || Math.abs(Number(x) - 326) > 6).reduce((s, [, n]) => s + n, 0);

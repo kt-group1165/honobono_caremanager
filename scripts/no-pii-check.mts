@@ -42,7 +42,7 @@ if (allowed.size < 100) { console.error(`✗ 事業所番号が ${allowed.size} 
 
 // ── 対象ファイル ──
 const files = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).split(/\r?\n/)
-  .filter((f) => /\.(json|mjs|mts|ts|tsx|js|md|sql)$/.test(f) && !f.endsWith("no-pii-baseline.json") && !f.endsWith("package-lock.json"));
+  .filter((f) => /\.(json|mjs|mts|ts|tsx|js|md|sql)$/.test(f) && !f.endsWith("no-pii-baseline.json") && !f.endsWith("no-pii-check.mts") && !f.endsWith("package-lock.json")); // 検査自身 (負のコントロールの架空の番号を持つ) は数えない
 
 const NEAR_RE = /被保番|被保険者番号|受給者証番号|insured_number/;
 type Count = { ten: number; near: number };

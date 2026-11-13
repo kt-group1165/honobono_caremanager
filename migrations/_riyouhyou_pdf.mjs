@@ -20,6 +20,7 @@
 // ============================================================================
 import { readdirSync, statSync } from "node:fs";
 import path from "node:path";
+import { normName } from "./_name_normalize.mjs";
 
 /** 区分支給限度基準額 (単位/月) → 要介護度。2026 年度の値 */
 export const LIMIT_TO_CARE_LEVEL = {
@@ -58,7 +59,9 @@ export function normRiyouName(s) {
   n = n.replace(/[0-9０-９〇○●※★☆*＊]+$/, "");
   // 先頭の記号 (＊佐藤タキコ)。同姓同名の区別に付けられている
   n = n.replace(/^[*＊〇○●※★☆]+/, "");
-  return n;
+  // ★ 異体字を寄せる (髙→高・﨑→崎 など。_name_normalize.mjs の normName と同じ表)。2026-11-13 KT在宅 で PDF「高」/ 当方「髙」の 1 名が
+  //   「氏名が食い違う」で止まっていた。比べる両側 (PDF と DB) に同じ関数をかけるので 寄せる範囲は揃う
+  return normName(n);
 }
 
 /**
