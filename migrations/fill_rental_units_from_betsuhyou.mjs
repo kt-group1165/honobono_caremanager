@@ -132,15 +132,36 @@ async function main() {
   const plans = []; // { docId, content, fills: [{ i, units }] }
   const examples = { D: [] };
   const existingMismatch = [];
-  for (const b of persons) {
+  const clientIdOf = (b) => {
     const key = `${b.file}#${b.idx}`;
-    let clientId = null;
     if (people.has(key)) {
       const p = people.get(key); const ids = byPair.get(`${p.insurer}|${p.insured}`);
-      if (ids?.size === 1) clientId = [...ids][0];
-    } else if (b.betsuhyouHeader) {
-      clientId = headerResolved.get(key)?.clientId ?? null;
+      return ids?.size === 1 ? [...ids][0] : null;
     }
+    return b.betsuhyouHeader ? (headerResolved.get(key)?.clientId ?? null) : null;
+  };
+  // 利用票は 人ごとに 1 本ずつ引かず、提供年月ごとに 150 人ずつまとめて引く (2026-11-13 H: DB が重くなったので往復を減らす)。
+  //   条件は人ごとに引いていたときと同じ (user_id + report_type + report_month)。書き込みはループの後なので 読む中身も同じ
+  const usageDocs = new Map(); // `${user_id}|${ym}` -> docs[]
+  {
+    const byYm = new Map();
+    for (const b of persons) {
+      const cid = clientIdOf(b); const ym = b.betsuhyouHeader?.month ?? b.riyouhyouMonth;
+      if (cid && ym) (byYm.get(ym) ?? byYm.set(ym, new Set()).get(ym)).add(cid);
+    }
+    for (const [ym, set] of byYm) {
+      const ids = [...set];
+      for (let i = 0; i < ids.length; i += 150) {
+        const { data, error } = await sb.from("kaigo_report_documents").select("id, user_id, content")
+          .in("user_id", ids.slice(i, i + 150)).eq("report_type", "service-usage").eq("report_month", ym).order("id");
+        if (error) throw new Error(error.message);
+        if ((data ?? []).length >= 1000) throw new Error(`利用票のまとめ読みが 1000 行に達した (${ym}) — 打ち切りの恐れ。束を小さくする`);
+        for (const d of data ?? []) { const k = `${d.user_id}|${ym}`; (usageDocs.get(k) ?? usageDocs.set(k, []).get(k)).push({ id: d.id, content: d.content }); }
+      }
+    }
+  }
+  for (const b of persons) {
+    const clientId = clientIdOf(b);
     if (!clientId) { st.特定できない++; continue; }
     if (SKIP_NAMES.has(String(names.get(clientId) ?? b.betsuhyouHeader?.name ?? "").replace(/[\s　]/g, ""))) { console.log(`  --skip-name で書かない: ${names.get(clientId) ?? b.betsuhyouHeader?.name}`); continue; }
     // 行が 1 行も読めない別表 (利用票別表・全CM の出し方。列の位置が違う) を「貸与なし」と取り違えない
@@ -149,10 +170,8 @@ async function main() {
     if (!items.length) { st.別表に貸与なし++; continue; }
     if (b.betsuhyouWarn.length) { st.別表の警告あり++; continue; } // 金額が合っていない別表は使わない
     const ym = b.betsuhyouHeader?.month ?? b.riyouhyouMonth;
-    const { data: docs, error } = await sb.from("kaigo_report_documents").select("id, content")
-      .eq("user_id", clientId).eq("report_type", "service-usage").eq("report_month", ym);
-    if (error) throw new Error(error.message);
-    if ((docs ?? []).length !== 1) { st.利用票なし++; continue; }
+    const docs = usageDocs.get(`${clientId}|${ym}`) ?? [];
+    if (docs.length !== 1) { st.利用票なし++; continue; }
     const doc = docs[0];
     const services = doc.content?.services ?? [];
     const rows = services.map((s, i) => ({ s, i })).filter(({ s }) => RENTAL.has(String(s.category ?? "")));

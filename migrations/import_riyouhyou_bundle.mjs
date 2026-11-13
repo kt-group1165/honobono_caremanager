@@ -201,8 +201,10 @@ await (async () => {
   const first = `${MONTH}-01`, last = `${MONTH}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
   const users = new Set((await all(() => sb.from("client_office_assignments").select("id, client_id, start_date, end_date").in("office_id", kyo.map((o) => o.id)).order("id")))
     .filter((r) => (!r.start_date || r.start_date <= last) && (!r.end_date || r.end_date >= first)).map((r) => r.client_id));
-  const su = new Set((await all(() => sb.from("kaigo_report_documents").select("id, user_id").eq("report_type", "service-usage").eq("report_month", MONTH).order("id"))).map((d) => d.user_id).filter((u) => users.has(u)));
-  const sud = new Set((await all(() => sb.from("kaigo_report_documents").select("id, user_id").eq("report_type", "service-usage-detail").eq("report_month", MONTH).order("id"))).map((d) => d.user_id).filter((u) => su.has(u)));
+  // その月の帳票を全件読まず、この居宅に割当のある人だけを 150 人ずつ引く (2026-11-13 H: DB が重くなったので。数える結果は同じ)
+  const docsOf = async (type, ids) => { const o = []; for (let i = 0; i < ids.length; i += 150) o.push(...await all(() => sb.from("kaigo_report_documents").select("id, user_id").eq("report_type", type).eq("report_month", MONTH).in("user_id", ids.slice(i, i + 150)).order("id"))); return o; };
+  const su = new Set((await docsOf("service-usage", [...users])).map((d) => d.user_id).filter((u) => users.has(u)));
+  const sud = new Set((await docsOf("service-usage-detail", [...su])).map((d) => d.user_id).filter((u) => su.has(u)));
   const plan = Number((summary.find((s) => s.key === "第7表")?.out.match(/第7表 書込予定\s+(\d+)/) ?? [])[1] ?? 0);
   console.log(`\n■ 拠点の進捗  ${AREA} (${kyo.map((o) => o.name).join(" / ")})  ${MONTH}`);
   console.log(`    利用票がある人 ${su.size} 名 (この居宅に割当があり その月の利用票がある人) / 第7表あり ${sud.size} 名${EXECUTE ? "" : ` / 今回の書込予定 ${plan} 件`}`);
