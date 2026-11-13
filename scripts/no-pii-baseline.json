@@ -2,11 +2,16 @@
   "_readme": [
     "基準値方式。ファイルごとに ① 事業所番号でない 10 桁 / ② 被保番などの行の数字 が増えたら落ちる。0 を目指す検査ではない",
     "★ 履歴 (過去の commit) には残っている。これは 新しく書き込むのを止める検査。repo の文書に 実在の氏名・被保険者番号を書かない (その場で DB から引く)",
-    "今ある件数には 電話番号・仮番号 (1111111111 など)・サンプルの番号 も入っている。増えたときは --update の前に 中身を見て消す"
+    "今ある件数には 電話番号・仮番号 (1111111111 など)・サンプルの番号 も入っている。増えたときは --update の前に 中身を見て消す",
+    "③ (2026-11-14 追加) JSON のキーに入った 氏名の形の値。ファイルごと・キーごとに 増えたら落ちる / 新しいファイルに 1 件でもあれば落ちる",
+    "  なぜこの件数か: 過去に「バックアップ JSON は commit しない」が守られておらず、migrations/ のバックアップと取込の出力 (49 ファイル) に実名が入っている",
+    "  いつ 0 になるはずか: その 49 ファイルを git から外せたとき (取込 script が読むファイルも混ざるので 1 本ずつ参照を確かめてから。user 判断待ち)",
+    "  見ていないもの: 本文中の氏名 / 空白の無い氏名・外国人名 / git の履歴 / repo の外"
   ],
   "total": {
     "ten": 16981,
-    "near": 1469
+    "near": 1469,
+    "names": 16736
   },
   "files": {
     "docs/AUDIT_densou_202606.md": {
@@ -708,6 +713,172 @@
     "supabase/seed_providers.sql": {
       "ten": 10,
       "near": 0
+    }
+  },
+  "names": {
+    "migrations/_backup/demo_data_20260807.json": {
+      "name": 110,
+      "user_name": 60,
+      "creator_name": 20,
+      "signed_by_name": 10,
+      "assessor_name": 5,
+      "recorder_name": 60,
+      "doctor_name": 15
+    },
+    "migrations/_backup_client_insurance_records_step1dedup_20260902.json": {
+      "care_office_name": 2
+    },
+    "migrations/_backup_empty_duplicate_reports_20260831.json": {
+      "user_name": 6,
+      "creator_name": 6
+    },
+    "migrations/_backup_fake_kyotaku_enrich_assessments_20260901.json": {
+      "assessor_name": 46
+    },
+    "migrations/_backup_insurance_dup_20260805130657.json": {
+      "name": 31
+    },
+    "migrations/_backup_insurance_dup_20260805132340.json": {
+      "name": 52
+    },
+    "migrations/_backup_insurance_dup_20260805132351.json": {
+      "name": 17
+    },
+    "migrations/_backup_insurance_dup_20260805132508.json": {
+      "name": 26
+    },
+    "migrations/_backup_insurance_dup_20260805132724.json": {
+      "name": 47
+    },
+    "migrations/_backup_insurance_dup_20260805132800.json": {
+      "name": 230
+    },
+    "migrations/_backup_insurance_dup_20260805134031.json": {
+      "name": 5
+    },
+    "migrations/_backup_insurance_dup_20260805134136.json": {
+      "name": 18
+    },
+    "migrations/_backup_insurance_dup_20260805141659.json": {
+      "name": 55
+    },
+    "migrations/_backup_insurance_dup_20260805141956.json": {
+      "name": 43
+    },
+    "migrations/_backup_insurance_dup_20260806133738.json": {
+      "name": 1
+    },
+    "migrations/_backup_insurance_dup_20260806133833.json": {
+      "name": 2
+    },
+    "migrations/_backup_insurance_dup_20260806134020.json": {
+      "name": 1
+    },
+    "migrations/_backup_insurance_dup_20260806134116.json": {
+      "name": 4
+    },
+    "migrations/_backup_insurance_dup_20260806145253.json": {
+      "name": 28
+    },
+    "migrations/_backup_insurance_dup_20260807015819.json": {
+      "name": 42
+    },
+    "migrations/_backup_insurance_dup_20260807052443.json": {
+      "name": 127,
+      "care_office_name": 5
+    },
+    "migrations/_backup_insurance_dup_20260807052453.json": {
+      "name": 130,
+      "care_office_name": 5
+    },
+    "migrations/_backup_kaigo_visit_procedure_documents_sample_20260901.json": {
+      "client_name": 15,
+      "author_name": 13
+    },
+    "migrations/_backup_oyumino_testdata_20260804.json": {
+      "name": 13,
+      "user_consent_name": 10,
+      "staff_name_cached": 11,
+      "pattern_name": 21,
+      "signer_name": 3
+    },
+    "migrations/_backup_renumber_leftovers_20260805142330.json": {
+      "name": 4
+    },
+    "migrations/_backup_renumber_leftovers_20260805143244.json": {
+      "name": 11
+    },
+    "migrations/_backup_test_client_20260901.json": {
+      "assessor_name": 2,
+      "name": 5
+    },
+    "migrations/_birth_date_format_backup.json": {
+      "name": 339
+    },
+    "migrations/_both_202606.json": {
+      "name": 38
+    },
+    "migrations/_cert_owner_fix_backup.json": {
+      "name": 2
+    },
+    "migrations/_densou_intentional_diff.json": {
+      "name": 1
+    },
+    "migrations/_detect_kohi_futan_202606.json": {
+      "name": 51
+    },
+    "migrations/_dropped_cert_generation_noise.json": {
+      "name": 82
+    },
+    "migrations/_import_cert_history_20260804.json": {
+      "name": 493
+    },
+    "migrations/_import_cert_history_20260831.json": {
+      "name": 3280
+    },
+    "migrations/_import_cert_history_dryrun.json": {
+      "name": 4110
+    },
+    "migrations/_insured_number_padding_backup.json": {
+      "name": 15
+    },
+    "migrations/_junk_user_number_fix_backup.json": {
+      "name": 3
+    },
+    "migrations/_kohi_area_tag_backup.json": {
+      "name": 8
+    },
+    "migrations/_kyotaku_clients_created.json": {
+      "name": 15
+    },
+    "migrations/_kyotaku_superseded.json": {
+      "name": 2
+    },
+    "migrations/_kyotaku_sync_created.json": {
+      "name": 772
+    },
+    "migrations/_member_job_type_backup.json": {
+      "name": 655
+    },
+    "migrations/_shared_user_number_fix_backup.json": {
+      "name": 2
+    },
+    "migrations/_snapshots/kyotaku_claims_2026-06.json": {
+      "name": 2722,
+      "_name": 2722
+    },
+    "migrations/_test_monitoring_sample.json": {
+      "name": 4,
+      "assessor_name": 4
+    },
+    "migrations/shougai_import_goi.json": {
+      "name": 30
+    },
+    "migrations/shougai_import_moba.json": {
+      "name": 34
+    },
+    "migrations/shougai_import_oami.json": {
+      "name": 35
     }
   }
 }

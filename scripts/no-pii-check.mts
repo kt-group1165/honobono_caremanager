@@ -69,22 +69,63 @@ console.log(`① 事業所番号でない 10 桁: ${totTen} 件 (${Object.values
 const probe = countText("// 例 被保番 0009876543 の人");
 const negOk = probe.ten === 1 && probe.near === 1;
 console.log(`■ 負のコントロール: 架空の被保番を 1 つ書いた行 → ① ${probe.ten} / ② ${probe.near} ${negOk ? "✓ 鳴る" : "✗ 鳴らない"}`);
-console.log("★ この検査が見ていないもの: 氏名 (機械的に拾えない) / git の履歴 (過去の commit) / repo の外のファイル (HANDOVER・SESSION_START はルートで git の外)");
 
+// ── ③ JSON のキーに入った氏名の形の値 (2026-11-14 H 依頼) ──
+//   キー名に name を含む / 「氏名」「利用者名」 で、値が「姓 + 空白 + 名」(漢字・かな 1〜6 字 + 半角/全角空白 + 1〜8 字) のもの。
+//   ★ 用具名・事業所名・サービス名は空白が入らないものが大半なので、この形の判定でほぼ落ちる (name キーをそのまま数えると誤検出だらけ)。
+//   ⚠ 人名でない値も少し当たる (pattern_name「田中 様パターン」・care_office_name の「○○ 居宅」など。2026-11-14 時点で中身は未確認)。
+//   ファイルごと・キーごとに数える (合計だけだと、1 本消して 1 本足したときに通ってしまう)。新しいファイルに 1 件でもあれば落ちる
+const NAME_KEY_RE = /"([A-Za-z_]*name[A-Za-z_]*|氏名|利用者名)"\s*:\s*"([^"]*)"/g;
+const PERSON_RE = /^[぀-ヿ一-鿿々〆ヶ]{1,6}[ 　][぀-ヿ一-鿿々〆ヶ]{1,8}$/;
+function countNames(text: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const m of text.matchAll(NAME_KEY_RE)) if (PERSON_RE.test(m[2].trim())) out[m[1]] = (out[m[1]] ?? 0) + 1;
+  return out;
+}
+const jsonFiles = execFileSync("git", ["ls-files"], { cwd: ROOT, encoding: "utf8" }).split(/\r?\n/)
+  .filter((f) => /\.(json|jsonl)$/.test(f) && !f.endsWith("no-pii-baseline.json") && !f.endsWith("package-lock.json"));
+const curNames: Record<string, Record<string, number>> = {};
+let totNames = 0;
+for (const f of jsonFiles) {
+  const p = join(ROOT, f);
+  if (!existsSync(p)) continue;
+  const c = countNames(readFileSync(p, "utf8"));
+  const n = Object.values(c).reduce((s, v) => s + v, 0);
+  if (n) { curNames[f] = c; totNames += n; }
+}
+console.log(`③ JSON のキーに入った氏名の形の値: ${totNames} 件 (${Object.keys(curNames).length} ファイル / 対象 JSON ${jsonFiles.length} ファイル)`);
+const probeNames = countNames(`{"client_name": "山田 太郎", "service_name": "福祉用具貸与", "office_name": "Ｈａｎａ居宅支援センター高品"}`);
+const negNamesOk = probeNames.client_name === 1 && Object.keys(probeNames).length === 1;
+console.log(`■ 負のコントロール ③: client_name に「山田 太郎」を 1 つ (用具名・事業所名と一緒に) → ${JSON.stringify(probeNames)} ${negNamesOk ? "✓ 鳴る (用具名・事業所名は数えない)" : "✗"}`);
+console.log("★ この検査が見ていないもの: 本文中の氏名 (JSON のキー以外・md やコードの中) / 空白の無い氏名・カタカナの外国人名 / git の履歴 (過去の commit) / repo の外のファイル (HANDOVER・SESSION_START はルートで git の外)");
+
+const NAMES_README = [
+  "③ (2026-11-14 追加) JSON のキーに入った 氏名の形の値。ファイルごと・キーごとに 増えたら落ちる / 新しいファイルに 1 件でもあれば落ちる",
+  "  なぜこの件数か: 過去に「バックアップ JSON は commit しない」が守られておらず、migrations/ のバックアップと取込の出力 (49 ファイル) に実名が入っている",
+  "  いつ 0 になるはずか: その 49 ファイルを git から外せたとき (取込 script が読むファイルも混ざるので 1 本ずつ参照を確かめてから。user 判断待ち)",
+  "  見ていないもの: 本文中の氏名 / 空白の無い氏名・外国人名 / git の履歴 / repo の外",
+];
 if (UPDATE) {
-  const readme = existsSync(BASELINE) ? (JSON.parse(readFileSync(BASELINE, "utf8")) as { _readme: string[] })._readme : [
+  const readme0 = existsSync(BASELINE) ? (JSON.parse(readFileSync(BASELINE, "utf8")) as { _readme: string[] })._readme : [
     "基準値方式。ファイルごとに ① 事業所番号でない 10 桁 / ② 被保番などの行の数字 が増えたら落ちる。0 を目指す検査ではない",
     "★ 履歴 (過去の commit) には残っている。これは 新しく書き込むのを止める検査。repo の文書に 実在の氏名・被保険者番号を書かない (その場で DB から引く)",
     "今ある件数には 電話番号・仮番号 (1111111111 など)・サンプルの番号 も入っている。増えたときは --update の前に 中身を見て消す",
   ];
-  writeFileSync(BASELINE, JSON.stringify({ _readme: readme, total: { ten: totTen, near: totNear }, files: cur }, null, 2) + "\n");
+  const readme = readme0.some((l) => l.startsWith("③")) ? readme0 : [...readme0, ...NAMES_README];
+  writeFileSync(BASELINE, JSON.stringify({ _readme: readme, total: { ten: totTen, near: totNear, names: totNames }, files: cur, names: curNames }, null, 2) + "\n");
   console.log(`基準値を書き直した: ${BASELINE}`);
-  process.exit(negOk ? 0 : 1);
+  process.exit(negOk && negNamesOk ? 0 : 1);
 }
 if (!existsSync(BASELINE)) { console.error("✗ 基準値ファイルが無い。--update で作る"); process.exit(1); }
-const base = JSON.parse(readFileSync(BASELINE, "utf8")) as { files: Record<string, Count> };
+const base = JSON.parse(readFileSync(BASELINE, "utf8")) as { files: Record<string, Count>; names?: Record<string, Record<string, number>> };
 const fails: string[] = [];
 if (!negOk) fails.push("負のコントロールが鳴らない");
+if (!negNamesOk) fails.push("負のコントロール ③ (氏名の形) が鳴らない");
+if (!base.names) fails.push("基準値に ③ (names) が無い。--update で作る");
+for (const [f, c] of Object.entries(curNames)) for (const [k, n] of Object.entries(c)) {
+  const b = base.names?.[f]?.[k] ?? 0;
+  if (n > b) fails.push(`${f}: ③ キー "${k}" の氏名の形 ${b} → ${n}${base.names?.[f] ? "" : " (新しいファイル)"}`);
+}
 for (const [f, c] of Object.entries(cur)) {
   const b = base.files[f] ?? { ten: 0, near: 0 };
   if (c.ten > b.ten) fails.push(`${f}: ① 事業所番号でない 10 桁 ${b.ten} → ${c.ten}`);
