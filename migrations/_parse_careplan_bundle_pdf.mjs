@@ -90,7 +90,7 @@ const LAYOUTS = {
     units: [295, 322], count: [360, 385], serviceUnits: [393, 412], serviceUnits2: [414, 442],
     withinLimitBracket: [583, 601], unitPrice: [605, 622], totalCost: [623, 663], benefitRate: [668, 683],
     insuranceClaim: [683, 716], userCopay: [750, 786],
-    // 利用者負担 (全額負担分)。30 日超の短期入所など 給付率 0% の行は 金額がこの列 (x≈808) にだけ出る (2026-11-13 いすみ 市原 よし ほか)
+    // 利用者負担 (全額負担分)。30 日超の短期入所など 給付率 0% の行は 金額がこの列 (x≈808) にだけ出る (2026-11-13 いすみ (氏名は DB で引く) ほか)
     userFullPay: [795, 830],
     kohiName: [395, 500], kohiClaim: [495, 545], kohiHonnin: [545, 580],
   },
@@ -459,7 +459,7 @@ export function extractBetsuhyouRows(words, carryIn = []) {
   // 前のページから持ち越した行の小計が このページの先頭 (最初の明細行より上) にあれば、そこで確定する
   if (pendingGroup.length) {
     const firstY = raw.length ? raw[0].y : Infinity;
-    // ★ 金額 (単価) が読める行だけ。最終ページの「種類別支給限度管理」の表の見出しにも「合計」があり、それを掴んでいた (積田 秋夫)
+    // ★ 金額 (単価) が読める行だけ。最終ページの「種類別支給限度管理」の表の見出しにも「合計」があり、それを掴んでいた ((氏名は DB で引く))
     const topSub = subtotalYs.find((sy) => sy < firstY && isSubtotalRow(words, sy, L) && readMoneyAt(words, sy, 8, L).unitPrice != null);
     if (topSub != null) flushGroup(topSub);
   }
@@ -550,7 +550,7 @@ export function applyKohiToItems(items, kohi) {
       //   「エスポ大原・通所リハ」= エスポワール大原・通所リハビリ / 「デイサービスいすみ苑」= デイサービス　いすみ苑 (空白)。
       //   空白を除いて含む、または 先頭 2 文字が同じで 文字が順に全部現れる (部分列) 事業所が ★ その人の明細で 1 つに決まるときだけ当てる
       if (!matched.length) {
-        // 法人の種類 (㈱ = NFKC で (株)・株式会社・有限会社 等) は除いて比べる (大網 杉田 賢司「㈱トーカイ千葉支店」= 株式会社トーカイ千葉支店)
+        // 法人の種類 (㈱ = NFKC で (株)・株式会社・有限会社 等) は除いて比べる (大網 (氏名は DB で引く)「㈱トーカイ千葉支店」= 株式会社トーカイ千葉支店)
         const nk = (v) => String(v ?? "").normalize("NFKC").replace(/[\s　]/g, "").replace(/株式会社|有限会社|合同会社|社会福祉法人|医療法人|\(株\)|\(有\)/g, "");
         const a = nk(row.providerNamePrefix);
         const subseq = (p) => { let j = 0; for (const ch of p) if (ch === a[j]) j++; return j === a.length; };
@@ -575,7 +575,7 @@ export function applyKohiToItems(items, kohi) {
       //   ★ 金額がちょうど合う事業所が その人の明細で 1 つに決まるときだけ当てる (2 つ以上なら当てない = 警告のまま)
       if (!matched.length) {
         // 事業所番号 + サービスの種類 (コードの頭 2 桁) でまとめる。老健は デイケア (16) と ショート (22) が同じ番号で、
-        //   公費欄は種類ごとに別の行で出る (木藤 やゑ「…ｳﾞｨﾗﾃﾞｲｹ」/「…ｳﾞｨﾗｼｮｰﾄ」)
+        //   公費欄は種類ごとに別の行で出る (老健の 1 名「…ｳﾞｨﾗﾃﾞｲｹ」/「…ｳﾞｨﾗｼｮｰﾄ」)
         const key = (it) => `${it.provider_number ?? it.provider_name}|${String(it.service_code ?? "").slice(0, 2)}`;
         const sums = new Map();
         for (const it of items) sums.set(key(it), (sums.get(key(it)) ?? 0) + (Number(it.total_cost) - Number(it.insurance_claim)));
@@ -697,7 +697,7 @@ export function parseBundles(pdfPath) {
   const finishPerson = (p) => {
     if (p.betsuhyouItems != null) {
       // 人の最後まで小計が見つからなかった行 (以前のページ単位の警告と同じ文言・同じ規定値の行)
-      // 今月 0 回 (サービス単位 0) の行は 小計が印字されない (送迎加算・処遇改善など。いすみ 山口 智子・積田 秋夫)。
+      // 今月 0 回 (サービス単位 0) の行は 小計が印字されない (送迎加算・処遇改善など。いすみ 2 名)。
       //   金額 0 の行として出し、警告にしない (合計は変わらない)
       const zero = p.betsuhyouCarry.filter((r) => !Number(r.service_units ?? (Number(r.units ?? 0) * Number(r.count ?? 0))));
       const rest = p.betsuhyouCarry.filter((r) => !zero.includes(r));

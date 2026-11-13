@@ -363,7 +363,7 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
       [5000, [it("身体介護１", 9549), it("訪問介護同一建物減算１", -955)], 9549, "service-usage-detail", "同一建物減算は対象外 (KY 4/4)"],
       [5000, [it("通所介護送迎減算", -846), it("通所介護Ⅰ１１", 5106)], 4260, "service-usage-detail", "送迎減算は対象 (KY と一致)"],
       [5000, [it("居宅療養小規模事業所加算", 26), it("緊急時訪問看護加算Ⅱ１", 574), it("訪看Ⅰ３", 823)], 823, "service-usage-detail", "居宅療養・緊急時訪問看護は対象外"],
-      [5000, [it("通所リハ提供体制加算４", 336), it("通所リハサービス提供体制加算Ⅰ", 308), it("通所リハⅢ２６３", 981)], 1317, "service-usage-detail", "★ 通所リハ提供体制加算は対象 / サービス提供体制は対象外 (岩見 幸一・KY)"],
+      [5000, [it("通所リハ提供体制加算４", 336), it("通所リハサービス提供体制加算Ⅰ", 308), it("通所リハⅢ２６３", 981)], 1317, "service-usage-detail", "★ 通所リハ提供体制加算は対象 / サービス提供体制は対象外 ((氏名は DB で引く)・KY)"],
     ];
     type LF = (u: number, d: { service_content: string; service_units: number }[] | null) => { units: number; source: string };
     const runL = (fn: LF) => lc.filter(([u, d, want, src]) => { const r = fn(u, d); return r.units !== want || r.source !== src; });
@@ -382,7 +382,7 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
   {
     const it = (no: string, name: string, code: string, cost: number, ins: number) => ({ provider_number: no, provider_name: name, service_code: code, total_cost: cost, insurance_claim: ins, user_copay: cost - ins });
     const kohi = (prefix: string, claim: number) => ({ rows: [{ providerNamePrefix: prefix, kohiClaim: claim, honninFutan: 0 }], total: { kohiClaim: claim } });
-    // 木藤 やゑ 型: 老健の デイケア (16) と ショート (22) が同じ番号。名前は「…ﾃﾞｲｹ」と「…ﾃﾞ」で当たらない
+    // 老健の 1 名 型: 老健の デイケア (16) と ショート (22) が同じ番号。名前は「…ﾃﾞｲｹ」と「…ﾃﾞ」で当たらない
     const kito = () => [it("1", "*KTやわた", "111411", 30000, 27000), it("2", "*辰巳ﾅｰｼﾝｸﾞ･ｳﾞｨﾗﾃﾞ", "161111", 50000, 39735), it("2", "*介護老人保健施設辰巳ｼｮｰﾄ", "221111", 40000, 28938)];
     type KC = [string, ReturnType<typeof kito>, ReturnType<typeof kohi>, number, string];
     const kc: KC[] = [
@@ -398,7 +398,7 @@ function compare(ours: OurDoc[], ky: Map<string, KyTicket>): Result {
       return !ok;
     });
     if (bad.length) { console.error("✗ FAIL: 公費欄の金額当ての境界が崩れている"); process.exit(1); }
-    // 負のコントロール: 種類で分けずに番号だけでまとめたら 木藤 型は当たらないはず (= 種類 2 桁が効いている)
+    // 負のコントロール: 種類で分けずに番号だけでまとめたら 老健の 1 名の型は当たらないはず (= 種類 2 桁が効いている)
     const merged = kito().map((x) => ({ ...x, service_code: "161111" }));
     if (!applyKohiToItems(merged, kohi("*辰巳ﾅｰｼﾝｸﾞ･ｳﾞｨﾗﾃﾞｲｹ", 10265)).warn.length) { console.error("✗ FAIL: 負のコントロールが鳴らない (番号だけでまとめても当たってしまう)"); process.exit(1); }
     console.log(`公費欄の金額当て applyKohiToItems: 境界 ${kc.length} 件 OK / 負のコントロール 種類で分けない→ 当たらない ✓`);

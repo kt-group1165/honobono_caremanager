@@ -61,7 +61,7 @@ import { ky8222ByPerson, kyRentalLines } from "../scripts/_ky-parse.mjs";
 
 const EXECUTE = process.argv.includes("--execute");
 const PDF_PATHS = process.argv.flatMap((a, i, arr) => (a === "--pdf" ? [arr[i + 1]] : []));
-// --skip-name <氏名>: その人は書かない (判断待ちの人を止めておく。2026-11-13 木更津 堀川 茂子: 画面の月計が前後で変わるので H 判断待ち)
+// --skip-name <氏名>: その人は書かない (判断待ちの人を止めておく。2026-11-13 木更津 (氏名は DB で引く): 画面の月計が前後で変わるので H 判断待ち)
 const SKIP_NAMES = new Set(process.argv.flatMap((a, i, arr) => (a === "--skip-name" ? [String(arr[i + 1]).replace(/[\s　]/g, "")] : [])));
 if (!PDF_PATHS.length) { console.error("--pdf <path> を最低 1 つ指定する"); process.exit(1); }
 const KAIGO = fileURLToPath(new URL("../", import.meta.url));
