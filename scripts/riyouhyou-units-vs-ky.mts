@@ -772,7 +772,7 @@ const CAP_VARIANTS: [string, (k: CapKind) => number][] = [
 ];
 export function capCheckTicket(
   kinds: Map<string, CapKind>, limit: number, capKeys: CapKeyIn[], items: DetailItem[] | null,
-): { calc: "額まで合う" | "額が合わない" | "計算不能"; calcExcess: number; diffSum: number; overlaps: string[]; detail: Record<string, "額まで合う" | "額が合わない" | "割り振り不明" | "第7表なし" | "超過情報なし">; detailTotal: number | null } {
+): { calc: "額まで合う" | "額が合わない" | "計算不能"; calcExcess: number; diffSum: number; overlaps: string[]; detail: Record<string, "額まで合う" | "額が合わない" | "割り振り不明" | "第7表なし" | "超過情報なし">; detailTotal: number | null; ticketDetail: "合う" | "第7表が大きい" | "第7表が小さい" | "第7表なし" | "超過情報なし" } {
   let target = 0, incomplete = false;
   for (const [kind, k] of kinds) { if (OUTSIDE_LIMIT_KINDS.has(kind)) continue; target += k.planned; if (k.nullUnits > 0) incomplete = true; }
   const calcExcess = target - limit;
@@ -799,7 +799,13 @@ export function capCheckTicket(
     const over = items.filter((it) => String(it.service_code ?? "").startsWith(c.kind)).reduce((s, it) => s + n(it.over_limit_units), 0);
     detail[c.kind] = c.ours - c.ky === over ? "額まで合う" : unalloc > 0 ? "割り振り不明" : "額が合わない";
   }
-  return { calc, calcExcess, diffSum, overlaps, detail, detailTotal };
+  // ★ ② 票単位 (2026-11-14 追加): 第7表の超過合計 (処遇改善を除く) == 差の合計。キー単位は 割り振り不明 が大半で判定できないため
+  //   ほのぼのが自分で印字した超過が KY の頭打ちの額と一致すれば、① (当方の合計から計算) が合わなくても説明が付く
+  //   「第7表が大きい / 小さい」は 別掲で数える。大きい = 頭打ち以外の種類 (貸与の別掲・別の型のキー) にも超過が割り振られている、は ★ 未確認の仮説
+  const ticketDetail: "合う" | "第7表が大きい" | "第7表が小さい" | "第7表なし" | "超過情報なし" =
+    !items || !items.length ? "第7表なし" : detailTotal == null ? "超過情報なし"
+      : detailTotal === diffSum ? "合う" : detailTotal > diffSum ? "第7表が大きい" : "第7表が小さい";
+  return { calc, calcExcess, diffSum, overlaps, detail, detailTotal, ticketDetail };
 }
 { // 境界 (DB 不要)
   const K = (o: Record<string, [number, number?, number?]>) => new Map(Object.entries(o).map(([k, [p, nu, act]]) => [k, { planned: p, nullUnits: nu ?? 0, actual: act ?? p }]));
@@ -826,6 +832,22 @@ export function capCheckTicket(
   if (ov1.calc !== "額が合わない" || JSON.stringify(ov1.overlaps) !== ovWant || ov2.overlaps.length !== 0) {
     console.error(`✗ 重なっている型の併記: ${ov1.calc} ${JSON.stringify(ov1.overlaps)} (期待 ${ovWant}) / 重ならない例 ${JSON.stringify(ov2.overlaps)} (期待 [])`); process.exit(1);
   }
+  // ② 票単位: 計算 (①) は合わないが ほのぼのの印字 (第7表) の超過合計が差と一致する例 / 大きい / 小さい
+  //   当方の合計 5600 (ほのぼのは 5300 と見ている) → ① の超過 600 ≠ 差 300。第7表の超過 300 は差と合う
+  const td = (items: DetailItem[] | null) => capCheckTicket(K({ "11": [5600] }), 5000, [{ kind: "11", ours: 5600, ky: 5300 }], items);
+  const tdCases: [string, DetailItem[] | null, string][] = [
+    ["① は合わないが 第7表の超過合計が差と合う", [it("111111", 100, 200)], "合う"],
+    ["第7表が大きい", [it("111111", 300), it("171111", 50)], "第7表が大きい"],
+    ["第7表が小さい", [it("111111", 250)], "第7表が小さい"],
+    ["処遇改善の行は合計に入れない", [it("111111", 300), { service_code: "116275", service_content: "訪問介護処遇改善加算Ⅱ", over_limit_units: 41 }], "合う"],
+    ["第7表なし", null, "第7表なし"],
+  ];
+  const tdBad = tdCases.filter(([, items, want]) => td(items).ticketDetail !== want);
+  if (td([it("111111", 300)]).calc !== "額が合わない") tdBad.push(["前提: ① は合わない", null, ""]);
+  // 負のコントロール ②: 第7表の超過を見ずに「頭打ちなら合う」とすると 大きい・小さい を見逃す
+  const tdNeg = tdCases.filter(([, , want]) => want !== "合う" && want !== "第7表なし").length;
+  if (tdBad.length || !tdNeg) { console.error(`✗ FAIL: ② 票単位の判定: ${tdBad.map((b) => b[0]).join(" / ")}`); process.exit(1); }
+  console.log(`頭打ちの検算 ② 票単位 (第7表の超過合計 == 差): 境界 ${tdCases.length} 件 OK / 負のコントロール 第7表を見ない→${tdNeg} 件 落ちる ✓`);
   // 負のコントロール: 差を見ずに「頭打ちなら合う」とすると 合わない例を見逃す
   const negLoose = cases.filter(([, , , , , wc]) => wc !== "額まで合う").length;
   if (bad.length || !negLoose) { console.error("✗ FAIL: 頭打ちの検算 capCheckTicket の境界が崩れている"); process.exit(1); }
@@ -854,6 +876,8 @@ if (process.env.CAP_CHECK === "1") {
     }
   }
   const calcCount: Record<string, number> = {}, detailCount: Record<string, number> = {}, overlapCount: Record<string, number> = {};
+  const ticketCount: Record<string, number> = {}, bothCount: Record<string, number> = {};
+  const neither: string[] = [];
   let bothTickets = 0, bothDisagree = 0;
   const lines: string[] = [];
   for (const [tk, keys] of capByTicket) {
@@ -864,6 +888,10 @@ if (process.env.CAP_CHECK === "1") {
     calcCount[r.calc] = (calcCount[r.calc] ?? 0) + keys.length;
     for (const v of Object.values(r.detail)) detailCount[v] = (detailCount[v] ?? 0) + 1;
     if (r.detailTotal != null && r.calc !== "計算不能") { bothTickets++; if (r.detailTotal !== r.calcExcess) bothDisagree++; }
+    ticketCount[r.ticketDetail] = (ticketCount[r.ticketDetail] ?? 0) + keys.length;
+    const both = r.calc === "額まで合う" ? (r.ticketDetail === "合う" ? "①②とも合う" : "①だけ合う") : r.ticketDetail === "合う" ? "②だけ合う" : r.overlaps.length ? "① の重なりで合う" : "どちらでも合わない";
+    bothCount[both] = (bothCount[both] ?? 0) + keys.length;
+    if (both === "どちらでも合わない") neither.push(o.doc.id.slice(0, 8));
     if (r.calc === "額が合わない") { const k = r.overlaps.length ? r.overlaps.join("・") : "(どの数え方でも合わない)"; overlapCount[k] = (overlapCount[k] ?? 0) + keys.length; }
     lines.push(`  ${tk} 種類 ${keys.map((k) => k.kind).join(",")} 差 ${r.diffSum} / 計算の超過 ${r.calcExcess} → ${r.calc}${r.overlaps.length ? ` (重なり: ${r.overlaps.join("・")})` : ""} / 第7表 ${JSON.stringify(r.detail)}${r.detailTotal != null ? ` 第7表の超過 ${r.detailTotal}` : ""}  doc ${o.doc.id}`);
   }
@@ -872,7 +900,12 @@ if (process.env.CAP_CHECK === "1") {
   console.log(`  ① 計算 (票単位・キー数で数える): ${JSON.stringify(calcCount)}`);
   console.log(`     うち「額が合わない」に重なっている数え方 (キー数・分類は変えない): ${JSON.stringify(overlapCount)}`);
   console.log(`  ② 第7表 (キー単位): ${JSON.stringify(detailCount)}`);
-  console.log(`  ①②が両方ある票 ${bothTickets} / うち超過の額が食い違う票 ${bothDisagree}`);
+  console.log(`  ② 第7表 (票単位・第7表の超過合計 == 差の合計。キー数で数える): ${JSON.stringify(ticketCount)}`);
+  console.log(`     「第7表が大きい」= 頭打ち以外の種類にも超過が割り振られている、は ★ 未確認の仮説`);
+  console.log(`  ①と② (票単位) の組み合わせ (キー数): ${JSON.stringify(bothCount)}`);
+  console.log(`     ★ ①と②は別のものを見ている (① = 当方の利用票の合計から計算 / ② = ほのぼのの印字)。同じ結論にならないことがある`);
+  if (neither.length) console.log(`     どちらでも合わない: ${neither.join(", ")}`);
+  console.log(`  ①の超過と第7表の超過合計が両方ある票 ${bothTickets} / うち食い違う票 ${bothDisagree}`);
   console.log("  ★ 見ていないもの: 頭打ち以外の型に紛れた頭打ち (実績回数で一致 等が先に当たったキー) / KY が限度額ちょうどかどうか");
   for (const l of DETAIL ? lines : lines.slice(0, 15)) console.log(l);
 }
