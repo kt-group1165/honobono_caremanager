@@ -759,14 +759,31 @@ printTransitions(transDedupe);
 //   ★ ①と②が両方ある票では、①の超過と ②の超過合計 (over + unallocated) の食い違いも数える (独立 2 系統が一致しても値は確定しない、の裏返し)
 type DetailItem = { service_code?: string | null; service_content?: string | null; over_limit_units?: number | string | null; _over_limit_unallocated?: number | string | null };
 type CapKeyIn = { kind: string; ours: number; ky: number };
+type CapKind = { planned: number; nullUnits: number; actual?: number; over30?: number; over30Actual?: number; plannedMonthly1?: number; actualMonthly1?: number };
+// ★ 「額が合わない」頭打ちに 重なっている型を併記する (2026-11-14 H 依頼)。分類 (型) は変えない = 基準値は動かない。
+//   型の判定は if/else if の連鎖で 1 キー 1 型なので、頭打ちに入った時点で 実績回数・30日超 などは見られていない。
+//   各キーの単位を下の数え方に置き換えて「差の合計 == 限度額対象の合計 − 限度額」が成り立てば、その数え方が重なっていると見る
+const CAP_VARIANTS: [string, (k: CapKind) => number][] = [
+  ["実績回数", (k) => k.actual ?? k.planned],
+  ["30日超を除く", (k) => k.planned - (k.over30 ?? 0)],
+  ["実績回数+30日超を除く", (k) => (k.actual ?? k.planned) - (k.over30Actual ?? 0)],
+  ["月1回の加算", (k) => k.plannedMonthly1 ?? k.planned],
+  ["実績回数+月1回の加算", (k) => k.actualMonthly1 ?? k.planned],
+];
 export function capCheckTicket(
-  kinds: Map<string, { planned: number; nullUnits: number }>, limit: number, capKeys: CapKeyIn[], items: DetailItem[] | null,
-): { calc: "額まで合う" | "額が合わない" | "計算不能"; calcExcess: number; diffSum: number; detail: Record<string, "額まで合う" | "額が合わない" | "割り振り不明" | "第7表なし" | "超過情報なし">; detailTotal: number | null } {
+  kinds: Map<string, CapKind>, limit: number, capKeys: CapKeyIn[], items: DetailItem[] | null,
+): { calc: "額まで合う" | "額が合わない" | "計算不能"; calcExcess: number; diffSum: number; overlaps: string[]; detail: Record<string, "額まで合う" | "額が合わない" | "割り振り不明" | "第7表なし" | "超過情報なし">; detailTotal: number | null } {
   let target = 0, incomplete = false;
   for (const [kind, k] of kinds) { if (OUTSIDE_LIMIT_KINDS.has(kind)) continue; target += k.planned; if (k.nullUnits > 0) incomplete = true; }
   const calcExcess = target - limit;
   const diffSum = capKeys.reduce((s, c) => s + (c.ours - c.ky), 0);
   const calc = incomplete ? "計算不能" : diffSum === calcExcess ? "額まで合う" : "額が合わない";
+  const overlaps = calc !== "額が合わない" ? [] : CAP_VARIANTS.filter(([, f]) => {
+    let t = 0;
+    for (const [kind, k] of kinds) if (!OUTSIDE_LIMIT_KINDS.has(kind)) t += f(k);
+    const d = capKeys.reduce((s, c) => s + (f(kinds.get(c.kind) ?? { planned: c.ours, nullUnits: 0 }) - c.ky), 0);
+    return t > limit && d === t - limit;
+  }).map(([name]) => name);
   const detail: Record<string, "額まで合う" | "額が合わない" | "割り振り不明" | "第7表なし" | "超過情報なし"> = {};
   let detailTotal: number | null = null;
   const n = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
@@ -782,10 +799,10 @@ export function capCheckTicket(
     const over = items.filter((it) => String(it.service_code ?? "").startsWith(c.kind)).reduce((s, it) => s + n(it.over_limit_units), 0);
     detail[c.kind] = c.ours - c.ky === over ? "額まで合う" : unalloc > 0 ? "割り振り不明" : "額が合わない";
   }
-  return { calc, calcExcess, diffSum, detail, detailTotal };
+  return { calc, calcExcess, diffSum, overlaps, detail, detailTotal };
 }
 { // 境界 (DB 不要)
-  const K = (o: Record<string, [number, number?]>) => new Map(Object.entries(o).map(([k, [p, nu]]) => [k, { planned: p, nullUnits: nu ?? 0 }]));
+  const K = (o: Record<string, [number, number?, number?]>) => new Map(Object.entries(o).map(([k, [p, nu, act]]) => [k, { planned: p, nullUnits: nu ?? 0, actual: act ?? p }]));
   const it = (code: string, over: number, un?: number): DetailItem => ({ service_code: code, over_limit_units: over, _over_limit_unallocated: un });
   type Case = [string, ReturnType<typeof K>, number, CapKeyIn[], DetailItem[] | null, string, Record<string, string>];
   const cases: Case[] = [
@@ -800,10 +817,19 @@ export function capCheckTicket(
   ];
   const bad = cases.filter(([, k, l, c, i, wc, wd]) => { const r = capCheckTicket(k, l, c, i); return r.calc !== wc || JSON.stringify(r.detail) !== JSON.stringify(wd); });
   for (const [label, k, l, c, i] of bad) console.error(`✗ capCheckTicket (${label}) = ${JSON.stringify(capCheckTicket(k, l, c, i))}`);
+  // 重なっている型の併記: 種類 11 が頭打ち、種類 15 は予定 2000 / 実績 2200。KY は実績で数えて限度額 5000 に頭打ち
+  //   実績合計 3600+2200=5800 → 超過 800 → KY11 = 3600−800 = 2800 / KY15 = 2200。予定で見ると 差 500 ≠ 超過 300 で合わない
+  const ov1 = capCheckTicket(K({ "11": [3300, 0, 3600], "15": [2000, 0, 2200] }), 5000, [{ kind: "11", ours: 3300, ky: 2800 }], null);
+  // 重ならない例: 実績も予定と同じなのに差が合わない (どの数え方でも説明が付かない)
+  const ov2 = capCheckTicket(K({ "11": [3300], "15": [2000] }), 5000, [{ kind: "11", ours: 3300, ky: 2800 }], null);
+  const ovWant = JSON.stringify(["実績回数", "実績回数+30日超を除く"]);
+  if (ov1.calc !== "額が合わない" || JSON.stringify(ov1.overlaps) !== ovWant || ov2.overlaps.length !== 0) {
+    console.error(`✗ 重なっている型の併記: ${ov1.calc} ${JSON.stringify(ov1.overlaps)} (期待 ${ovWant}) / 重ならない例 ${JSON.stringify(ov2.overlaps)} (期待 [])`); process.exit(1);
+  }
   // 負のコントロール: 差を見ずに「頭打ちなら合う」とすると 合わない例を見逃す
   const negLoose = cases.filter(([, , , , , wc]) => wc !== "額まで合う").length;
   if (bad.length || !negLoose) { console.error("✗ FAIL: 頭打ちの検算 capCheckTicket の境界が崩れている"); process.exit(1); }
-  console.log(`頭打ちの検算 capCheckTicket: 境界 ${cases.length} 件 OK / 負のコントロール 差を見ない→${negLoose} 件 落ちる ✓`);
+  console.log(`頭打ちの検算 capCheckTicket: 境界 ${cases.length} 件 + 重なっている型の併記 2 件 OK / 負のコントロール 差を見ない→${negLoose} 件 落ちる ✓`);
 }
 if (process.env.CAP_CHECK === "1") {
   const capByTicket = new Map<string, CapKeyIn[]>();
@@ -827,7 +853,7 @@ if (process.env.CAP_CHECK === "1") {
       for (const r of rows) detailBy.set(`${month}|${r.user_id}`, cnt.get(r.user_id)! > 1 ? null : (r.items ?? []));
     }
   }
-  const calcCount: Record<string, number> = {}, detailCount: Record<string, number> = {};
+  const calcCount: Record<string, number> = {}, detailCount: Record<string, number> = {}, overlapCount: Record<string, number> = {};
   let bothTickets = 0, bothDisagree = 0;
   const lines: string[] = [];
   for (const [tk, keys] of capByTicket) {
@@ -838,11 +864,13 @@ if (process.env.CAP_CHECK === "1") {
     calcCount[r.calc] = (calcCount[r.calc] ?? 0) + keys.length;
     for (const v of Object.values(r.detail)) detailCount[v] = (detailCount[v] ?? 0) + 1;
     if (r.detailTotal != null && r.calc !== "計算不能") { bothTickets++; if (r.detailTotal !== r.calcExcess) bothDisagree++; }
-    lines.push(`  ${tk} 種類 ${keys.map((k) => k.kind).join(",")} 差 ${r.diffSum} / 計算の超過 ${r.calcExcess} → ${r.calc} / 第7表 ${JSON.stringify(r.detail)}${r.detailTotal != null ? ` 第7表の超過 ${r.detailTotal}` : ""}  doc ${o.doc.id}`);
+    if (r.calc === "額が合わない") { const k = r.overlaps.length ? r.overlaps.join("・") : "(どの数え方でも合わない)"; overlapCount[k] = (overlapCount[k] ?? 0) + keys.length; }
+    lines.push(`  ${tk} 種類 ${keys.map((k) => k.kind).join(",")} 差 ${r.diffSum} / 計算の超過 ${r.calcExcess} → ${r.calc}${r.overlaps.length ? ` (重なり: ${r.overlaps.join("・")})` : ""} / 第7表 ${JSON.stringify(r.detail)}${r.detailTotal != null ? ` 第7表の超過 ${r.detailTotal}` : ""}  doc ${o.doc.id}`);
   }
   const nKeys = [...capByTicket.values()].reduce((s, v) => s + v.length, 0);
   console.log(`\n■ 頭打ちの検算 (CAP_CHECK=1): 頭打ちキー ${nKeys} / 票 ${capByTicket.size}`);
   console.log(`  ① 計算 (票単位・キー数で数える): ${JSON.stringify(calcCount)}`);
+  console.log(`     うち「額が合わない」に重なっている数え方 (キー数・分類は変えない): ${JSON.stringify(overlapCount)}`);
   console.log(`  ② 第7表 (キー単位): ${JSON.stringify(detailCount)}`);
   console.log(`  ①②が両方ある票 ${bothTickets} / うち超過の額が食い違う票 ${bothDisagree}`);
   console.log("  ★ 見ていないもの: 頭打ち以外の型に紛れた頭打ち (実績回数で一致 等が先に当たったキー) / KY が限度額ちょうどかどうか");
