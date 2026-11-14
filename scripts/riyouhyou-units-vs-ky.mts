@@ -889,7 +889,9 @@ if (process.env.CAP_CHECK === "1") {
     for (const v of Object.values(r.detail)) detailCount[v] = (detailCount[v] ?? 0) + 1;
     if (r.detailTotal != null && r.calc !== "計算不能") { bothTickets++; if (r.detailTotal !== r.calcExcess) bothDisagree++; }
     ticketCount[r.ticketDetail] = (ticketCount[r.ticketDetail] ?? 0) + keys.length;
-    const both = r.calc === "額まで合う" ? (r.ticketDetail === "合う" ? "①②とも合う" : "①だけ合う") : r.ticketDetail === "合う" ? "②だけ合う" : r.overlaps.length ? "① の重なりで合う" : "どちらでも合わない";
+    // ★ 計算不能 (単位の空き) は「どちらでも合わない」に混ぜない (2026-11-14 2026-07 初回で 1 キー混ざった)
+    const both = r.calc === "額まで合う" ? (r.ticketDetail === "合う" ? "①②とも合う" : "①だけ合う") : r.ticketDetail === "合う" ? "②だけ合う"
+      : r.calc === "計算不能" ? "①計算不能・②なし" : r.overlaps.length ? "① の重なりで合う" : "どちらでも合わない";
     bothCount[both] = (bothCount[both] ?? 0) + keys.length;
     if (both === "どちらでも合わない") neither.push(o.doc.id.slice(0, 8));
     if (r.calc === "額が合わない") { const k = r.overlaps.length ? r.overlaps.join("・") : "(どの数え方でも合わない)"; overlapCount[k] = (overlapCount[k] ?? 0) + keys.length; }
