@@ -217,5 +217,46 @@ console.log("\n【F】上限月額調整 = min(上限月額, 1割相当額)");
   console.log("  ⚠ 未設定(null)と負担0円が伝送上どちらも 0 になる。区別は警告のみ。");
 }
 
+// ── 負のコントロール (2026-11-14): 実装をわざと壊したときの出力を作り、同じ判定で落ちることを確かめる ──
+//   (F) min を取らない実装 2 通り / (E) コード昇順に並べない実装 / (A) 請求額に利用者負担を引かない実装
+console.log("\n【負のコントロール】壊した実装の出力で 判定が落ちるか");
+{
+  // 項番 N は 元の行の c[N+1] (先頭の 種別,連番 の 2 列)
+  const tamper = (content: string, kind: string, rec: string, fn: (c: string[]) => void) => content.split(/\r?\n/).map((l) => {
+    const c = l.split(",");
+    if (c[2]?.replace(/"/g, "") !== kind || c[3]?.replace(/"/g, "") !== rec) return l;
+    fn(c); return c.join(",");
+  }).join("\n");
+  const j22 = (content: string) => f(parseJ11(content, "J121", "01")[0], 22);
+  const low = buildShogaiDensou([user(row({ self_payment_limit: 9300 }))], OPTS).seikyuFile.content;
+  const cap = buildShogaiDensou([user(row({ self_payment_limit: 1000 }))], OPTS).seikyuFile.content;
+  const eRow = row({
+    details: [
+      { service_type: "居宅介護", service_category: "家事", service_code: "116111", unit_per: 100, count: 5, units: 500 },
+      { service_type: "居宅介護", service_category: "身体", service_code: "111111", unit_per: 250, count: 10, units: 2500 },
+    ],
+    addons: [{ service_code: "115121", service_name: "居宅介護処遇改善加算Ⅱイ", units: 400 }], addonUnits: 400, totalUnits: 3400,
+  });
+  const e = buildShogaiDensou([user(eRow)], OPTS).seikyuFile.content;
+  const a = buildShogaiDensou([user(row())], OPTS).seikyuFile.content;
+  const codesSorted = (content: string) => { const cs = parseJ11(content, "J121", "03").map((x) => f(x, 7)); return JSON.stringify(cs) === JSON.stringify([...cs].sort()); };
+  const swap03 = (content: string) => {
+    const ls = content.split(/\r?\n/);
+    const idx = ls.map((l, i) => [l.split(","), i] as const).filter(([c]) => c[2]?.replace(/"/g, "") === "J121" && c[3]?.replace(/"/g, "") === "03").map(([, i]) => i);
+    [ls[idx[0]], ls[idx[1]]] = [ls[idx[1]], ls[idx[0]]];
+    return ls.join("\n");
+  };
+  const cases: [string, boolean, boolean][] = [
+    ["(F) 常に上限月額を採る実装", j22(low) === "2725", j22(tamper(low, "J121", "01", (c) => { c[23] = "9300"; })) === "2725"],
+    ["(F) 常に 1 割相当額を採る実装", j22(cap) === "1000", j22(tamper(cap, "J121", "01", (c) => { c[23] = "2725"; })) === "1000"],
+    ["(E) コード昇順に並べない実装", codesSorted(e), codesSorted(swap03(e))],
+    ["(A) 請求額から利用者負担を引かない実装", f(parseJ11(a, "J121", "01")[0], 28) === "24525", f(parseJ11(tamper(a, "J121", "01", (c) => { c[29] = "27250"; }), "J121", "01")[0], 28) === "24525"],
+  ];
+  for (const [label, realOk, brokenOk] of cases) console.log(`  ${label}: 正しい出力 ${realOk ? "通る" : "★ 通らない"} / 壊した出力 ${brokenOk ? "★ 通ってしまう" : "落ちる"}`);
+  const ok = cases.every(([, realOk, brokenOk]) => realOk && !brokenOk);
+  if (!ok) failures++;
+  console.log(`■ 負のコントロール: 壊した実装の出力 ${cases.length} 通り → ${cases.filter(([, , b2]) => !b2).length} 通り 落ちる ${ok ? "✓" : "✗ 鳴らない"}`);
+}
+
 console.log(`\n${failures === 0 ? "✅ 全ての検算が一致しました" : `❌ ${failures} 件の不一致`}`);
 process.exit(failures === 0 ? 0 : 1);
