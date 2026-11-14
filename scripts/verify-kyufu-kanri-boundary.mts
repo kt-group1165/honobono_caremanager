@@ -180,5 +180,32 @@ console.log("\n【E】明細 98 行の上限 (99 は終端行)");
   console.log("    警告は出るので気づけるが、実運用で 98 事業所は考えにくい (現状最大は要確認)。");
 }
 
+// ── 負のコントロール (2026-11-14): 実装をわざと壊したときの出力を作り、上と同じ判定で落ちることを確かめる ──
+//   (B) 限度額で切り詰める実装 / (E) 98 行で打ち切らない実装 / (A) 事業所番号の昇順に並べない実装
+console.log("\n【負のコントロール】壊した実装の出力で 判定が落ちるか");
+{
+  const toCsv = (rows: string[][]) => rows.map((r) => ["2", "1", ...r].join(",")).join("\n");
+  const detailOf = (rows: string[][]) => rows.filter((r) => f(r, 8) !== "99");
+  const lastOf = (rows: string[][]) => rows.find((r) => f(r, 8) === "99");
+  const judgeA = (rows: string[][]) => { const offs = detailOf(rows).map((r) => f(r, 17)); return JSON.stringify(offs) === JSON.stringify([...offs].sort()); };
+  const judgeB = (rows: string[][]) => f(lastOf(rows) ?? [], 24) === "30000";
+  const judgeE = (rows: string[][]) => detailOf(rows).length === 98 && f(lastOf(rows) ?? [], 24) === "9800";
+  const a = parse8222(buildKyufuKanriFile([baseUser({ lines: [line("2222222222", "15", 8000), line("1111111111", "11", 12000), line("3333333333", "17", 5000)] })], OPTS).content);
+  const b = parse8222(buildKyufuKanriFile([baseUser({ lines: [line("1111111111", "11", 20000), line("2222222222", "15", 10000)] })], OPTS).content);
+  const e = parse8222(buildKyufuKanriFile([baseUser({ lines: Array.from({ length: 100 }, (_, i) => line(String(1000000000 + i), "11", 100)) })], OPTS).content);
+  const swap = (rows: string[][]) => { const r = rows.map((x) => [...x]); [r[0], r[1]] = [r[1], r[0]]; return r; };
+  const clip = (rows: string[][]) => rows.map((r) => (f(r, 8) === "99" ? r.map((v, i) => (i === 23 ? "27048" : v)) : r));
+  const noCap = (rows: string[][]) => { const d = detailOf(rows); const extra = d[d.length - 1].map((v, i) => (i === 16 ? "9999999998" : v)); return [...d, extra, ...rows.filter((r) => f(r, 8) === "99")]; };
+  const cases: [string, boolean, boolean][] = [
+    ["(A) 昇順に並べない実装", judgeA(a), judgeA(parse8222(toCsv(swap(a))))],
+    ["(B) 限度額で切り詰める実装", judgeB(b), judgeB(parse8222(toCsv(clip(b))))],
+    ["(E) 98 行で打ち切らない実装", judgeE(e), judgeE(parse8222(toCsv(noCap(e))))],
+  ];
+  for (const [label, realOk, brokenOk] of cases) console.log(`  ${label}: 正しい出力 ${realOk ? "通る" : "★ 通らない"} / 壊した出力 ${brokenOk ? "★ 通ってしまう" : "落ちる"}`);
+  const ok = cases.every(([, realOk, brokenOk]) => realOk && !brokenOk);
+  if (!ok) failures++;
+  console.log(`■ 負のコントロール: 壊した実装の出力 ${cases.length} 通り → ${cases.filter(([, , b2]) => !b2).length} 通り 落ちる ${ok ? "✓" : "✗ 鳴らない"}`);
+}
+
 console.log(`\n${failures === 0 ? "✅ 全ての検算が一致しました" : `❌ ${failures} 件の不一致`}`);
 process.exit(failures === 0 ? 0 : 1);
