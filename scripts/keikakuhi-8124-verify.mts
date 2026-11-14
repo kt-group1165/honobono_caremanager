@@ -211,6 +211,44 @@ console.log("\n=== J. ★ u.units と Σlines が食い違うとき ===");
   check(num(F(p.hoken!, 9)) === t22, "7111 費用合計 も明細の合計基準", `${F(p.hoken!, 9)} / ${t22}`);
 }
 
+// ── 負のコントロール (2026-11-14): わざと壊した出力で A/B/C の判定が落ちることを確かめる ──
+//   上の check はすべて「正しい出力なら通る」側。壊した出力でも通ってしまうなら検査が効いていない
+console.log("\n=== 負のコントロール (わざと壊した出力) ===");
+{
+  const lines = [ml("432211", 1411), ml("433001", 300), ml("436101", 154)];
+  const total = 1865;
+  const real = build([user({ userName: "負のコントロール", units: total, lines })]).content;
+  const abc = (content: string): string[] => {
+    const rows = parse(content).byUser.get("1000000001") ?? [];
+    const last = rows[rows.length - 1];
+    if (!last) return ["明細が無い"];
+    const bad: string[] = [];
+    if (num(F(last, 21)) !== rows.reduce((s, c) => s + num(F(c, 20)), 0)) bad.push("A");
+    if (num(F(last, 22)) !== Math.floor((total * P100) / 100)) bad.push("B");
+    if (F(last, 16) !== "99") bad.push("C");
+    return bad;
+  };
+  // 項番 N は c[N+1]。最終行 (行番号 99) だけ書き換える
+  const tamper = (fn: (c: string[]) => void) => real.split(/\r?\n/).map((l) => {
+    const c = l.split(",");
+    if (F(c, 1) !== "8124" || F(c, 16) !== "99") return l;
+    fn(c);
+    return c.join(",");
+  }).join("\n");
+  const broken: [string, string][] = [
+    ["請求金額 (項22) を 1 円ずらす (切り捨て→切り上げ相当)", tamper((c) => { c[23] = String(num(F(c, 22)) + 1); })],
+    ["合計単位数 (項21) を 1 単位ずらす", tamper((c) => { c[22] = String(num(F(c, 21)) + 1); })],
+    ["最終行の行番号 99 を 3 にする", tamper((c) => { c[17] = "3"; })],
+  ];
+  const realBad = abc(real);
+  const rang = broken.filter(([, content]) => abc(content).length > 0);
+  check(realBad.length === 0, "負のコントロールの前提: 正しい出力は A/B/C を通る", realBad.join(","));
+  for (const [label, content] of broken) console.log(`     ${label} → ${abc(content).join(",") || "★ 通ってしまった"}`);
+  const ok = rang.length === broken.length;
+  console.log(`■ 負のコントロール: わざと壊した出力 ${broken.length} 通り → ${rang.length} 通り 落ちる ${ok ? "✓" : "✗ 鳴らない"}`);
+  if (!ok) fails.push("負のコントロールが鳴らない");
+}
+
 console.log(`\n${fails.length === 0 ? "すべて PASS" : `★ ${fails.length} 件 FAIL`}`);
 for (const f of fails) console.log(`  - ${f}`);
 if (fails.length > 0) process.exit(1);
