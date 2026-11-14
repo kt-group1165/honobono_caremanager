@@ -9,7 +9,7 @@
     "  見ていないもの: 本文中の氏名 / 空白の無い氏名・外国人名 / git の履歴 / repo の外"
   ],
   "total": {
-    "ten": 16981,
+    "ten": 16992,
     "near": 1469,
     "names": 16736
   },
@@ -571,7 +571,7 @@
       "near": 4
     },
     "scripts/keikakuhi-8124-verify.mts": {
-      "ten": 9,
+      "ten": 10,
       "near": 0
     },
     "scripts/kohi-verify.mts": {
@@ -595,7 +595,7 @@
       "near": 1
     },
     "scripts/kyufu-kanri-8222-verify.mts": {
-      "ten": 38,
+      "ten": 41,
       "near": 2
     },
     "scripts/meisai-map-keys-baseline.json": {
@@ -647,7 +647,7 @@
       "near": 0
     },
     "scripts/verify-kyufu-kanri-boundary.mts": {
-      "ten": 15,
+      "ten": 22,
       "near": 0
     },
     "scripts/verify-shogai-j11-boundary.mts": {
