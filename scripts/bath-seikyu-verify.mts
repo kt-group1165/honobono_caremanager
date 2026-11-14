@@ -175,7 +175,7 @@ console.log("\n=== §A-5 ★ 計画単位数 > 認定の限度額 で警告が�
   // 負のコントロール: 計画 < 認定 なら出ない (3-9)
   const d2 = baseData({ records: recs, planUnits: [{ client_id: CLIENT, target_month: "2026-06", planned_units: 20000 }] });
   const res2 = await run(d2);
-  check("計画 < 認定 なら警告は出ない (負のコントロール)", res2.warnings.some((w) => w.includes("計画単位数")), false);
+  check("計画 < 認定 なら警告は出ない (負のコントロール・出てはいけない例のみ)", res2.warnings.some((w) => w.includes("計画単位数")), false);
   // 挙動は変えていないこと: 計画 40,000 が基準値になり超過 0
   check("金額は変えない (計画が基準値になり超過 0)", res.rows[0]?.overUnits, 0);
 }

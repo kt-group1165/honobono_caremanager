@@ -283,6 +283,8 @@ console.log("\n=== ⑥ 構造異常 (順序崩れ・件数不一致・依頼フ�
 }
 
 console.log(`\n══ 合計 検査 ${checks} 件 / NG ${fails} 件 ══`);
+// ★ check:all が数える行 (2026-11-14)。壊した実装は回していない = 「出てはいけない例のみ」
+console.log(`■ 負のコントロール (出てはいけない例のみ): 未定義コード "5"・空欄コード は振替済みにしない (fail-closed) ${fails ? "は上の NG を見る" : "✓"}`);
 console.log("\n⚠ この script は fb-zengin.ts / fb-zengin-result.ts を DB 不使用・自己検算のみで検証したもの。");
 console.log("  実際に金融機関へ提出した/受け取ったファイルでの検証は未実施 (実ファイルが要る)。");
 if (fails > 0) process.exit(1);

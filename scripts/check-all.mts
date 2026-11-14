@@ -228,6 +228,42 @@ for (const r of results) {
   const noSampleTag = r.noSample ? " (サンプル未投入。合格ではない)" : "";
   console.log(`${mark}  ${r.name.padEnd(16)} ${r.skipped ? "" : `${(r.ms / 1000).toFixed(1)}s`}${kindTag}${noSampleTag}`);
 }
+// ── 負のコントロールの有無を ★ 実行時の出力から数える (2026-11-14 H 依頼) ─────────────────────────
+//   ラベルを手で付けると古くなるので、各検査の出力に「負のコントロール」の行があるかで決める。
+//   auto    = 「負のコントロール」を含む行があり、✗/鳴らない/失敗 を含まない (壊した実装・期待値を外す 等を毎回回している)
+//   example = 「出てはいけない例のみ」を含む行 (境界の否定例があるだけ。壊した実装は回していない)
+//   none    = 行が無い
+//   broken  = 「負のコントロール」の行に ✗/鳴らない/失敗 がある → ★ FAIL にする
+//   ⚠ 書式はまだ揃っていない (「■ 負のコントロール: … ✓」「(負のコントロール込み)」「§9 負のコントロール」などが混在)。
+//     いまは「行があるか」までしか見ていない。揃えたら「■ 負のコントロール:」で始まる行に絞る
+export function negControlStatus(out: string): "auto" | "example" | "none" | "broken" {
+  const lines = out.split(/\r?\n/).filter((l) => l.includes("負のコントロール"));
+  if (!lines.length) return "none";
+  if (lines.some((l) => /✗|鳴らない|失敗/.test(l))) return "broken";
+  if (lines.every((l) => l.includes("出てはいけない例のみ"))) return "example";
+  return "auto";
+}
+{ // 境界 (DB 不要)
+  const cases: [string, string][] = [
+    ["■ 負のコントロール: 架空の被保番 → ① 1 ✓ 鳴る", "auto"],
+    ["PASS — 20 件すべて一致 (負のコントロール込み)", "auto"],
+    ["■ 負のコントロール (出てはいけない例のみ): 未定義コードは振替しない ✓", "example"],
+    ["■ 負のコントロール: 一致キーが 1 つも無く実施できない ✗", "broken"],
+    ["PASS — 10 件", "none"],
+  ];
+  const bad = cases.filter(([o, w]) => negControlStatus(o) !== w);
+  if (bad.length) { console.error(`✗ negControlStatus の境界: ${bad.map(([o]) => o).join(" / ")}`); process.exit(1); }
+}
+const negOf = new Map(results.filter((r) => !r.skipped && r.out != null).map((r) => [r.name, negControlStatus(r.out!)]));
+for (const r of results) if (negOf.get(r.name) === "broken") r.ok = false;
+const negGroups = { auto: [] as string[], example: [] as string[], none: [] as string[], broken: [] as string[] };
+for (const [n, st] of negOf) negGroups[st].push(n);
+console.log(`★ 負のコントロール (出力から数えた・回した ${negOf.size} 本): あり ${negGroups.auto.length} / 出てはいけない例のみ ${negGroups.example.length} / ★ 出していない ${negGroups.none.length}${negGroups.broken.length ? ` / ✗ 鳴らない ${negGroups.broken.length} (FAIL)` : ""}`);
+if (negGroups.example.length) console.log(`   出てはいけない例のみ: ${negGroups.example.join(", ")}`);
+if (negGroups.none.length) console.log(`   出していない: ${negGroups.none.join(", ")}`);
+if (negGroups.broken.length) console.log(`   ✗ 鳴らない: ${negGroups.broken.join(", ")}`);
+console.log("   ⚠ 見ていないもの: 行を出していても中身が空振り (壊した実装が同じ結果を返す) の場合は見抜けない / --fast で飛ばした検査は数えていない");
+console.log("");
 const failed = results.filter((r) => !r.ok);
 console.log("");
 console.log("⚠ この一覧が ★ 見ていないもの (件数は今回の実測):");

@@ -78,5 +78,7 @@ eq("名前 身体日０．５・２人", billedMinutesFromName("身体日０．�
 eq("名前 時間が無い", billedMinutesFromName("居介上限額管理加算"), null);
 
 console.log(`check:shikyuryo-cap  ${pass} 件 合格 / ${fails.length} 件 不合格`);
+// ★ check:all が数える行 (2026-11-14)。「・２人 を数える実装」を回してはいない。2 人目を数えると落ちる例 (尾崎) を持っているだけ
+console.log(`■ 負のコントロール (出てはいけない例のみ): 2 人目を数えると支給量超えになる例 (尾崎) で 外す訪問 0 ${fails.some((f) => f.includes("尾崎")) ? "は上の不合格を見る" : "✓"}`);
 for (const f of fails) console.log(`  ✗ ${f}`);
 process.exit(fails.length ? 1 : 0);
