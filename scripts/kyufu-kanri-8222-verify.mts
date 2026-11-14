@@ -272,6 +272,41 @@ console.log("\n=== 異常系: warning が出るか ===");
   check(r.warnings.some((w) => w.includes("10 桁")), "居宅事業所番号が10桁でない → warning");
 }
 
+// ── 負のコントロール (2026-11-14): わざと壊した出力で A/B/H の判定が落ちることを確かめる ──
+//   上の check はすべて「正しい出力なら通る」側。壊した出力でも通ってしまうなら検査が効いていない
+console.log("\n=== 負のコントロール (わざと壊した出力) ===");
+{
+  const u = user({ userName: "負のコントロール", lines: [line("1279999003", "15", 5000), line("1279999001", "11", 12000), line("1279999002", "13", 3000)] });
+  const real = build([u]).content;
+  const judge = (content: string): string[] => {
+    const { tickets } = parse(content);
+    const t = tickets[0];
+    if (!t || !t.end) return ["票か終端行が無い"];
+    const bad: string[] = [];
+    if (t.detail.reduce((s, c) => s + num(F(c, 20)), 0) !== num(F(t.end, 24))) bad.push("A");
+    const offs = t.detail.map((c) => F(c, 17));
+    if (JSON.stringify(offs) !== JSON.stringify([...offs].sort())) bad.push("B");
+    if (!/^\d{8}$/.test(F(t.end, 3))) bad.push("H");
+    return bad;
+  };
+  // 項番 N は c[N+1]
+  const rows = (content: string) => content.split(/\r?\n/);
+  const mapRows = (fn: (c: string[], i: number) => void) => rows(real).map((l, i) => { const c = l.split(","); if (F(c, 1) !== "8222") return l; fn(c, i); return c.join(","); }).join("\n");
+  const detailIdx = rows(real).map((l, i) => [l.split(","), i] as const).filter(([c]) => F(c, 1) === "8222" && F(c, 8) !== "99").map(([, i]) => i);
+  const broken: [string, string][] = [
+    ["明細 1 行の 項20 を 1 単位ずらす", mapRows((c, i) => { if (i === detailIdx[0]) c[21] = String(num(F(c, 20)) + 1); })],
+    ["明細の並びを入れ替える (事業所番号の昇順でなくす)", (() => { const r = rows(real); const [a, b] = [detailIdx[0], detailIdx[1]]; [r[a], r[b]] = [r[b], r[a]]; return r.join("\n"); })()],
+    ["保険者番号 (項3) を 6 桁にする", mapRows((c) => { c[4] = F(c, 3).slice(-6); })],
+  ];
+  const realBad = judge(real);
+  check(realBad.length === 0, "負のコントロールの前提: 正しい出力は A/B/H を通る", realBad.join(","));
+  const rang = broken.filter(([, content]) => judge(content).length > 0);
+  for (const [label, content] of broken) console.log(`     ${label} → ${judge(content).join(",") || "★ 通ってしまった"}`);
+  const ok = rang.length === broken.length;
+  console.log(`■ 負のコントロール: わざと壊した出力 ${broken.length} 通り → ${rang.length} 通り 落ちる ${ok ? "✓" : "✗ 鳴らない"}`);
+  if (!ok) fails.push("負のコントロールが鳴らない");
+}
+
 console.log(`\n${fails.length === 0 ? "すべて PASS" : `★ ${fails.length} 件 FAIL`}`);
 for (const f of fails) console.log(`  - ${f}`);
 if (fails.length > 0) process.exit(1);
